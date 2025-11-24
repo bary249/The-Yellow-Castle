@@ -1,0 +1,27 @@
+name: card_game
+description: A turn-based card game built with Flutter and Flame.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flame: ^1.10.0
+  flame_audio: ^2.0.1
+  playing_cards: ^2.0.1
+  provider: ^6.0.5
+  vector_math: ^2.1.4
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^2.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/cards/
+    - assets/audio/
