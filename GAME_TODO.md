@@ -900,8 +900,8 @@
 ### **Phase 2: Combat Depth + Cloud Sync** (Weeks 5-8)
 - ✅ Full tick system implementation
 - ✅ Overflow damage
-- 🔄 **Lane advancement & zones (base → middle → enemy base)** (IN PROGRESS)
-- [ ] **Simple per-tick visualization of card battles and lane victory**
+- ✅ **Lane advancement & zones (base → middle → enemy base)**
+- 🔄 **Simple per-tick visualization of card battles and lane victory** (IN PROGRESS)
 - [ ] Gold system
 - [ ] Element system basics
 - ⏸️ **Player profile system (Firestore)** (deferred)

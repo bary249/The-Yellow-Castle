@@ -72,6 +72,12 @@ class CombatResolver {
     }
   }
 
+  /// Process a single tick in a lane (public for animations)
+  void processTickInLane(int tick, Lane lane, {String? customLaneName}) {
+    final laneName = customLaneName ?? _getLaneName(lane.position);
+    _processTick(tick, lane, laneName);
+  }
+
   /// Process a single tick
   void _processTick(int tick, Lane lane, String laneName) {
     final playerCard = lane.playerStack.activeCard;

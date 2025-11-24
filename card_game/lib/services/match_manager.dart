@@ -104,8 +104,11 @@ class MatchManager {
     }
   }
 
-  /// Resolve combat in all lanes
-  void _resolveCombat() {
+  /// Callback for combat animation updates
+  Function()? onCombatUpdate;
+
+  /// Resolve combat in all lanes with animations
+  Future<void> _resolveCombat() async {
     if (_currentMatch == null) return;
 
     _currentMatch!.currentPhase = MatchPhase.combatPhase;
@@ -118,10 +121,10 @@ class MatchManager {
     print('TURN ${_currentMatch!.turnNumber} - COMBAT RESOLUTION');
     print('=' * 80);
 
-    // Resolve each lane
+    // Resolve each lane with tick-by-tick animation
     for (final lane in _currentMatch!.lanes) {
       if (lane.hasActiveCards) {
-        _combatResolver.resolveLane(lane);
+        await _resolveLaneAnimated(lane);
       }
     }
 
@@ -135,6 +138,10 @@ class MatchManager {
     // Check if any cards damaged crystals (winning a lane means attacking crystal)
     _checkCrystalDamage();
 
+    // Wait before showing final results
+    await Future.delayed(const Duration(milliseconds: 800));
+    onCombatUpdate?.call();
+
     // Print crystal damage
     print('Player Crystal: ${_currentMatch!.player.crystalHP} HP');
     print('Opponent Crystal: ${_currentMatch!.opponent.crystalHP} HP');
@@ -146,6 +153,42 @@ class MatchManager {
     if (!_currentMatch!.isGameOver) {
       _startNextTurn();
     }
+  }
+
+  /// Resolve a single lane with tick-by-tick animations
+  Future<void> _resolveLaneAnimated(Lane lane) async {
+    // Initial delay to show combat starting
+    await Future.delayed(const Duration(milliseconds: 300));
+    onCombatUpdate?.call();
+
+    // Process ticks 1-5 with delays
+    for (int tick = 1; tick <= 5; tick++) {
+      final playerCard = lane.playerStack.activeCard;
+      final opponentCard = lane.opponentStack.activeCard;
+
+      // If both sides are empty, break
+      if (playerCard == null && opponentCard == null) break;
+
+      // Resolve this tick
+      _combatResolver.processTickInLane(tick, lane);
+
+      // Clean up dead cards
+      lane.playerStack.cleanup();
+      lane.opponentStack.cleanup();
+
+      // Update UI after tick
+      await Future.delayed(const Duration(milliseconds: 600));
+      onCombatUpdate?.call();
+
+      // Check if combat is over
+      if (lane.playerStack.isEmpty || lane.opponentStack.isEmpty) {
+        break;
+      }
+    }
+
+    // Final delay after lane completes
+    await Future.delayed(const Duration(milliseconds: 400));
+    onCombatUpdate?.call();
   }
 
   /// Check zone advancement and crystal damage

@@ -77,7 +77,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     setState(() {});
   }
 
-  void _submitTurn() {
+  Future<void> _submitTurn() async {
     final match = _matchManager.currentMatch;
     if (match == null) return;
 
@@ -86,12 +86,17 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       0,
       (sum, list) => sum + list.length,
     );
-    if (totalPlaced == 0) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Place at least one card!')));
-      return;
-    }
+    // if (totalPlaced == 0) {
+    //   ScaffoldMessenger.of(
+    //     context,
+    //   ).showSnackBar(const SnackBar(content: Text('Place at least one card!')));
+    //   return;
+    // }
+
+    // Set up animation callback
+    _matchManager.onCombatUpdate = () {
+      if (mounted) setState(() {});
+    };
 
     // Submit player moves
     _matchManager.submitPlayerMoves(Map.from(_stagedCards));
@@ -187,6 +192,36 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
               _buildPlayerInfo(match.opponent, isOpponent: true),
 
               const SizedBox(height: 8),
+
+              // Combat phase indicator
+              if (match.currentPhase == MatchPhase.combatPhase)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Colors.red[700]!, Colors.orange[600]!],
+                    ),
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.flash_on, color: Colors.white, size: 24),
+                      SizedBox(width: 8),
+                      Text(
+                        '⚔️ COMBAT IN PROGRESS ⚔️',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 2,
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                      Icon(Icons.flash_on, color: Colors.white, size: 24),
+                    ],
+                  ),
+                ),
 
               // Instructions
               if (_selectedCard != null)
@@ -577,14 +612,31 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     );
   }
 
-  Widget _buildCardWidget(GameCard card, Color color) {
-    return Container(
+  Widget _buildCardWidget(
+    GameCard card,
+    Color color, {
+    bool isAttacking = false,
+  }) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
       margin: const EdgeInsets.all(2),
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
         color: card.isAlive ? color : Colors.grey,
         borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: Colors.black26),
+        border: Border.all(
+          color: isAttacking ? Colors.orange : Colors.black26,
+          width: isAttacking ? 3 : 1,
+        ),
+        boxShadow: isAttacking
+            ? [
+                BoxShadow(
+                  color: Colors.orange.withOpacity(0.6),
+                  blurRadius: 8,
+                  spreadRadius: 2,
+                ),
+              ]
+            : null,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
