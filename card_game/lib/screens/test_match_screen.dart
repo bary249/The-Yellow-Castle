@@ -390,7 +390,11 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   Widget _buildLane(MatchState match, LanePosition position) {
     final lane = match.getLane(position);
     final stagedCardsInLane = _stagedCards[position]!;
-    final canPlace = _selectedCard != null && stagedCardsInLane.length < 2;
+
+    // Check total cards: survivors + staged cards must not exceed 2
+    final survivingCount = lane.playerStack.aliveCards.length;
+    final totalCards = survivingCount + stagedCardsInLane.length;
+    final canPlace = _selectedCard != null && totalCards < 2;
 
     return GestureDetector(
       onTap: canPlace ? () => _placeCardInLane(position) : null,
@@ -433,6 +437,30 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
             _buildCardStack(lane.opponentStack, Colors.red[200]!),
 
             const Divider(),
+
+            // Surviving player cards from previous turn
+            if (lane.playerStack.aliveCards.isNotEmpty)
+              Container(
+                padding: const EdgeInsets.all(4),
+                margin: const EdgeInsets.only(bottom: 4),
+                decoration: BoxDecoration(
+                  color: Colors.blue[100],
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: Colors.blue, width: 2),
+                ),
+                child: Column(
+                  children: [
+                    const Text(
+                      '💪 Survivors',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    _buildCardStack(lane.playerStack, Colors.blue[200]!),
+                  ],
+                ),
+              ),
 
             // Staged cards (player's cards for this turn)
             if (stagedCardsInLane.isNotEmpty)

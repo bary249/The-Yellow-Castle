@@ -136,12 +136,12 @@ class Lane {
     }
   }
 
-  /// Reset lane for new turn
+  /// Reset lane for new turn (clears cards but preserves zone position)
   void reset() {
     playerStack.topCard = null;
     playerStack.bottomCard = null;
     opponentStack.topCard = null;
     opponentStack.bottomCard = null;
-    currentZone = Zone.middle; // Reset to middle
+    // Zone position persists across turns - do NOT reset it
   }
 }

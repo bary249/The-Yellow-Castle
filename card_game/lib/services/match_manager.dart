@@ -210,10 +210,9 @@ class MatchManager {
     _currentMatch!.player.drawCards();
     _currentMatch!.opponent.drawCards();
 
-    // Reset lanes
-    for (final lane in _currentMatch!.lanes) {
-      lane.reset();
-    }
+    // DON'T reset lanes - surviving cards persist across turns!
+    // Zones and surviving cards remain in their positions
+    // Players can add NEW cards (0-2 per lane, max 2 total stack)
 
     // Reset submissions
     _currentMatch!.resetSubmissions();
