@@ -49,10 +49,18 @@ class CardStack {
 
   /// Remove dead cards and promote bottom card if needed
   void cleanup() {
+    // First, clear any dead bottom card
+    if (bottomCard != null && !bottomCard!.isAlive) {
+      bottomCard = null;
+    }
+
+    // If top is dead, promote bottom to top
     if (topCard != null && !topCard!.isAlive) {
       topCard = bottomCard;
       bottomCard = null;
     }
+
+    // Check again if new top is dead
     if (topCard != null && !topCard!.isAlive) {
       topCard = null;
     }

@@ -111,6 +111,11 @@ class MatchManager {
   /// Callback for combat animation updates
   Function()? onCombatUpdate;
 
+  /// Current tick information for UI display
+  String? currentTickInfo;
+  LanePosition? currentCombatLane;
+  int? currentCombatTick;
+
   /// Resolve combat in all lanes with animations
   Future<void> _resolveCombat() async {
     if (_currentMatch == null) return;
@@ -161,6 +166,10 @@ class MatchManager {
 
   /// Resolve a single lane with tick-by-tick animations
   Future<void> _resolveLaneAnimated(Lane lane) async {
+    currentCombatLane = lane.position;
+    currentTickInfo =
+        '⚔️ ${lane.position.name.toUpperCase()} - Combat Starting...';
+
     // Initial delay to show combat starting
     await Future.delayed(const Duration(milliseconds: 300));
     onCombatUpdate?.call();
@@ -173,25 +182,52 @@ class MatchManager {
       // If both sides are empty, break
       if (playerCard == null && opponentCard == null) break;
 
+      currentCombatTick = tick;
+      currentTickInfo = 'Tick $tick: Processing...';
+
+      // Count log entries before this tick
+      final logCountBefore = _combatResolver.logEntries.length;
+
       // Resolve this tick
       _combatResolver.processTickInLane(tick, lane);
+
+      // Get new log entries from this tick
+      final newEntries = _combatResolver.logEntries
+          .skip(logCountBefore)
+          .toList();
+      final tickActions = newEntries
+          .where((e) => e.tick == tick && e.action.contains('→'))
+          .map((e) => e.action)
+          .join(' | ');
+
+      currentTickInfo = tickActions.isNotEmpty
+          ? 'Tick $tick: $tickActions'
+          : 'Tick $tick: No actions';
+
+      // Show tick result before cleanup
+      await Future.delayed(const Duration(milliseconds: 400));
+      onCombatUpdate?.call();
 
       // Clean up dead cards
       lane.playerStack.cleanup();
       lane.opponentStack.cleanup();
 
-      // Update UI after tick
-      await Future.delayed(const Duration(milliseconds: 600));
+      // Update UI after cleanup
+      await Future.delayed(const Duration(milliseconds: 400));
       onCombatUpdate?.call();
 
       // Check if combat is over
       if (lane.playerStack.isEmpty || lane.opponentStack.isEmpty) {
+        currentTickInfo = '🏁 Combat Complete!';
         break;
       }
     }
 
     // Final delay after lane completes
-    await Future.delayed(const Duration(milliseconds: 400));
+    await Future.delayed(const Duration(milliseconds: 500));
+    currentTickInfo = null;
+    currentCombatLane = null;
+    currentCombatTick = null;
     onCombatUpdate?.call();
   }
 

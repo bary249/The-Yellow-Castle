@@ -113,8 +113,15 @@ class CombatResolver {
       return;
     }
 
-    // Simultaneous attacks
-    if (playerActs && opponentCard != null) {
+    // Snapshot alive state BEFORE any attacks (for simultaneous combat)
+    final playerAliveBeforeTick = playerCard?.isAlive ?? false;
+    final opponentAliveBeforeTick = opponentCard?.isAlive ?? false;
+
+    // Simultaneous attacks - both happen even if one dies
+    if (playerActs &&
+        opponentCard != null &&
+        playerAliveBeforeTick &&
+        opponentAliveBeforeTick) {
       _performAttack(
         playerCard,
         opponentCard,
@@ -122,10 +129,14 @@ class CombatResolver {
         lane.opponentStack,
         laneName,
         true,
+        checkAliveBeforeAttack: false, // Skip alive check for simultaneous
       );
     }
 
-    if (opponentActs && playerCard != null) {
+    if (opponentActs &&
+        playerCard != null &&
+        playerAliveBeforeTick &&
+        opponentAliveBeforeTick) {
       _performAttack(
         opponentCard,
         playerCard,
@@ -133,6 +144,7 @@ class CombatResolver {
         lane.playerStack,
         laneName,
         false,
+        checkAliveBeforeAttack: false, // Skip alive check for simultaneous
       );
     }
   }
@@ -161,9 +173,12 @@ class CombatResolver {
     int tick,
     CardStack targetStack,
     String laneName,
-    bool isPlayerAttacking,
-  ) {
-    if (!attacker.isAlive || !target.isAlive) return;
+    bool isPlayerAttacking, {
+    bool checkAliveBeforeAttack = true,
+  }) {
+    // Check alive status only if requested (skip for simultaneous attacks)
+    if (checkAliveBeforeAttack && (!attacker.isAlive || !target.isAlive))
+      return;
 
     final attackerSide = isPlayerAttacking ? '🛡️ YOU' : '⚔️ AI';
     final damage = attacker.damage;

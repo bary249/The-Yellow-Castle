@@ -203,22 +203,48 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                       colors: [Colors.red[700]!, Colors.orange[600]!],
                     ),
                   ),
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                  child: Column(
                     children: [
-                      Icon(Icons.flash_on, color: Colors.white, size: 24),
-                      SizedBox(width: 8),
-                      Text(
-                        '⚔️ COMBAT IN PROGRESS ⚔️',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 2,
-                        ),
+                      const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.flash_on, color: Colors.white, size: 24),
+                          SizedBox(width: 8),
+                          Text(
+                            '⚔️ COMBAT IN PROGRESS ⚔️',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 2,
+                            ),
+                          ),
+                          SizedBox(width: 8),
+                          Icon(Icons.flash_on, color: Colors.white, size: 24),
+                        ],
                       ),
-                      SizedBox(width: 8),
-                      Icon(Icons.flash_on, color: Colors.white, size: 24),
+                      if (_matchManager.currentTickInfo != null) ...[
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.black26,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            _matchManager.currentTickInfo!,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
