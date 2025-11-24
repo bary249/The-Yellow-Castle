@@ -66,9 +66,12 @@ class MatchManager {
       final cards = entry.value;
 
       // Remove cards from hand and place in lane
+      // Fresh cards ALWAYS go to bottom if there are survivors
       for (final card in cards) {
         if (_currentMatch!.player.playCard(card)) {
-          lane.playerStack.addCard(card);
+          // If lane has survivors, place new card at bottom
+          final hasSurvivors = lane.playerStack.topCard != null;
+          lane.playerStack.addCard(card, asTopCard: !hasSurvivors);
         }
       }
     }

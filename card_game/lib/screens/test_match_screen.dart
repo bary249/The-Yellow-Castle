@@ -106,7 +106,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     final aiMoves = _ai.generateMoves(match.opponent);
     await _matchManager.submitOpponentMoves(aiMoves);
 
-    // Clear staging
+    // Clear staging AFTER combat completes
     _clearStaging();
     if (mounted) setState(() {});
   }
@@ -548,18 +548,31 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                   ),
                 ),
 
-              // Staged cards (player's cards for this turn)
+              // Staged/Deployed cards (player's cards for this turn)
               if (stagedCardsInLane.isNotEmpty)
                 Container(
                   padding: const EdgeInsets.all(4),
                   decoration: BoxDecoration(
-                    color: Colors.yellow[100],
+                    color: match.playerSubmitted
+                        ? Colors.green[100]
+                        : Colors.yellow[100],
                     borderRadius: BorderRadius.circular(4),
-                    border: Border.all(color: Colors.orange, width: 2),
+                    border: Border.all(
+                      color: match.playerSubmitted
+                          ? Colors.green
+                          : Colors.orange,
+                      width: 2,
+                    ),
                   ),
                   child: Column(
                     children: [
-                      const Text('⏳ Staged', style: TextStyle(fontSize: 10)),
+                      Text(
+                        match.playerSubmitted ? '✅ Deployed' : '⏳ Staged',
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                       ...stagedCardsInLane.map(
                         (card) => _buildStagedCard(card, position),
                       ),
@@ -652,11 +665,52 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       return const SizedBox(height: 80);
     }
 
+    final hasMultiple = stack.topCard != null && stack.bottomCard != null;
+
     return Column(
       children: [
-        if (stack.topCard != null) _buildCardWidget(stack.topCard!, color),
+        if (stack.topCard != null)
+          _buildCardWidgetWithPosition(
+            stack.topCard!,
+            color,
+            position: hasMultiple ? '🔼 TOP' : null,
+          ),
         if (stack.bottomCard != null)
-          _buildCardWidget(stack.bottomCard!, color),
+          _buildCardWidgetWithPosition(
+            stack.bottomCard!,
+            color,
+            position: hasMultiple ? '🔽 BOTTOM' : null,
+          ),
+      ],
+    );
+  }
+
+  Widget _buildCardWidgetWithPosition(
+    GameCard card,
+    Color color, {
+    String? position,
+    bool isAttacking = false,
+  }) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (position != null)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.black87,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              position,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 8,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        _buildCardWidget(card, color, isAttacking: isAttacking),
       ],
     );
   }
