@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../models/deck.dart';
 import '../models/match_state.dart';
 import '../models/lane.dart';
@@ -121,34 +122,53 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       );
     }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Turn ${match.turnNumber} - ${match.currentPhase.name}'),
-        actions: [
-          if (match.isGameOver)
-            IconButton(
-              icon: const Icon(Icons.refresh),
-              onPressed: _startNewMatch,
-            ),
-          if (!match.isGameOver && !match.playerSubmitted)
-            IconButton(
-              icon: const Icon(Icons.clear_all),
-              onPressed: () {
-                _clearStaging();
-                setState(() {});
-              },
-              tooltip: 'Clear all placements',
-            ),
-        ],
+    return Focus(
+      autofocus: true,
+      onKeyEvent: (node, event) {
+        if (event is KeyDownEvent &&
+            event.logicalKey == LogicalKeyboardKey.space &&
+            _matchManager.waitingForNextTick) {
+          _matchManager.advanceToNextTick();
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text('Turn ${match.turnNumber} - ${match.currentPhase.name}'),
+          actions: [
+            if (match.isGameOver)
+              IconButton(
+                icon: const Icon(Icons.refresh),
+                onPressed: _startNewMatch,
+              ),
+            if (!match.isGameOver && !match.playerSubmitted)
+              IconButton(
+                icon: const Icon(Icons.clear_all),
+                onPressed: () {
+                  _clearStaging();
+                  setState(() {});
+                },
+                tooltip: 'Clear all placements',
+              ),
+          ],
+        ),
+        body: match.isGameOver ? _buildGameOver(match) : _buildMatchView(match),
+        floatingActionButton: _matchManager.waitingForNextTick
+            ? FloatingActionButton.extended(
+                onPressed: () => _matchManager.advanceToNextTick(),
+                label: const Text('Next Tick (SPACE)'),
+                icon: const Icon(Icons.skip_next),
+                backgroundColor: Colors.orange,
+              )
+            : (match.isGameOver || match.playerSubmitted
+                  ? null
+                  : FloatingActionButton.extended(
+                      onPressed: _submitTurn,
+                      label: const Text('Submit Turn'),
+                      icon: const Icon(Icons.send),
+                    )),
       ),
-      body: match.isGameOver ? _buildGameOver(match) : _buildMatchView(match),
-      floatingActionButton: match.isGameOver || match.playerSubmitted
-          ? null
-          : FloatingActionButton.extended(
-              onPressed: _submitTurn,
-              label: const Text('Submit Turn'),
-              icon: const Icon(Icons.send),
-            ),
     );
   }
 
@@ -469,115 +489,118 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
           borderRadius: BorderRadius.circular(8),
           color: canPlace ? Colors.green.withOpacity(0.1) : null,
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              position.name.toUpperCase(),
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-            ),
-            // Zone display
-            Container(
-              margin: const EdgeInsets.symmetric(vertical: 4),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: Colors.purple[100],
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.purple),
-              ),
-              child: Text(
-                lane.zoneDisplay,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                position.name.toUpperCase(),
                 style: const TextStyle(
-                  fontSize: 11,
                   fontWeight: FontWeight.bold,
+                  fontSize: 16,
                 ),
               ),
-            ),
-
-            // Opponent cards
-            _buildCardStack(lane.opponentStack, Colors.red[200]!),
-
-            const Divider(),
-
-            // Surviving player cards from previous turn
-            if (lane.playerStack.aliveCards.isNotEmpty)
+              // Zone display
               Container(
-                padding: const EdgeInsets.all(4),
-                margin: const EdgeInsets.only(bottom: 4),
+                margin: const EdgeInsets.symmetric(vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
-                  color: Colors.blue[100],
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(color: Colors.blue, width: 2),
+                  color: Colors.purple[100],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.purple),
                 ),
-                child: Column(
-                  children: [
-                    const Text(
-                      '💪 Survivors',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
+                child: Text(
+                  lane.zoneDisplay,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+
+              // Opponent cards
+              _buildCardStack(lane.opponentStack, Colors.red[200]!),
+
+              const Divider(),
+
+              // Surviving player cards from previous turn
+              if (lane.playerStack.aliveCards.isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.all(4),
+                  margin: const EdgeInsets.only(bottom: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.blue[100],
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: Colors.blue, width: 2),
+                  ),
+                  child: Column(
+                    children: [
+                      const Text(
+                        '💪 Survivors',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                    ),
-                    _buildCardStack(lane.playerStack, Colors.blue[200]!),
-                  ],
-                ),
-              ),
-
-            // Staged cards (player's cards for this turn)
-            if (stagedCardsInLane.isNotEmpty)
-              Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: Colors.yellow[100],
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(color: Colors.orange, width: 2),
-                ),
-                child: Column(
-                  children: [
-                    const Text('⏳ Staged', style: TextStyle(fontSize: 10)),
-                    ...stagedCardsInLane.map(
-                      (card) => _buildStagedCard(card, position),
-                    ),
-                  ],
-                ),
-              )
-            else if (canPlace)
-              Container(
-                height: 60,
-                margin: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(
-                    color: Colors.green,
-                    style: BorderStyle.solid,
-                    width: 2,
+                      _buildCardStack(lane.playerStack, Colors.blue[200]!),
+                    ],
                   ),
                 ),
-                child: const Center(
-                  child: Icon(
-                    Icons.add_circle_outline,
-                    color: Colors.green,
-                    size: 32,
+
+              // Staged cards (player's cards for this turn)
+              if (stagedCardsInLane.isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: Colors.yellow[100],
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: Colors.orange, width: 2),
+                  ),
+                  child: Column(
+                    children: [
+                      const Text('⏳ Staged', style: TextStyle(fontSize: 10)),
+                      ...stagedCardsInLane.map(
+                        (card) => _buildStagedCard(card, position),
+                      ),
+                    ],
+                  ),
+                )
+              else if (canPlace)
+                Container(
+                  height: 60,
+                  margin: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(
+                      color: Colors.green,
+                      style: BorderStyle.solid,
+                      width: 2,
+                    ),
+                  ),
+                  child: const Center(
+                    child: Icon(
+                      Icons.add_circle_outline,
+                      color: Colors.green,
+                      size: 32,
+                    ),
+                  ),
+                )
+              else
+                Container(
+                  height: 60,
+                  margin: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[200],
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Center(
+                    child: Text('Empty', style: TextStyle(color: Colors.grey)),
                   ),
                 ),
-              )
-            else
-              Container(
-                height: 60,
-                margin: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: Colors.grey[200],
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: const Center(
-                  child: Text('Empty', style: TextStyle(color: Colors.grey)),
-                ),
-              ),
-
-            // Player cards (from previous turns)
-            _buildCardStack(lane.playerStack, Colors.blue[200]!),
-          ],
+            ],
+          ),
         ),
       ),
     );

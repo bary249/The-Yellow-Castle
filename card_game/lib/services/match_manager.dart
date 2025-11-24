@@ -116,6 +116,16 @@ class MatchManager {
   LanePosition? currentCombatLane;
   int? currentCombatTick;
 
+  /// Manual tick progression control
+  bool waitingForNextTick = false;
+  Function()? onWaitingForTick;
+
+  /// Advance to next tick (called by user action)
+  void advanceToNextTick() {
+    waitingForNextTick = false;
+    onWaitingForTick?.call();
+  }
+
   /// Resolve combat in all lanes with animations
   Future<void> _resolveCombat() async {
     if (_currentMatch == null) return;
@@ -204,16 +214,20 @@ class MatchManager {
           ? 'Tick $tick: $tickActions'
           : 'Tick $tick: No actions';
 
-      // Show tick result before cleanup
-      await Future.delayed(const Duration(milliseconds: 400));
+      // Wait for user to advance tick
+      waitingForNextTick = true;
       onCombatUpdate?.call();
+
+      // Wait until user presses next
+      while (waitingForNextTick) {
+        await Future.delayed(const Duration(milliseconds: 100));
+      }
 
       // Clean up dead cards
       lane.playerStack.cleanup();
       lane.opponentStack.cleanup();
 
       // Update UI after cleanup
-      await Future.delayed(const Duration(milliseconds: 400));
       onCombatUpdate?.call();
 
       // Check if combat is over
