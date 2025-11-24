@@ -901,7 +901,11 @@
 - ✅ Full tick system implementation
 - ✅ Overflow damage
 - ✅ **Lane advancement & zones (base → middle → enemy base)**
-- 🔄 **Simple per-tick visualization of card battles and lane victory** (IN PROGRESS)
+- ✅ **Simple per-tick visualization of card battles and lane victory**
+  - Tick-by-tick animations with action display
+  - Manual progression with SPACE/button
+  - Combat banner with current tick info
+  - Fixed simultaneous attack logic
 - [ ] Gold system
 - [ ] Element system basics
 - ⏸️ **Player profile system (Firestore)** (deferred)
