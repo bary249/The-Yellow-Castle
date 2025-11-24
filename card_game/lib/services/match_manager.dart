@@ -121,10 +121,18 @@ class MatchManager {
 
   /// Manual tick progression control
   bool waitingForNextTick = false;
+  bool skipAllTicks = false;
   Function()? onWaitingForTick;
 
   /// Advance to next tick (called by user action)
   void advanceToNextTick() {
+    waitingForNextTick = false;
+    onWaitingForTick?.call();
+  }
+
+  /// Skip all remaining ticks (ENTER key)
+  void skipToEnd() {
+    skipAllTicks = true;
     waitingForNextTick = false;
     onWaitingForTick?.call();
   }
@@ -134,6 +142,9 @@ class MatchManager {
     if (_currentMatch == null) return;
 
     _currentMatch!.currentPhase = MatchPhase.combatPhase;
+
+    // Reset skip flag for new combat
+    skipAllTicks = false;
 
     // Clear previous combat log
     _combatResolver.clearLog();
@@ -217,21 +228,25 @@ class MatchManager {
           ? 'Tick $tick: $tickActions'
           : 'Tick $tick: No actions';
 
-      // Wait for user to advance tick
-      waitingForNextTick = true;
-      onCombatUpdate?.call();
+      // Wait for user to advance tick (unless skipping all)
+      if (!skipAllTicks) {
+        waitingForNextTick = true;
+        onCombatUpdate?.call();
 
-      // Wait until user presses next
-      while (waitingForNextTick) {
-        await Future.delayed(const Duration(milliseconds: 100));
+        // Wait until user presses next or skip
+        while (waitingForNextTick && !skipAllTicks) {
+          await Future.delayed(const Duration(milliseconds: 100));
+        }
       }
 
       // Clean up dead cards
       lane.playerStack.cleanup();
       lane.opponentStack.cleanup();
 
-      // Update UI after cleanup
-      onCombatUpdate?.call();
+      // Update UI after cleanup (skip in fast mode)
+      if (!skipAllTicks) {
+        onCombatUpdate?.call();
+      }
 
       // Check if combat is over
       if (lane.playerStack.isEmpty || lane.opponentStack.isEmpty) {

@@ -125,11 +125,17 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     return Focus(
       autofocus: true,
       onKeyEvent: (node, event) {
-        if (event is KeyDownEvent &&
-            event.logicalKey == LogicalKeyboardKey.space &&
-            _matchManager.waitingForNextTick) {
-          _matchManager.advanceToNextTick();
-          return KeyEventResult.handled;
+        if (event is KeyDownEvent && _matchManager.waitingForNextTick) {
+          // SPACE: Advance one tick at a time
+          if (event.logicalKey == LogicalKeyboardKey.space) {
+            _matchManager.advanceToNextTick();
+            return KeyEventResult.handled;
+          }
+          // ENTER: Skip all remaining ticks instantly
+          if (event.logicalKey == LogicalKeyboardKey.enter) {
+            _matchManager.skipToEnd();
+            return KeyEventResult.handled;
+          }
         }
         return KeyEventResult.ignored;
       },
@@ -155,11 +161,25 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         ),
         body: match.isGameOver ? _buildGameOver(match) : _buildMatchView(match),
         floatingActionButton: _matchManager.waitingForNextTick
-            ? FloatingActionButton.extended(
-                onPressed: () => _matchManager.advanceToNextTick(),
-                label: const Text('Next Tick (SPACE)'),
-                icon: const Icon(Icons.skip_next),
-                backgroundColor: Colors.orange,
+            ? Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  FloatingActionButton.extended(
+                    onPressed: () => _matchManager.skipToEnd(),
+                    label: const Text('Skip All (ENTER)'),
+                    icon: const Icon(Icons.fast_forward),
+                    backgroundColor: Colors.red,
+                    heroTag: 'skip',
+                  ),
+                  const SizedBox(height: 8),
+                  FloatingActionButton.extended(
+                    onPressed: () => _matchManager.advanceToNextTick(),
+                    label: const Text('Next Tick (SPACE)'),
+                    icon: const Icon(Icons.skip_next),
+                    backgroundColor: Colors.orange,
+                    heroTag: 'next',
+                  ),
+                ],
               )
             : (match.isGameOver || match.playerSubmitted
                   ? null
