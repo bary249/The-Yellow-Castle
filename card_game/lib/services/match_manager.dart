@@ -54,7 +54,9 @@ class MatchManager {
   }
 
   /// Player submits their card placements for the turn
-  void submitPlayerMoves(Map<LanePosition, List<GameCard>> placements) {
+  Future<void> submitPlayerMoves(
+    Map<LanePosition, List<GameCard>> placements,
+  ) async {
     if (_currentMatch == null) return;
     if (_currentMatch!.playerSubmitted) return;
 
@@ -75,12 +77,14 @@ class MatchManager {
 
     // Check if both players submitted
     if (_currentMatch!.bothPlayersSubmitted) {
-      _resolveCombat();
+      await _resolveCombat();
     }
   }
 
   /// Opponent (AI) submits their moves
-  void submitOpponentMoves(Map<LanePosition, List<GameCard>> placements) {
+  Future<void> submitOpponentMoves(
+    Map<LanePosition, List<GameCard>> placements,
+  ) async {
     if (_currentMatch == null) return;
     if (_currentMatch!.opponentSubmitted) return;
 
@@ -100,7 +104,7 @@ class MatchManager {
 
     // Check if both players submitted
     if (_currentMatch!.bothPlayersSubmitted) {
-      _resolveCombat();
+      await _resolveCombat();
     }
   }
 

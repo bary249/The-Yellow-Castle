@@ -99,15 +99,15 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     };
 
     // Submit player moves
-    _matchManager.submitPlayerMoves(Map.from(_stagedCards));
+    await _matchManager.submitPlayerMoves(Map.from(_stagedCards));
 
     // AI makes its moves
     final aiMoves = _ai.generateMoves(match.opponent);
-    _matchManager.submitOpponentMoves(aiMoves);
+    await _matchManager.submitOpponentMoves(aiMoves);
 
     // Clear staging
     _clearStaging();
-    setState(() {});
+    if (mounted) setState(() {});
   }
 
   @override
