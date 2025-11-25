@@ -97,12 +97,19 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> {
       _matchListener = _firestore
           .collection('matches')
           .where('playerIds', arrayContains: user.uid)
-          .where('status', isEqualTo: 'active')
           .snapshots()
           .listen((snapshot) {
-            if (snapshot.docs.isNotEmpty && mounted) {
-              final matchDoc = snapshot.docs.first;
-              _navigateToMatch(matchDoc.id);
+            if (!mounted || !_isSearching) return;
+
+            // Find waiting or active match
+            for (final doc in snapshot.docs) {
+              final data = doc.data();
+              final status = data['status'] as String?;
+              if (status == 'waiting' || status == 'active') {
+                print('Found match: ${doc.id} (status: $status)');
+                _navigateToMatch(doc.id);
+                return;
+              }
             }
           });
     } catch (e) {
@@ -125,57 +132,52 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> {
     try {
       final matchRef = _firestore.collection('matches').doc();
 
-      await _firestore.runTransaction((transaction) async {
-        // Check if opponent is still searching
-        final opponentDoc = await transaction.get(
-          _firestore.collection('matchmaking_queue').doc(opponentId),
-        );
+      // Check if opponent is still searching
+      final opponentDoc = await _firestore
+          .collection('matchmaking_queue')
+          .doc(opponentId)
+          .get();
 
-        if (!opponentDoc.exists || opponentDoc.data()?['searching'] != true) {
-          return; // Opponent left queue
-        }
+      if (!opponentDoc.exists || opponentDoc.data()?['searching'] != true) {
+        return; // Opponent left queue
+      }
 
-        // Create match
-        transaction.set(matchRef, {
-          'matchId': matchRef.id,
-          'status': 'active',
-          'createdAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-          'player1': {
-            'userId': myId,
-            'displayName': myName,
-            'submitted': false,
-            'crystalHP': 100,
-          },
-          'player2': {
-            'userId': opponentId,
-            'displayName': opponentName,
-            'submitted': false,
-            'crystalHP': 100,
-          },
-          'playerIds': [myId, opponentId],
-          'turnNumber': 1,
-          'currentPhase': 'placement',
-          'lanes': {
-            'left': {'zone': 'middle', 'player1Cards': [], 'player2Cards': []},
-            'center': {
-              'zone': 'middle',
-              'player1Cards': [],
-              'player2Cards': [],
-            },
-            'right': {'zone': 'middle', 'player1Cards': [], 'player2Cards': []},
-          },
-          'winner': null,
-        });
-
-        // Remove both from queue
-        transaction.delete(
-          _firestore.collection('matchmaking_queue').doc(myId),
-        );
-        transaction.delete(
-          _firestore.collection('matchmaking_queue').doc(opponentId),
-        );
+      // Create match with ready flags
+      await matchRef.set({
+        'matchId': matchRef.id,
+        'status': 'waiting', // waiting for both players to be ready
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+        'player1': {
+          'userId': myId,
+          'displayName': myName,
+          'ready': false,
+          'submitted': false,
+          'crystalHP': 100,
+        },
+        'player2': {
+          'userId': opponentId,
+          'displayName': opponentName,
+          'ready': false,
+          'submitted': false,
+          'crystalHP': 100,
+        },
+        'playerIds': [myId, opponentId],
+        'turnNumber': 1,
+        'currentPhase': 'placement',
+        'lanes': {
+          'left': {'zone': 'middle', 'player1Cards': [], 'player2Cards': []},
+          'center': {'zone': 'middle', 'player1Cards': [], 'player2Cards': []},
+          'right': {'zone': 'middle', 'player1Cards': [], 'player2Cards': []},
+        },
+        'winner': null,
       });
+
+      // Remove both from queue
+      await _firestore.collection('matchmaking_queue').doc(myId).delete();
+      await _firestore.collection('matchmaking_queue').doc(opponentId).delete();
+
+      // Don't navigate here - let both players detect via listener
     } catch (e) {
       print('Match creation error (may be normal race): $e');
     }
