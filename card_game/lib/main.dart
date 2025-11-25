@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
-import 'screens/test_match_screen.dart';
+import 'screens/main_menu_screen.dart';
 import 'services/auth_service.dart';
 
 final _authService = AuthService();
@@ -39,7 +39,7 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
         appBarTheme: const AppBarTheme(centerTitle: true, elevation: 2),
       ),
-      home: const TestMatchScreen(),
+      home: const MainMenuScreen(),
     );
   }
 }
