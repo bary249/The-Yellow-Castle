@@ -111,6 +111,33 @@ class MatchManager {
     }
   }
 
+  /// Submit opponent moves for online multiplayer (cards not in local hand)
+  /// Places cards directly in lanes without checking hand
+  Future<void> submitOnlineOpponentMoves(
+    Map<LanePosition, List<GameCard>> placements,
+  ) async {
+    if (_currentMatch == null) return;
+    if (_currentMatch!.opponentSubmitted) return;
+
+    // Place cards directly in lanes (no hand check for online opponent)
+    for (final entry in placements.entries) {
+      final lane = _currentMatch!.getLane(entry.key);
+      final cards = entry.value;
+
+      for (final card in cards) {
+        // Add directly to opponent stack - these are reconstructed from Firebase
+        lane.opponentStack.addCard(card);
+      }
+    }
+
+    _currentMatch!.opponentSubmitted = true;
+
+    // Check if both players submitted
+    if (_currentMatch!.bothPlayersSubmitted) {
+      await _resolveCombat();
+    }
+  }
+
   /// Callback for combat animation updates
   Function()? onCombatUpdate;
 
@@ -122,6 +149,7 @@ class MatchManager {
   /// Manual tick progression control
   bool waitingForNextTick = false;
   bool skipAllTicks = false;
+  bool autoProgress = false; // Auto-progress with delays (for online mode)
   Function()? onWaitingForTick;
 
   /// Advance to next tick (called by user action)
@@ -228,8 +256,12 @@ class MatchManager {
           ? 'Tick $tick: $tickActions'
           : 'Tick $tick: No actions';
 
-      // Wait for user to advance tick (unless skipping all)
-      if (!skipAllTicks) {
+      // Wait for user to advance tick (unless skipping all or auto-progressing)
+      if (autoProgress) {
+        // Auto-progress: show tick, wait ~2 seconds, then continue
+        onCombatUpdate?.call();
+        await Future.delayed(const Duration(seconds: 2));
+      } else if (!skipAllTicks) {
         waitingForNextTick = true;
         onCombatUpdate?.call();
 
@@ -243,8 +275,8 @@ class MatchManager {
       lane.playerStack.cleanup();
       lane.opponentStack.cleanup();
 
-      // Update UI after cleanup (skip in fast mode)
-      if (!skipAllTicks) {
+      // Update UI after cleanup
+      if (autoProgress || !skipAllTicks) {
         onCombatUpdate?.call();
       }
 

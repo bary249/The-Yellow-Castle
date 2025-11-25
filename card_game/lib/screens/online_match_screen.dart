@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/deck.dart';
 import '../models/match_state.dart';
@@ -312,32 +311,10 @@ class _OnlineMatchScreenState extends State<OnlineMatchScreen> {
       if (mounted) setState(() {});
     };
 
-    // Get MY moves from Firebase (what I submitted)
-    final myKey = _amPlayer1 ? 'player1' : 'player2';
-    final myMoves = _matchData?[myKey]?['moves'] as Map<String, dynamic>? ?? {};
+    // Enable auto-progression for online mode (tick-by-tick with delays)
+    _matchManager.autoProgress = true;
 
-    final myCards = <LanePosition, List<GameCard>>{
-      LanePosition.left: [],
-      LanePosition.center: [],
-      LanePosition.right: [],
-    };
-
-    for (final lane in LanePosition.values) {
-      final laneCards = (myMoves[lane.name] as List<dynamic>?) ?? [];
-      for (final cardData in laneCards) {
-        myCards[lane]!.add(
-          GameCard(
-            id: cardData['id'] as String? ?? 'card',
-            name: cardData['name'] as String? ?? 'Card',
-            damage: cardData['damage'] as int? ?? 5,
-            health: cardData['health'] as int? ?? 5,
-            tick: cardData['tick'] as int? ?? 3,
-          ),
-        );
-      }
-    }
-
-    // Get OPPONENT moves from Firebase
+    // Get OPPONENT moves from Firebase (we need to reconstruct their cards)
     final oppKey = _amPlayer1 ? 'player2' : 'player1';
     final oppMoves =
         _matchData?[oppKey]?['moves'] as Map<String, dynamic>? ?? {};
@@ -363,9 +340,11 @@ class _OnlineMatchScreenState extends State<OnlineMatchScreen> {
       }
     }
 
-    // Submit both to MatchManager (runs combat locally with battle log)
-    await _matchManager.submitPlayerMoves(myCards);
-    await _matchManager.submitOpponentMoves(opponentCards);
+    // Submit MY moves using _stagedCards (actual cards from my hand)
+    await _matchManager.submitPlayerMoves(Map.from(_stagedCards));
+
+    // Submit OPPONENT moves using online method (bypasses hand check)
+    await _matchManager.submitOnlineOpponentMoves(opponentCards);
 
     // Only player1 updates Firebase with results (to avoid race)
     if (_amPlayer1) {
@@ -487,161 +466,120 @@ class _OnlineMatchScreenState extends State<OnlineMatchScreen> {
     // Show waiting indicator if I submitted but opponent hasn't
     final showWaiting = _mySubmitted && !_opponentSubmitted;
 
-    return Focus(
-      autofocus: true,
-      onKeyEvent: (node, event) {
-        if (event is KeyDownEvent && _matchManager.waitingForNextTick) {
-          // SPACE: Advance one tick at a time
-          if (event.logicalKey == LogicalKeyboardKey.space) {
-            _matchManager.advanceToNextTick();
-            return KeyEventResult.handled;
-          }
-          // ENTER: Skip all remaining ticks instantly
-          if (event.logicalKey == LogicalKeyboardKey.enter) {
-            _matchManager.skipToEnd();
-            return KeyEventResult.handled;
-          }
-        }
-        return KeyEventResult.ignored;
-      },
-      child: Scaffold(
-        appBar: AppBar(
-          title: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('Turn ${match.turnNumber}'),
-              const SizedBox(width: 16),
-              // Timer display
-              if (!match.isGameOver && !_mySubmitted)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: _remainingSeconds <= 5 ? Colors.red : Colors.amber,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    '⏱️ ${_remainingSeconds}s',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: _remainingSeconds <= 5
-                          ? Colors.white
-                          : Colors.black,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          backgroundColor: Colors.indigo[700],
-          foregroundColor: Colors.white,
-          actions: [
-            // Submission status indicators
-            if (!match.isGameOver) ...[
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
-                decoration: BoxDecoration(
-                  color: _mySubmitted ? Colors.green : Colors.grey,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  _mySubmitted ? '✓ You' : '○ You',
-                  style: const TextStyle(fontSize: 12),
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
-                decoration: BoxDecoration(
-                  color: _opponentSubmitted ? Colors.green : Colors.grey,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  _opponentSubmitted ? '✓ Opp' : '○ Opp',
-                  style: const TextStyle(fontSize: 12),
-                ),
-              ),
-            ],
-            if (!match.isGameOver && !_mySubmitted)
-              IconButton(
-                icon: const Icon(Icons.clear_all),
-                onPressed: () {
-                  _clearStaging();
-                  setState(() {});
-                },
-                tooltip: 'Clear all placements',
-              ),
-            IconButton(
-              icon: const Icon(Icons.exit_to_app),
-              onPressed: () => Navigator.of(context).pop(),
-              tooltip: 'Leave match',
-            ),
-          ],
-        ),
-        body: Column(
+    return Scaffold(
+      appBar: AppBar(
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            // Waiting for opponent banner
-            if (showWaiting)
+            Text('Turn ${match.turnNumber}'),
+            const SizedBox(width: 16),
+            // Timer display
+            if (!match.isGameOver && !_mySubmitted)
               Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                color: Colors.amber[100],
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                    SizedBox(width: 12),
-                    Text(
-                      '⏳ Waiting for opponent to submit...',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ],
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: _remainingSeconds <= 5 ? Colors.red : Colors.amber,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '⏱️ ${_remainingSeconds}s',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: _remainingSeconds <= 5 ? Colors.white : Colors.black,
+                  ),
                 ),
               ),
-            Expanded(
-              child: match.isGameOver
-                  ? _buildGameOver(match)
-                  : _buildMatchView(match),
-            ),
           ],
         ),
-        floatingActionButton: _matchManager.waitingForNextTick
-            ? Column(
-                mainAxisSize: MainAxisSize.min,
+        backgroundColor: Colors.indigo[700],
+        foregroundColor: Colors.white,
+        actions: [
+          // Submission status indicators
+          if (!match.isGameOver) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+              decoration: BoxDecoration(
+                color: _mySubmitted ? Colors.green : Colors.grey,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                _mySubmitted ? '✓ You' : '○ You',
+                style: const TextStyle(fontSize: 12),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+              decoration: BoxDecoration(
+                color: _opponentSubmitted ? Colors.green : Colors.grey,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                _opponentSubmitted ? '✓ Opp' : '○ Opp',
+                style: const TextStyle(fontSize: 12),
+              ),
+            ),
+          ],
+          if (!match.isGameOver && !_mySubmitted)
+            IconButton(
+              icon: const Icon(Icons.clear_all),
+              onPressed: () {
+                _clearStaging();
+                setState(() {});
+              },
+              tooltip: 'Clear all placements',
+            ),
+          IconButton(
+            icon: const Icon(Icons.exit_to_app),
+            onPressed: () => Navigator.of(context).pop(),
+            tooltip: 'Leave match',
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          // Waiting for opponent banner
+          if (showWaiting)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              color: Colors.amber[100],
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  FloatingActionButton.extended(
-                    onPressed: () => _matchManager.skipToEnd(),
-                    label: const Text('Skip All (ENTER)'),
-                    icon: const Icon(Icons.fast_forward),
-                    backgroundColor: Colors.red,
-                    heroTag: 'skip',
+                  SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
                   ),
-                  const SizedBox(height: 8),
-                  FloatingActionButton.extended(
-                    onPressed: () => _matchManager.advanceToNextTick(),
-                    label: const Text('Next Tick (SPACE)'),
-                    icon: const Icon(Icons.skip_next),
-                    backgroundColor: Colors.orange,
-                    heroTag: 'next',
+                  SizedBox(width: 12),
+                  Text(
+                    '⏳ Waiting for opponent to submit...',
+                    style: TextStyle(fontWeight: FontWeight.bold),
                   ),
                 ],
-              )
-            : (match.isGameOver || _mySubmitted
-                  ? null
-                  : FloatingActionButton.extended(
-                      onPressed: _submitTurn,
-                      label: const Text('Submit Turn'),
-                      icon: const Icon(Icons.send),
-                      backgroundColor: Colors.green,
-                    )),
+              ),
+            ),
+          Expanded(
+            child: match.isGameOver
+                ? _buildGameOver(match)
+                : _buildMatchView(match),
+          ),
+        ],
       ),
+      floatingActionButton: (match.isGameOver || _mySubmitted)
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: _submitTurn,
+              label: const Text('Submit Turn'),
+              icon: const Icon(Icons.send),
+              backgroundColor: Colors.green,
+            ),
     );
   }
 
