@@ -38,5 +38,19 @@ end
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_macos_build_settings(target)
+
+    # Force all pods to use a modern macOS deployment target.
+    # This avoids Firebase/Pods being built with 10.11/10.12, which can
+    # trigger unsupported clang options for arm64-apple-macos.
+    target.build_configurations.each do |config|
+      config.build_settings['MACOSX_DEPLOYMENT_TARGET'] = '10.15'
+      
+      # Strip out any -G flags that might be causing issues
+      ['OTHER_CFLAGS', 'OTHER_CPLUSPLUSFLAGS', 'OTHER_LDFLAGS'].each do |setting|
+        if config.build_settings[setting]
+          config.build_settings[setting] = config.build_settings[setting].gsub(/-G\b/, '')
+        end
+      end
+    end
   end
 end

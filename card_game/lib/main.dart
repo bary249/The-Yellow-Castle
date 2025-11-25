@@ -1,13 +1,27 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 import 'screens/test_match_screen.dart';
+import 'services/auth_service.dart';
+
+final _authService = AuthService();
 
 Future<void> main() async {
   // Ensure Flutter is initialized
   WidgetsFlutterBinding.ensureInitialized();
 
   // Initialize Firebase
-  await Firebase.initializeApp();
+  if (kIsWeb) {
+    // Web requires explicit options
+    await Firebase.initializeApp(options: DefaultFirebaseOptions.web);
+  } else {
+    // Mobile/desktop use bundled platform config
+    await Firebase.initializeApp();
+  }
+
+  // Simple smoke test: ensure we're signed in anonymously
+  await _authService.signInAnonymously();
 
   runApp(const MyApp());
 }

@@ -6,6 +6,7 @@ import '../models/lane.dart';
 import '../models/card.dart';
 import '../services/match_manager.dart';
 import '../services/simple_ai.dart';
+import '../services/auth_service.dart';
 
 /// Simple test screen to verify game logic with drag-and-drop card placement
 class TestMatchScreen extends StatefulWidget {
@@ -18,6 +19,11 @@ class TestMatchScreen extends StatefulWidget {
 class _TestMatchScreenState extends State<TestMatchScreen> {
   final MatchManager _matchManager = MatchManager();
   final SimpleAI _ai = SimpleAI();
+  final AuthService _authService = AuthService();
+
+  String? _playerId;
+  String? _playerName;
+  int? _playerElo;
 
   // Staging area: cards placed in lanes before submitting
   final Map<LanePosition, List<GameCard>> _stagedCards = {
@@ -31,14 +37,35 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   @override
   void initState() {
     super.initState();
-    _startNewMatch();
+    _initPlayerAndMatch();
+  }
+
+  Future<void> _initPlayerAndMatch() async {
+    // Use Firebase user if available
+    final user = _authService.currentUser;
+    if (user != null) {
+      _playerId = user.uid;
+      final profile = await _authService.getUserProfile(user.uid);
+      _playerName = profile?['displayName'] as String? ?? 'Player';
+      _playerElo = profile?['elo'] as int? ?? 1000;
+    } else {
+      _playerId = 'local_player';
+      _playerName = 'Player';
+      _playerElo = 1000;
+    }
+
+    if (mounted) {
+      _startNewMatch();
+    }
   }
 
   void _startNewMatch() {
+    final id = _playerId ?? 'player1';
+    final name = _playerName ?? 'You';
     _matchManager.startMatch(
-      playerId: 'player1',
-      playerName: 'You',
-      playerDeck: Deck.starter(playerId: 'player1'),
+      playerId: id,
+      playerName: name,
+      playerDeck: Deck.starter(playerId: id),
       opponentId: 'ai',
       opponentName: 'AI Opponent',
       opponentDeck: Deck.starter(playerId: 'ai'),
@@ -221,244 +248,186 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   }
 
   Widget _buildMatchView(MatchState match) {
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Main game area
+        // Account header (Firebase player info)
+        _buildAccountHeader(),
+        const SizedBox(height: 8),
+
         Expanded(
-          flex: 2,
-          child: Column(
+          child: Row(
             children: [
-              // Opponent info
-              _buildPlayerInfo(match.opponent, isOpponent: true),
+              // Main game area
+              Expanded(
+                flex: 2,
+                child: Column(
+                  children: [
+                    // Opponent info
+                    _buildPlayerInfo(match.opponent, isOpponent: true),
 
-              const SizedBox(height: 8),
+                    const SizedBox(height: 8),
 
-              // Combat phase indicator
-              if (match.currentPhase == MatchPhase.combatPhase)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [Colors.red[700]!, Colors.orange[600]!],
-                    ),
-                  ),
-                  child: Column(
-                    children: [
-                      const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.flash_on, color: Colors.white, size: 24),
-                          SizedBox(width: 8),
-                          Text(
-                            '⚔️ COMBAT IN PROGRESS ⚔️',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 2,
-                            ),
-                          ),
-                          SizedBox(width: 8),
-                          Icon(Icons.flash_on, color: Colors.white, size: 24),
-                        ],
-                      ),
-                      if (_matchManager.currentTickInfo != null) ...[
-                        const SizedBox(height: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.black26,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            _matchManager.currentTickInfo!,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                            ),
-                            textAlign: TextAlign.center,
+                    // Combat phase indicator
+                    if (match.currentPhase == MatchPhase.combatPhase)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [Colors.red[700]!, Colors.orange[600]!],
                           ),
                         ),
-                      ],
-                    ],
-                  ),
-                ),
+                        child: Column(
+                          children: [
+                            const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.flash_on,
+                                  color: Colors.white,
+                                  size: 24,
+                                ),
+                                SizedBox(width: 8),
+                                Text(
+                                  '⚔️ COMBAT IN PROGRESS ⚔️',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 2,
+                                  ),
+                                ),
+                                SizedBox(width: 8),
+                                Icon(
+                                  Icons.flash_on,
+                                  color: Colors.white,
+                                  size: 24,
+                                ),
+                              ],
+                            ),
+                            if (_matchManager.currentTickInfo != null) ...[
+                              const SizedBox(height: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.black26,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  _matchManager.currentTickInfo!,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
 
-              // Instructions
-              if (_selectedCard != null)
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  color: Colors.amber[100],
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.touch_app, size: 16),
-                      const SizedBox(width: 8),
-                      Text('Click a lane to place ${_selectedCard!.name}'),
-                    ],
-                  ),
-                ),
+                    // Instructions
+                    if (_selectedCard != null)
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        color: Colors.amber[100],
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.touch_app, size: 16),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Click a lane to place ${_selectedCard!.name}',
+                            ),
+                          ],
+                        ),
+                      ),
 
-              // Lanes
-              Expanded(
-                child: Row(
-                  children: [
-                    Expanded(child: _buildLane(match, LanePosition.left)),
-                    Expanded(child: _buildLane(match, LanePosition.center)),
-                    Expanded(child: _buildLane(match, LanePosition.right)),
+                    // Lanes
+                    Expanded(
+                      child: Row(
+                        children: [
+                          Expanded(child: _buildLane(match, LanePosition.left)),
+                          Expanded(
+                            child: _buildLane(match, LanePosition.center),
+                          ),
+                          Expanded(
+                            child: _buildLane(match, LanePosition.right),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Player info
+                    _buildPlayerInfo(match.player, isOpponent: false),
+
+                    // Hand
+                    _buildHand(match.player),
                   ],
                 ),
               ),
 
-              // Player info
-              _buildPlayerInfo(match.player, isOpponent: false),
-
-              // Hand
-              _buildHand(match.player),
+              // Battle Log sidebar
+              _buildBattleLog(),
             ],
           ),
         ),
-
-        // Battle Log sidebar
-        _buildBattleLog(),
       ],
     );
   }
 
-  Widget _buildBattleLog() {
-    final logs = _matchManager.getCombatLog();
+  Widget _buildAccountHeader() {
+    final name = _playerName ?? 'Player';
+    final elo = _playerElo ?? 1000;
+    final id = _playerId ?? 'local';
 
     return Container(
-      width: 350,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.grey[900],
-        border: Border(left: BorderSide(color: Colors.grey[700]!, width: 2)),
-      ),
-      child: Column(
-        children: [
-          // Header
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.grey[850],
-              border: Border(bottom: BorderSide(color: Colors.grey[700]!)),
-            ),
-            child: const Row(
-              children: [
-                Icon(Icons.receipt_long, color: Colors.amber, size: 20),
-                SizedBox(width: 8),
-                Text(
-                  'BATTLE LOG',
-                  style: TextStyle(
-                    color: Colors.amber,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                    letterSpacing: 1.2,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Log entries
-          Expanded(
-            child: logs.isEmpty
-                ? const Center(
-                    child: Text(
-                      'No combat yet\nPlace cards and submit to see battle results',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.all(8),
-                    itemCount: logs.length,
-                    itemBuilder: (context, index) {
-                      final entry = logs[index];
-                      return _buildLogEntry(entry);
-                    },
-                  ),
-          ),
+        color: Colors.blueGrey[900],
+        boxShadow: const [
+          BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2)),
         ],
       ),
-    );
-  }
-
-  Widget _buildLogEntry(dynamic entry) {
-    // Check if it's a BattleLogEntry
-    final tick = entry.tick as int;
-    final laneDesc = entry.laneDescription as String;
-    final action = entry.action as String;
-    final details = entry.details as String;
-    final isImportant = entry.isImportant as bool? ?? false;
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: isImportant
-            ? Colors.orange[900]!.withOpacity(0.3)
-            : Colors.grey[850],
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(
-          color: isImportant ? Colors.orange : Colors.grey[700]!,
-          width: isImportant ? 2 : 1,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // Lane and tick
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                laneDesc,
-                style: const TextStyle(
-                  color: Colors.cyan,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 11,
-                ),
+              const Icon(Icons.account_circle, color: Colors.white, size: 22),
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    'ELO $elo',
+                    style: const TextStyle(color: Colors.white70, fontSize: 11),
+                  ),
+                ],
               ),
-              if (tick > 0)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.purple[700],
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    'T$tick',
-                    style: const TextStyle(color: Colors.white, fontSize: 10),
-                  ),
-                ),
             ],
           ),
-          const SizedBox(height: 4),
-
-          // Action
-          Text(
-            action,
-            style: TextStyle(
-              color: isImportant ? Colors.amber : Colors.white,
-              fontWeight: isImportant ? FontWeight.bold : FontWeight.normal,
-              fontSize: 12,
+          Flexible(
+            child: Text(
+              'UID: ${id.length > 8 ? id.substring(0, 8) : id}',
+              style: const TextStyle(color: Colors.white60, fontSize: 10),
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.right,
             ),
-          ),
-          const SizedBox(height: 2),
-
-          // Details
-          Text(
-            details,
-            style: const TextStyle(color: Colors.grey, fontSize: 11),
           ),
         ],
       ),
@@ -467,22 +436,41 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
 
   Widget _buildPlayerInfo(player, {required bool isOpponent}) {
     return Container(
-      padding: const EdgeInsets.all(8),
-      color: isOpponent ? Colors.red[100] : Colors.blue[100],
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      color: isOpponent ? Colors.red[50] : Colors.blue[50],
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            player.name,
-            style: const TextStyle(fontWeight: FontWeight.bold),
+          Row(
+            children: [
+              Icon(
+                isOpponent ? Icons.smart_toy : Icons.person,
+                color: isOpponent ? Colors.red : Colors.blue,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                player.name,
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: isOpponent ? Colors.red[700] : Colors.blue[700],
+                ),
+              ),
+            ],
           ),
-          Text(
-            '💎 ${player.crystalHP} HP',
-            style: const TextStyle(fontSize: 16),
+          Row(
+            children: [
+              const Icon(Icons.favorite, color: Colors.pink, size: 18),
+              const SizedBox(width: 4),
+              Text(
+                '${player.crystalHP} HP',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(width: 16),
+              const Icon(Icons.monetization_on, color: Colors.amber, size: 18),
+              const SizedBox(width: 4),
+              Text('${player.gold}'),
+            ],
           ),
-          Text('🃏 ${player.hand.length}'),
-          Text('📚 ${player.deck.remainingCards}'),
-          Text('💰 ${player.gold}'),
         ],
       ),
     );
@@ -507,7 +495,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
             width: canPlace ? 3 : 1,
           ),
           borderRadius: BorderRadius.circular(8),
-          color: canPlace ? Colors.green.withOpacity(0.1) : null,
+          color: canPlace ? Colors.green.withValues(alpha: 0.1) : null,
         ),
         child: SingleChildScrollView(
           child: Column(
@@ -604,7 +592,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                   height: 60,
                   margin: const EdgeInsets.all(4),
                   decoration: BoxDecoration(
-                    color: Colors.green.withOpacity(0.2),
+                    color: Colors.green.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(4),
                     border: Border.all(
                       color: Colors.green,
@@ -674,6 +662,77 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
             onPressed: () => _removeCardFromLane(lane, card),
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBattleLog() {
+    final log = _matchManager.getCombatLog();
+
+    return Container(
+      width: 200,
+      color: Colors.grey[100],
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            color: Colors.grey[300],
+            width: double.infinity,
+            child: const Text(
+              '📜 Battle Log',
+              style: TextStyle(fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
+            ),
+          ),
+          Expanded(
+            child: log.isEmpty
+                ? const Center(child: Text('No combat yet'))
+                : ListView.builder(
+                    itemCount: log.length,
+                    itemBuilder: (context, index) {
+                      final entry = log[index];
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          border: Border(
+                            bottom: BorderSide(color: Colors.grey[300]!),
+                          ),
+                          color: entry.isImportant
+                              ? Colors.amber[50]
+                              : Colors.white,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '[${entry.laneDescription}] T${entry.tick}',
+                              style: TextStyle(
+                                fontSize: 9,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                            Text(
+                              entry.action,
+                              style: const TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            if (entry.details.isNotEmpty)
+                              Text(
+                                entry.details,
+                                style: const TextStyle(fontSize: 9),
+                              ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
           ),
         ],
       ),
@@ -754,7 +813,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         boxShadow: isAttacking
             ? [
                 BoxShadow(
-                  color: Colors.orange.withOpacity(0.6),
+                  color: Colors.orange.withValues(alpha: 0.6),
                   blurRadius: 8,
                   spreadRadius: 2,
                 ),
@@ -835,7 +894,9 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                             boxShadow: isSelected
                                 ? [
                                     BoxShadow(
-                                      color: Colors.green.withOpacity(0.5),
+                                      color: Colors.green.withValues(
+                                        alpha: 0.5,
+                                      ),
                                       blurRadius: 8,
                                       spreadRadius: 2,
                                     ),
