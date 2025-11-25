@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import 'test_match_screen.dart';
+import 'matchmaking_screen.dart';
 
 /// Main menu screen with Play vs AI and Play Online options
 class MainMenuScreen extends StatefulWidget {
@@ -50,23 +51,9 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
   }
 
   void _playOnline() {
-    // Placeholder - will implement matchmaking later
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('🌐 Play Online'),
-        content: const Text(
-          'Online multiplayer is coming soon!\n\n'
-          'We\'re building matchmaking and real-time battle sync.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const MatchmakingScreen()));
   }
 
   @override
@@ -132,10 +119,10 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                       _buildMenuButton(
                         icon: Icons.public,
                         label: 'PLAY ONLINE',
-                        sublabel: 'Coming soon...',
+                        sublabel: 'Battle real players!',
                         color: Colors.blue,
                         onTap: _playOnline,
-                        enabled: true, // Set to true when ready
+                        enabled: true,
                       ),
 
                       const SizedBox(height: 40),
