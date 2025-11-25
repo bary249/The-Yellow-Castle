@@ -1,0 +1,16 @@
+Simulated 10 games (Deck1 vs Deck2)
+Deck1 wins: 5 (50.0%)
+Deck2 wins: 5 (50.0%)
+Draws: 0 (0.0%)
+Average turns: 14.70
+
+Game 1: winner=deck2, turns=10, P1=0 HP, P2=84 HP
+Game 2: winner=deck1, turns=15, P1=18 HP, P2=0 HP
+Game 3: winner=deck1, turns=19, P1=30 HP, P2=0 HP
+Game 4: winner=deck1, turns=17, P1=8 HP, P2=0 HP
+Game 5: winner=deck1, turns=11, P1=75 HP, P2=0 HP
+Game 6: winner=deck2, turns=15, P1=0 HP, P2=2 HP
+Game 7: winner=deck1, turns=15, P1=3 HP, P2=0 HP
+Game 8: winner=deck2, turns=17, P1=0 HP, P2=100 HP
+Game 9: winner=deck2, turns=11, P1=0 HP, P2=66 HP
+Game 10: winner=deck2, turns=17, P1=0 HP, P2=25 HP

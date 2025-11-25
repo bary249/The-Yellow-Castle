@@ -1,11 +1,26 @@
 /// Represents a playing card in the game
-/// Phase 1: Simple version without elements or character families
+/// Phase 1: simple version, but already prepared for elements/families/abilities
 class GameCard {
   final String id;
   final String name;
   final int damage;
   final int health;
-  final int tick; // 1-5: determines when the card acts in combat
+
+  /// 1-5: determines when the card acts in combat
+  final int tick;
+
+  /// Optional element for advantage matrix (e.g. 'Fire', 'Water', 'Nature')
+  final String? element;
+
+  /// Optional character family (e.g. 'Monkey', 'Ant')
+  final String? family;
+
+  /// Simple ability tags (e.g. 'pierce', 'shield', 'haste')
+  final List<String> abilities;
+
+  /// Basic balance knobs (unused by core logic for now)
+  final int cost;
+  final int rarity; // 1-5
 
   // Runtime state
   int currentHealth;
@@ -16,7 +31,13 @@ class GameCard {
     required this.damage,
     required this.health,
     required this.tick,
-  }) : currentHealth = health;
+    this.element,
+    this.family,
+    List<String>? abilities,
+    this.cost = 0,
+    this.rarity = 1,
+  }) : abilities = List.unmodifiable(abilities ?? const []),
+       currentHealth = health;
 
   /// Create a copy of this card (for deck shuffling/dealing)
   GameCard copy() {
@@ -26,6 +47,11 @@ class GameCard {
       damage: damage,
       health: health,
       tick: tick,
+      element: element,
+      family: family,
+      abilities: abilities,
+      cost: cost,
+      rarity: rarity,
     );
   }
 
@@ -55,6 +81,11 @@ class GameCard {
     int damage = 5,
     int health = 10,
     int tick = 3,
+    String? element,
+    String? family,
+    List<String>? abilities,
+    int cost = 0,
+    int rarity = 1,
   }) {
     return GameCard(
       id: id ?? 'card_${DateTime.now().millisecondsSinceEpoch}',
@@ -62,6 +93,11 @@ class GameCard {
       damage: damage,
       health: health,
       tick: tick,
+      element: element,
+      family: family,
+      abilities: abilities,
+      cost: cost,
+      rarity: rarity,
     );
   }
 }

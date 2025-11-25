@@ -21,6 +21,8 @@ class MatchManager {
     required String opponentName,
     required Deck opponentDeck,
     bool opponentIsAI = true,
+    String? playerAttunedElement,
+    String? opponentAttunedElement,
   }) {
     // Create players
     final player = Player(
@@ -28,6 +30,7 @@ class MatchManager {
       name: playerName,
       deck: playerDeck,
       isHuman: true,
+      attunedElement: playerAttunedElement,
     );
 
     final opponent = Player(
@@ -35,6 +38,7 @@ class MatchManager {
       name: opponentName,
       deck: opponentDeck,
       isHuman: !opponentIsAI,
+      attunedElement: opponentAttunedElement,
     );
 
     // Shuffle decks
@@ -146,10 +150,15 @@ class MatchManager {
   LanePosition? currentCombatLane;
   int? currentCombatTick;
 
+  /// Optional log sink used by simulations to capture full battle logs.
+  /// When set, all combat-related print output is also written here.
+  StringBuffer? logSink;
+
   /// Manual tick progression control
   bool waitingForNextTick = false;
   bool skipAllTicks = false;
   bool autoProgress = false; // Auto-progress with delays (for online mode)
+  bool fastMode = false; // When true, skip delays (for simulations)
   Function()? onWaitingForTick;
 
   /// Advance to next tick (called by user action)
@@ -178,9 +187,9 @@ class MatchManager {
     _combatResolver.clearLog();
 
     // Print turn header to terminal
-    print('\n${'=' * 80}');
-    print('TURN ${_currentMatch!.turnNumber} - COMBAT RESOLUTION');
-    print('=' * 80);
+    _log('\n${'=' * 80}');
+    _log('TURN ${_currentMatch!.turnNumber} - COMBAT RESOLUTION');
+    _log('=' * 80);
 
     // Resolve each lane with tick-by-tick animation
     for (final lane in _currentMatch!.lanes) {
@@ -190,23 +199,25 @@ class MatchManager {
     }
 
     // Print combat log to terminal
-    print('\n--- BATTLE LOG ---');
+    _log('\n--- BATTLE LOG ---');
     for (final entry in _combatResolver.logEntries) {
-      print(entry.formattedMessage);
+      _log(entry.formattedMessage);
     }
-    print('--- END BATTLE LOG ---\n');
+    _log('--- END BATTLE LOG ---\n');
 
     // Check if any cards damaged crystals (winning a lane means attacking crystal)
     _checkCrystalDamage();
 
-    // Wait before showing final results
-    await Future.delayed(const Duration(milliseconds: 800));
+    // Wait before showing final results (skip in fast/sim mode)
+    if (!fastMode) {
+      await Future.delayed(const Duration(milliseconds: 800));
+    }
     onCombatUpdate?.call();
 
     // Print crystal damage
-    print('Player Crystal: ${_currentMatch!.player.crystalHP} HP');
-    print('Opponent Crystal: ${_currentMatch!.opponent.crystalHP} HP');
-    print('=' * 80);
+    _log('Player Crystal: ${_currentMatch!.player.crystalHP} HP');
+    _log('Opponent Crystal: ${_currentMatch!.opponent.crystalHP} HP');
+    _log('=' * 80);
 
     // Check for game over
     _currentMatch!.checkGameOver();
@@ -222,8 +233,20 @@ class MatchManager {
     currentTickInfo =
         '⚔️ ${lane.position.name.toUpperCase()} - Combat Starting...';
 
-    // Initial delay to show combat starting
-    await Future.delayed(const Duration(milliseconds: 300));
+    // Provide lane/attunement context to the combat resolver so it can
+    // apply base-zone buffs for matching elements.
+    if (_currentMatch != null) {
+      _combatResolver.setLaneContext(
+        zone: lane.currentZone,
+        playerBaseElement: _currentMatch!.player.attunedElement,
+        opponentBaseElement: _currentMatch!.opponent.attunedElement,
+      );
+    }
+
+    // Initial delay to show combat starting (skip in fast/sim mode)
+    if (!fastMode) {
+      await Future.delayed(const Duration(milliseconds: 300));
+    }
     onCombatUpdate?.call();
 
     // Process ticks 1-5 with delays
@@ -258,9 +281,11 @@ class MatchManager {
 
       // Wait for user to advance tick (unless skipping all or auto-progressing)
       if (autoProgress) {
-        // Auto-progress: show tick, wait ~2 seconds, then continue
+        // Auto-progress: show tick, then continue (optionally with delay)
         onCombatUpdate?.call();
-        await Future.delayed(const Duration(seconds: 2));
+        if (!fastMode) {
+          await Future.delayed(const Duration(seconds: 2));
+        }
       } else if (!skipAllTicks) {
         waitingForNextTick = true;
         onCombatUpdate?.call();
@@ -287,8 +312,10 @@ class MatchManager {
       }
     }
 
-    // Final delay after lane completes
-    await Future.delayed(const Duration(milliseconds: 500));
+    // Final delay after lane completes (skip in fast/sim mode)
+    if (!fastMode) {
+      await Future.delayed(const Duration(milliseconds: 500));
+    }
     currentTickInfo = null;
     currentCombatLane = null;
     currentCombatTick = null;
@@ -299,7 +326,7 @@ class MatchManager {
   void _checkCrystalDamage() {
     if (_currentMatch == null) return;
 
-    print('\n--- ZONE ADVANCEMENT ---');
+    _log('\n--- ZONE ADVANCEMENT ---');
 
     for (final lane in _currentMatch!.lanes) {
       final playerWon = lane.playerWon;
@@ -307,9 +334,9 @@ class MatchManager {
 
       if (playerWon == true) {
         // Player won lane - advance toward enemy base
-        print('$laneName: Player victory! ${lane.zoneDisplay}');
+        _log('$laneName: Player victory! ${lane.zoneDisplay}');
         final reachedBase = lane.advanceZone(true);
-        print('$laneName: Advanced to ${lane.zoneDisplay}');
+        _log('$laneName: Advanced to ${lane.zoneDisplay}');
 
         if (reachedBase) {
           // Reached enemy base - deal crystal damage
@@ -318,16 +345,18 @@ class MatchManager {
             (sum, card) => sum + card.damage,
           );
           _currentMatch!.opponent.takeCrystalDamage(totalDamage);
-          print('$laneName: 💥 $totalDamage crystal damage to AI!');
+          _log(
+            '$laneName: 💥 ${totalDamage.toStringAsFixed(0)} crystal damage to AI!',
+          );
         }
 
         // Award gold for winning lane
         _currentMatch!.player.earnGold(400); // Tier capture gold
       } else if (playerWon == false) {
         // Opponent won lane - advance toward player base
-        print('$laneName: AI victory! ${lane.zoneDisplay}');
+        _log('$laneName: AI victory! ${lane.zoneDisplay}');
         final reachedBase = lane.advanceZone(false);
-        print('$laneName: Advanced to ${lane.zoneDisplay}');
+        _log('$laneName: Advanced to ${lane.zoneDisplay}');
 
         if (reachedBase) {
           // Reached player base - deal crystal damage
@@ -336,32 +365,36 @@ class MatchManager {
             (sum, card) => sum + card.damage,
           );
           _currentMatch!.player.takeCrystalDamage(totalDamage);
-          print('$laneName: 💥 $totalDamage crystal damage to Player!');
+          _log(
+            '$laneName: 💥 ${totalDamage.toStringAsFixed(0)} crystal damage to Player!',
+          );
         }
 
+        // Award gold for winning lane
         _currentMatch!.opponent.earnGold(400);
       } else {
-        print('$laneName: Draw - no advancement. ${lane.zoneDisplay}');
+        // Draw - no advancement
+        _log('$laneName: Draw - no advancement. ${lane.zoneDisplay}');
       }
     }
-    print('--- END ZONE ADVANCEMENT ---\n');
+
+    _log('--- END ZONE ADVANCEMENT ---');
   }
 
-  /// Start the next turn
+  /// Advance to next turn (used after combat resolves when game not over)
   void _startNextTurn() {
     if (_currentMatch == null) return;
 
     _currentMatch!.currentPhase = MatchPhase.drawPhase;
 
-    // Draw cards
+    // Draw cards for both players
     _currentMatch!.player.drawCards();
     _currentMatch!.opponent.drawCards();
 
     // DON'T reset lanes - surviving cards persist across turns!
-    // Zones and surviving cards remain in their positions
-    // Players can add NEW cards (0-2 per lane, max 2 total stack)
+    // Zones and surviving cards remain in their positions.
 
-    // Reset submissions
+    // Reset submissions for next turn
     _currentMatch!.resetSubmissions();
 
     // Increment turn
@@ -378,5 +411,13 @@ class MatchManager {
   void endMatch() {
     _currentMatch = null;
     _combatResolver.clearLog();
+  }
+
+  void _log(String message) {
+    // Always print for now (keeps existing debug behavior)
+    // Simulations additionally capture logs via logSink.
+    // ignore: avoid_print
+    print(message);
+    logSink?.writeln(message);
   }
 }

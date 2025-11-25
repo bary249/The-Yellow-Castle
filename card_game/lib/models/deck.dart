@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'card.dart';
+import '../data/card_library.dart';
 
 /// Represents a player's deck of 25 cards
 class Deck {
@@ -50,51 +51,10 @@ class Deck {
 
   /// Create a basic starter deck for testing
   factory Deck.starter({String? playerId}) {
-    final cards = <GameCard>[];
-
-    // Create a balanced starter deck
-    // 10 Tick 1 cards (fast attackers)
-    for (int i = 0; i < 10; i++) {
-      cards.add(
-        GameCard(
-          id: 'starter_tick1_$i',
-          name: 'Quick Strike',
-          damage: 3,
-          health: 5,
-          tick: 1,
-        ),
-      );
-    }
-
-    // 10 Tick 3 cards (balanced)
-    for (int i = 0; i < 10; i++) {
-      cards.add(
-        GameCard(
-          id: 'starter_tick3_$i',
-          name: 'Warrior',
-          damage: 5,
-          health: 10,
-          tick: 3,
-        ),
-      );
-    }
-
-    // 5 Tick 5 cards (heavy hitters)
-    for (int i = 0; i < 5; i++) {
-      cards.add(
-        GameCard(
-          id: 'starter_tick5_$i',
-          name: 'Heavy Tank',
-          damage: 8,
-          health: 15,
-          tick: 5,
-        ),
-      );
-    }
-
+    final cards = buildStarterCardPool();
     return Deck(
       id: 'starter_${playerId ?? "default"}',
-      name: 'Starter Deck',
+      name: 'Elemental Starter Deck',
       cards: cards,
     );
   }

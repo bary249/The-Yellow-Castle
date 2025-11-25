@@ -26,6 +26,49 @@ class BattleLogEntry {
 class CombatResolver {
   final List<BattleLogEntry> combatLog = [];
 
+  // Per-lane context for zone-based elemental buffs.
+  Zone _currentZone = Zone.middle;
+  String? _playerBaseElement;
+  String? _opponentBaseElement;
+
+  /// Set contextual data for the current lane before processing ticks.
+  /// This allows us to apply small buffs when fighting in a player's base zone.
+  void setLaneContext({
+    required Zone zone,
+    String? playerBaseElement,
+    String? opponentBaseElement,
+  }) {
+    _currentZone = zone;
+    _playerBaseElement = playerBaseElement;
+    _opponentBaseElement = opponentBaseElement;
+  }
+
+  /// Apply a simple element advantage matrix to damage.
+  /// Elements are optional string tags on GameCard (e.g. 'Fire', 'Water', 'Nature').
+  /// If either card has no element, base damage is used.
+  int _calculateElementalDamage(GameCard attacker, GameCard target) {
+    final base = attacker.damage;
+    if (attacker.element == null || target.element == null) {
+      return base;
+    }
+
+    final atk = attacker.element!;
+    final def = target.element!;
+
+    // Very small, readable matrix: Fire > Nature, Water > Fire, Nature > Water
+    double multiplier = 1.0;
+    if (atk == 'Fire' && def == 'Nature') multiplier = 1.25;
+    if (atk == 'Nature' && def == 'Water') multiplier = 1.25;
+    if (atk == 'Water' && def == 'Fire') multiplier = 1.25;
+
+    if (atk == 'Nature' && def == 'Fire') multiplier = 0.75;
+    if (atk == 'Water' && def == 'Nature') multiplier = 0.75;
+    if (atk == 'Fire' && def == 'Water') multiplier = 0.75;
+
+    final adjusted = (base * multiplier).round();
+    return adjusted.clamp(1, 9999);
+  }
+
   /// Resolve combat in a single lane
   /// Returns true if player won the lane
   bool? resolveLane(Lane lane, {String? customLaneName}) {
@@ -126,6 +169,7 @@ class CombatResolver {
         playerCard,
         opponentCard,
         tick,
+        lane.playerStack,
         lane.opponentStack,
         laneName,
         true,
@@ -141,6 +185,7 @@ class CombatResolver {
         opponentCard,
         playerCard,
         tick,
+        lane.opponentStack,
         lane.playerStack,
         laneName,
         false,
@@ -171,6 +216,7 @@ class CombatResolver {
     GameCard attacker,
     GameCard target,
     int tick,
+    CardStack attackerStack,
     CardStack targetStack,
     String laneName,
     bool isPlayerAttacking, {
@@ -181,7 +227,96 @@ class CombatResolver {
       return;
 
     final attackerSide = isPlayerAttacking ? '🛡️ YOU' : '⚔️ AI';
-    final damage = attacker.damage;
+    int damage = _calculateElementalDamage(attacker, target);
+    String note = '';
+
+    void _append(String text) {
+      if (note.isEmpty) {
+        note = text;
+      } else {
+        note = '$note$text';
+      }
+    }
+
+    // 1) Base attunement buff when fighting in own base with matching element.
+    final attunedElement = isPlayerAttacking
+        ? _playerBaseElement
+        : _opponentBaseElement;
+    if (attunedElement != null && attacker.element == attunedElement) {
+      final isInPlayerBase = _currentZone == Zone.playerBase;
+      final isInOpponentBase = _currentZone == Zone.enemyBase;
+
+      // Player's base is Zone.playerBase, opponent's is Zone.enemyBase.
+      final inOwnBase =
+          (isPlayerAttacking && isInPlayerBase) ||
+          (!isPlayerAttacking && isInOpponentBase);
+
+      if (inOwnBase) {
+        damage += 1;
+        _append(' (+1 base buff)');
+      }
+    }
+
+    // 2) Fury: flat +2 damage for this attacker.
+    if (attacker.abilities.contains('fury_2')) {
+      damage += 2;
+      _append(' (+2 fury)');
+    }
+
+    // 3) Stack buff: if a DIFFERENT card in the same stack has stack_buff_damage_2.
+    bool _stackHasBuff(CardStack stack) {
+      final top = stack.topCard;
+      final bottom = stack.bottomCard;
+      if (top != null &&
+          top != attacker &&
+          top.abilities.contains('stack_buff_damage_2')) {
+        return true;
+      }
+      if (bottom != null &&
+          bottom != attacker &&
+          bottom.abilities.contains('stack_buff_damage_2')) {
+        return true;
+      }
+      return false;
+    }
+
+    if (_stackHasBuff(attackerStack)) {
+      damage += 2;
+      _append(' (+2 stack buff)');
+    }
+
+    // 4) Debuff from defending stack: reduce incoming damage by 2 (min 1).
+    bool _stackHasDebuff(CardStack stack) {
+      final top = stack.topCard;
+      final bottom = stack.bottomCard;
+      if (top != null &&
+          top.abilities.contains('stack_debuff_enemy_damage_2')) {
+        return true;
+      }
+      if (bottom != null &&
+          bottom.abilities.contains('stack_debuff_enemy_damage_2')) {
+        return true;
+      }
+      return false;
+    }
+
+    if (_stackHasDebuff(targetStack)) {
+      final reduced = (damage - 2).clamp(1, 9999);
+      if (reduced != damage) {
+        damage = reduced;
+        _append(' (-2 stack debuff)');
+      }
+    }
+
+    // 5) Shield on the target: reduce damage by 2 (min 1).
+    if (target.abilities.contains('shield_2')) {
+      final reduced = (damage - 2).clamp(1, 9999);
+      if (reduced != damage) {
+        damage = reduced;
+        _append(' (-2 shield)');
+      }
+    }
+
     final hpBefore = target.currentHealth;
 
     // Apply damage
@@ -195,7 +330,8 @@ class CombatResolver {
         tick: tick,
         laneDescription: laneName,
         action: '$attackerSide ${attacker.name} → ${target.name}',
-        details: '$damage damage dealt | HP: $hpBefore → $hpAfter | $result',
+        details:
+            '$damage damage dealt | HP: $hpBefore → $hpAfter | $result$note',
         isImportant: targetDied,
       ),
     );

@@ -654,6 +654,18 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                   'HP: ${card.health} DMG: ${card.damage} T:${card.tick}',
                   style: const TextStyle(fontSize: 9),
                 ),
+                if (card.element != null)
+                  Text(
+                    'Elem: ${card.element}',
+                    style: const TextStyle(fontSize: 8),
+                  ),
+                if (card.abilities.isNotEmpty)
+                  Text(
+                    'Abilities: ${card.abilities.join(", ")}',
+                    style: const TextStyle(fontSize: 7),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
               ],
             ),
           ),
@@ -837,6 +849,15 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
             'DMG:${card.damage} T:${card.tick}',
             style: const TextStyle(fontSize: 7),
           ),
+          if (card.element != null)
+            Text('Elem:${card.element}', style: const TextStyle(fontSize: 7)),
+          if (card.abilities.isNotEmpty)
+            Text(
+              card.abilities.join(', '),
+              style: const TextStyle(fontSize: 6),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
         ],
       ),
     );
@@ -931,6 +952,18 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                                 'Tick: ${card.tick}',
                                 style: const TextStyle(fontSize: 9),
                               ),
+                              if (card.element != null)
+                                Text(
+                                  'Elem: ${card.element}',
+                                  style: const TextStyle(fontSize: 8),
+                                ),
+                              if (card.abilities.isNotEmpty)
+                                Text(
+                                  card.abilities.join(', '),
+                                  style: const TextStyle(fontSize: 7),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               if (isSelected)
                                 const Padding(
                                   padding: EdgeInsets.only(top: 2),

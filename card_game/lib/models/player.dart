@@ -13,6 +13,10 @@ class Player {
   int crystalHP;
   int gold;
 
+  /// Optional elemental attunement for this player's base/crystal.
+  /// When set, matching-element cards can receive buffs in that player's base zone.
+  final String? attunedElement;
+
   // Constants
   static const int maxHandSize = 8;
   static const int maxCrystalHP = 100;
@@ -24,6 +28,7 @@ class Player {
     this.isHuman = true,
     this.crystalHP = maxCrystalHP,
     this.gold = 0,
+    this.attunedElement,
   }) : hand = [];
 
   /// Check if crystal is destroyed
