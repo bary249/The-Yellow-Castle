@@ -1,0 +1,60 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+    
+    // User profiles - users can read any profile, but only write their own
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isOwner(userId);
+      allow update: if isOwner(userId);
+      allow delete: if false; // Never allow deletion
+    }
+    
+    // Matchmaking queue - users can only manage their own queue entry
+    match /matchmaking_queue/{userId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isOwner(userId);
+      allow update: if isOwner(userId);
+      allow delete: if isOwner(userId);
+    }
+    
+    // Matches - users can read matches they're part of, and create new ones
+    match /matches/{matchId} {
+      function isPlayerInMatch() {
+        return isSignedIn() && 
+               request.auth.uid in resource.data.playerIds;
+      }
+      
+      function isPlayerInNewMatch() {
+        return isSignedIn() && 
+               request.auth.uid in request.resource.data.playerIds;
+      }
+      
+      allow read: if isSignedIn() && 
+                     (request.auth.uid in resource.data.playerIds);
+      allow create: if isPlayerInNewMatch();
+      allow update: if isPlayerInMatch();
+      allow delete: if false; // Never allow deletion of matches
+      
+      // Turn submissions (subcollection)
+      match /turns/{turnId} {
+        allow read: if isSignedIn() && 
+                       request.auth.uid in get(/databases/$(database)/documents/matches/$(matchId)).data.playerIds;
+        allow create: if isSignedIn() && 
+                         request.auth.uid in get(/databases/$(database)/documents/matches/$(matchId)).data.playerIds;
+        allow update: if false; // Turns are immutable once created
+        allow delete: if false;
+      }
+    }
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "115117579254",
+    "project_id": "flutterloc-41cf3",
+    "storage_bucket": "flutterloc-41cf3.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:115117579254:android:041dc38bf3e43c5cae05d7",
+        "android_client_info": {
+          "package_name": "com.udayaapp.cardGame"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCGvfdZ4EtRrjIaCxXGDRsHKu3HC7qOMfU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

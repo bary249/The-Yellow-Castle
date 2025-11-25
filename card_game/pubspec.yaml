@@ -37,6 +37,12 @@ dependencies:
   riverpod: ^2.4.9
   vector_math: ^2.1.4
   cupertino_icons: ^1.0.8
+  
+  # Firebase
+  firebase_core: ^2.24.2
+  firebase_auth: ^4.16.0
+  cloud_firestore: ^4.14.0
+  firebase_analytics: ^10.8.0
 
 dev_dependencies:
   flutter_test:
