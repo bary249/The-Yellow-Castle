@@ -20,12 +20,14 @@ service cloud.firestore {
       allow delete: if false; // Never allow deletion
     }
     
-    // Matchmaking queue - users can only manage their own queue entry
-    match /matchmaking_queue/{userId} {
+    // Matchmaking queue - users can manage queue entries
+    // NOTE: For alpha testing, allow any authenticated user to delete entries
+    // (needed for transaction-based matchmaking where one player removes both)
+    match /matchmaking_queue/{queueId} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn() && isOwner(userId);
-      allow update: if isOwner(userId);
-      allow delete: if isOwner(userId);
+      allow create: if isSignedIn() && isOwner(queueId);
+      allow update: if isSignedIn();
+      allow delete: if isSignedIn();
     }
     
     // Matches - users can read matches they're part of, and create new ones
