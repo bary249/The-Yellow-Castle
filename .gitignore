@@ -1,0 +1,32 @@
+# Flutter/Dart
+.dart_tool/
+.packages
+build/
+*.iml
+.idea/
+*.log
+
+# macOS
+.DS_Store
+*.swp
+
+# IDE
+.vscode/
+
+# Generated files
+*.g.dart
+*.freezed.dart
+
+# Platform generated
+android/local.properties
+ios/Flutter/Generated.xcconfig
+ios/Flutter/flutter_export_environment.sh
+ios/Flutter/ephemeral/
+ios/Runner/GeneratedPluginRegistrant.*
+macos/Flutter/ephemeral/
+macos/Flutter/GeneratedPluginRegistrant.swift
+windows/flutter/generated_*
+linux/flutter/generated_*
+
+# Pubspec lock (optional - remove if you want to track it)
+# pubspec.lock
