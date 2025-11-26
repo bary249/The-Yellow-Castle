@@ -413,6 +413,55 @@ class MatchManager {
     _combatResolver.clearLog();
   }
 
+  /// Debug helper: print a readable snapshot of the current game state.
+  ///
+  /// Shows turn, phase, player/opponent crystals and gold, and for each lane
+  /// the current zone plus front/back cards on both sides.
+  void printGameStateSnapshot() {
+    final match = _currentMatch;
+    if (match == null) {
+      _log('No active match.');
+      return;
+    }
+
+    _log('\n=== GAME STATE SNAPSHOT ===');
+    _log('Turn ${match.turnNumber} | Phase: ${match.currentPhase}');
+    _log(
+      'Player: ${match.player.name} | Crystal: ${match.player.crystalHP} HP | '
+      'Hand: ${match.player.hand.length} | Deck: ${match.player.deck.remainingCards} | '
+      'Gold: ${match.player.gold}',
+    );
+    _log(
+      'Opponent: ${match.opponent.name} | Crystal: ${match.opponent.crystalHP} HP | '
+      'Hand: ${match.opponent.hand.length} | Deck: ${match.opponent.deck.remainingCards} | '
+      'Gold: ${match.opponent.gold}',
+    );
+
+    for (final lane in match.lanes) {
+      final laneLabel = lane.position.name.toUpperCase();
+      _log('\nLane $laneLabel | Zone: ${lane.zoneDisplay}');
+
+      final playerFront = lane.playerStack.topCard;
+      final playerBack = lane.playerStack.bottomCard;
+      final opponentFront = lane.opponentStack.topCard;
+      final opponentBack = lane.opponentStack.bottomCard;
+
+      String describeCard(GameCard? card) {
+        if (card == null) return '—';
+        return '${card.name} (HP: ${card.currentHealth}/${card.health}, '
+            'DMG: ${card.damage}, T: ${card.tick}'
+            '${card.element != null ? ', ${card.element}' : ''})';
+      }
+
+      _log('  Player Front:  ${describeCard(playerFront)}');
+      _log('  Player Back:   ${describeCard(playerBack)}');
+      _log('  Opp Front:     ${describeCard(opponentFront)}');
+      _log('  Opp Back:      ${describeCard(opponentBack)}');
+    }
+
+    _log('=== END GAME STATE SNAPSHOT ===\n');
+  }
+
   void _log(String message) {
     // Always print for now (keeps existing debug behavior)
     // Simulations additionally capture logs via logSink.

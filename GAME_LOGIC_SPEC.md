@@ -2,6 +2,10 @@
 
 This document captures the **implemented and intended logic** of the game, mapped to current code where possible.
 
+> **Terminology note:**
+> The gameplay and UI refer to stack positions as **Front**/**Back**.
+> The underlying code still uses `topCard`/`bottomCard` for those positions.
+
 - High-level rules & player-facing view → see `GAME_RULES.md`.
 - This file → dev-facing reference for match flow, combat math, and lane logic.
 
@@ -69,28 +73,31 @@ This document captures the **implemented and intended logic** of the game, mappe
   - `playerStack`, `opponentStack` (CardStack each).
 
 **CardStack**
-- Holds up to **2 cards**:
-  - `topCard` (GameCard?).
-  - `bottomCard` (GameCard?).
+- Conceptually holds up to **2 cards** per side:
+  - **Front card** (closest to the enemy, active first).
+  - **Back card** (behind the front card, comes in when front dies).
+- In code these are currently named:
+  - `topCard` (used as the **front** card).
+  - `bottomCard` (used as the **back** card).
   - `isPlayerOwned` (bool).
 
 **Key methods:**
-- `isEmpty` → both null.
-- `isFull` → both non-null.
+- `isEmpty` → both front/back slots null.
+- `isFull` → both front/back slots non-null.
 - `activeCard`:
-  - Returns `topCard` if it exists and `isAlive`.
-  - Else `bottomCard` if exists and `isAlive`.
+  - Returns `topCard` (front card) if it exists and `isAlive`.
+  - Else `bottomCard` (back card) if exists and `isAlive`.
   - Else `null`.
 - `addCard(GameCard card, {bool asTopCard = true})`:
-  - If stack empty → new card becomes `topCard`.
-  - If only `topCard` present:
-    - `asTopCard == true` → move existing `topCard` to `bottomCard`, new card becomes `topCard`.
-    - `asTopCard == false` → new card becomes `bottomCard`.
+  - If stack empty → new card becomes `topCard` (front).
+  - If only `topCard` (front) present:
+    - `asTopCard == true` → move existing `topCard` to `bottomCard` (back), new card becomes `topCard` (front).
+    - `asTopCard == false` → new card becomes `bottomCard` (back).
   - If both occupied → returns `false`.
 - `cleanup()` after tick/combat:
-  - Clears dead `bottomCard`.
-  - If `topCard` is dead → promotes `bottomCard` to `topCard`, nulls `bottomCard`.
-  - If new `topCard` still dead → clears it.
+  - Clears dead `bottomCard` (back card).
+  - If `topCard` (front) is dead → promotes `bottomCard` (back) to `topCard` (front), nulls `bottomCard`.
+  - If new `topCard` (front) still dead → clears it.
 
 **Lane winner:**
 - Getter `playerWon`:
@@ -263,11 +270,11 @@ For `tick` from 1 to 5:
    - If `attacker.abilities` contains `fury_2` → `damage += 2` (+2 fury).
 
 3. **Stack Buff** `stack_buff_damage_2`
-   - Look at `topCard` and `bottomCard` of **attackerStack`** (excluding attacker itself).
+   - Look at `topCard` (front) and `bottomCard` (back) of **attackerStack** (excluding attacker itself).
    - If any has `stack_buff_damage_2` → `damage += 2` (+2 stack buff).
 
 4. **Stack Debuff** `stack_debuff_enemy_damage_2`
-   - Look at `topCard` / `bottomCard` of **targetStack`**.
+   - Look at `topCard` (front) / `bottomCard` (back) of **targetStack**.
    - If any has this ability → reduce damage by 2 (min 1) (−2 stack debuff).
 
 5. **Shield** `shield_2`
@@ -282,11 +289,11 @@ For `tick` from 1 to 5:
 7. **Overflow damage**
    - If `targetDied`:
      - Compute `overflowDamage = -target.currentHealth` (excess into negative).
-     - If `overflowDamage > 0` and `targetStack.bottomCard` exists and is alive:
+     - If `overflowDamage > 0` and `targetStack.bottomCard` (back card) exists and is alive:
        - Call `_applyOverflowDamage(overflowDamage, targetStack, tick, laneName)`.
 
 `_applyOverflowDamage` then:
-- Applies full `damage` to `stack.bottomCard`.
+- Applies full `damage` to `stack.bottomCard` (back card).
 - Logs overflow event.
 
 ---
@@ -405,6 +412,15 @@ This section is meant as a **bridge** between `GAME_TODO.md` and the current cod
   - Implementation hooks would sit:
     - In card-play logic (when playing from hand).
     - In match state or a dedicated `UltimateTracker`.
+
+- **3 Ages System (multi-deck progression):**
+  - Planned: each player has **3 separate decks** representing **Age 1 (early)**, **Age 2 (mid)**, **Age 3 (late)**.
+  - The active deck is determined by the **current turn number**:
+    - Age 1 for early turns, then automatic switch to Age 2, then Age 3.
+  - Likely implementation points:
+    - A small "Age controller" that, on `_startNextTurn`, checks `turnNumber` and swaps which deck supplies draws.
+    - UI/state hooks to expose the **current age/deck** for visualization and logging.
+  - This has **no code yet**; it’s purely a design hook to be implemented later.
 
 - **Online multiplayer:**
   - `online_match_screen.dart` and Firebase sync services coordinate this.

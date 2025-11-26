@@ -50,6 +50,9 @@ Future<MatchOutcome> simulateSingleMatch({
     opponentAttunedElement: 'Fire',
   );
 
+  // Log initial game state before any turns are played
+  matchManager.printGameStateSnapshot();
+
   final ai1 = SimpleAI();
   final ai2 = SimpleAI();
 
@@ -69,6 +72,8 @@ Future<MatchOutcome> simulateSingleMatch({
     }
 
     if (match.isGameOver || match.turnNumber > maxTurns) {
+      // Final snapshot at end of match (or max turn cap)
+      matchManager.printGameStateSnapshot();
       final winner = match.winner;
       String winnerLabel = 'draw';
       if (winner != null) {
@@ -95,7 +100,9 @@ Future<MatchOutcome> simulateSingleMatch({
     await matchManager.submitPlayerMoves(p1Moves);
     await matchManager.submitOpponentMoves(p2Moves);
 
-    // MatchManager will resolve combat and advance turn internally
+    // After both sides submit, MatchManager resolves combat and advances turn.
+    // Capture a snapshot at the end of each full round (post-combat, pre-next turn).
+    matchManager.printGameStateSnapshot();
   }
 }
 

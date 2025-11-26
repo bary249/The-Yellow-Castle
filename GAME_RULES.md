@@ -1,5 +1,9 @@
 # Land of Clans & Wanderers – Core Rules
 
+> **Terminology note (for developers):**
+> In code, stack positions are currently named `topCard`/`bottomCard`.
+> In these rules and the UI we use **Front**/**Back**.
+
 ## 1. Objective
 - Defend your crystal while attacking the enemy crystal.
 - You **win** when the enemy crystal’s HP reaches 0.
@@ -41,16 +45,16 @@ Design intent: if you play too many cards early, you can run out of gas later.
 - The battlefield has **3 lanes**, each with:
   - Your **Card Stack** (frontline) and the opponent’s **Card Stack**.
   - Each stack holds up to **2 cards**:
-    - **Top** card = **active** card.
-    - **Bottom** card = **backup**.
+    - **Front** card = **active** card (closest to the enemy).
+    - **Back** card = **backup** (behind the front card).
 - Active card rules:
-  - The **top card** fights first.
-  - If the top card dies, the bottom card becomes active **at the start of the next tick**, not in the middle of a tick.
+  - The **front card** fights first.
+  - If the front card dies, the back card becomes active **at the start of the next tick**, not in the middle of a tick.
 - Placement rules:
   - You can play up to **2 cards per lane**.
   - When a stack has 1 card and you add a second:
-    - Place as **Top** → your new card becomes top; the old top moves to bottom.
-    - Place as **Bottom** → your new card goes under the existing top.
+    - Place as **Front** → your new card becomes front; the old front moves to back.
+    - Place as **Back** → your new card goes behind the existing front card.
 
 ---
 
@@ -60,7 +64,7 @@ Each round has the following phases:
 ### 5.1 Turn Phase (Planning)
 - Both players act **simultaneously** within an **8-second timer**:
   - Choose **0–2 cards per lane** from your hand.
-  - Choose top/bottom placement for each lane’s stack.
+  - Choose front/back placement for each lane’s stack.
   - Confirm your moves before the timer ends.
 - When you place a card in a lane and confirm:
   - It **leaves your hand**.
@@ -93,7 +97,7 @@ Combat in each lane is broken into **5 ticks**.
 
 ### 6.2 Simultaneous Combat
 For each **tick** in each lane:
-- Determine which cards are **active** (top or surviving bottom) on each side.
+- Determine which cards are **active** (front or surviving back card) on each side.
 - If a card is scheduled to act this tick, it attacks.
 - If **both** sides have active cards that act on this tick:
   - They **both deal damage** to each other, even if one dies from the other’s hit.
@@ -101,9 +105,9 @@ For each **tick** in each lane:
 - If only one side acts on this tick, it attacks alone.
 
 ### 6.3 Overflow Damage
-- If an attack **kills** the top card and deals **more damage than needed**:
-  - The extra (overflow) damage is applied to the **bottom card** in that stack (if it exists).
-- The bottom card **still does not act mid-tick**; it only becomes active at the **start of the next tick** if still alive.
+- If an attack **kills** the front card and deals **more damage than needed**:
+  - The extra (overflow) damage is applied to the **back card** in that stack (if it exists).
+- The back card **still does not act mid-tick**; it only becomes active at the **start of the next tick** if still alive.
 
 ---
 
@@ -170,8 +174,8 @@ A match can end in a few ways:
 These systems are part of the wider design and may be enabled later:
 
 - **Hero System**
-  - Each deck has **one Hero** with special abilities.
-  - Hero abilities are used a **limited number of times** per match.
+  - Each deck has **one Hero** with a unique ability.
+  - The hero ability is intended as a **single powerful use per match** (design: 1 ability, 1 use).
   - Effects include buffs, heals, extra draws, etc.
 
 - **Gold & Post-Match Shop**
@@ -181,5 +185,11 @@ These systems are part of the wider design and may be enabled later:
 - **Character Families & Ultimates**
   - Some cards belong to **families** (e.g. Monkey, Ant) with **3 variations**.
   - Playing all 3 variations can trigger a powerful **Ultimate** effect.
+
+- **3 Ages System**
+  - The match is divided into **three Ages** (early, mid, late game).
+  - Each Age is tied to a different **deck** for the same player.
+  - As turns progress, the game automatically **switches to the next Age deck** at set turn thresholds.
+  - The UI will clearly show the **current Age/deck** so players know which stage of the battle they are in.
 
 These details are for long-term progression and content, and don’t change the **core turn-by-turn rules** described above.
