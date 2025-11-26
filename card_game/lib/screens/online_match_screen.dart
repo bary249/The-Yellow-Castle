@@ -36,6 +36,7 @@ class _OnlineMatchScreenState extends State<OnlineMatchScreen> {
   bool _gameStarted = false;
 
   // 20 second turn timer
+  static const bool _turnTimerEnabled = false; // Toggle ON/OFF easily
   Timer? _turnTimer;
   int _remainingSeconds = 20;
   int _lastTurnNumber = 0; // Track turn changes for player2
@@ -137,7 +138,9 @@ class _OnlineMatchScreenState extends State<OnlineMatchScreen> {
             _gameStarted = true;
             _lastTurnNumber = turnNumber;
             _startNewMatch();
-            _startTurnTimer();
+            if (_turnTimerEnabled) {
+              _startTurnTimer();
+            }
 
             // Player1 updates status to active
             if (_amPlayer1) {
@@ -152,7 +155,9 @@ class _OnlineMatchScreenState extends State<OnlineMatchScreen> {
             _gameStarted = true;
             _lastTurnNumber = turnNumber;
             _startNewMatch();
-            _startTurnTimer();
+            if (_turnTimerEnabled) {
+              _startTurnTimer();
+            }
           }
 
           // Detect turn change (for player2 to restart timer after player1 writes results)
@@ -164,7 +169,9 @@ class _OnlineMatchScreenState extends State<OnlineMatchScreen> {
             _opponentSubmitted = false;
             _combatInProgress = false;
             _clearStaging();
-            _startTurnTimer();
+            if (_turnTimerEnabled) {
+              _startTurnTimer();
+            }
           }
 
           // Check if match ended
@@ -377,7 +384,7 @@ class _OnlineMatchScreenState extends State<OnlineMatchScreen> {
       });
 
       // Restart timer for next turn (if game not over)
-      if (status == 'active') {
+      if (status == 'active' && _turnTimerEnabled) {
         _startTurnTimer();
       }
     }
@@ -474,7 +481,7 @@ class _OnlineMatchScreenState extends State<OnlineMatchScreen> {
             Text('Turn ${match.turnNumber}'),
             const SizedBox(width: 16),
             // Timer display
-            if (!match.isGameOver && !_mySubmitted)
+            if (_turnTimerEnabled && !match.isGameOver && !_mySubmitted)
               Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 12,
