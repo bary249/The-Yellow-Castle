@@ -18,7 +18,8 @@ class BattleLogEntry {
   });
 
   String get formattedMessage {
-    return '[$laneDescription] Tick $tick: $action - $details';
+    final tickLabel = tick == 6 ? 'Fatigue' : 'Tick $tick';
+    return '[$laneDescription] $tickLabel: $action - $details';
   }
 }
 
@@ -26,13 +27,14 @@ class BattleLogEntry {
 class CombatResolver {
   final List<BattleLogEntry> combatLog = [];
 
-  // Per-lane context for zone-based elemental buffs.
+  // Per-lane context for zone-based terrain attunement buffs.
   Zone _currentZone = Zone.middle;
-  String? _playerBaseElement;
-  String? _opponentBaseElement;
+  String? _playerBaseElement; // Treated as terrain tag for the player's base
+  String?
+  _opponentBaseElement; // Treated as terrain tag for the opponent's base
 
   /// Set contextual data for the current lane before processing ticks.
-  /// This allows us to apply small buffs when fighting in a player's base zone.
+  /// This allows us to apply small buffs when fighting in an attuned base zone.
   void setLaneContext({
     required Zone zone,
     String? playerBaseElement,
@@ -43,30 +45,11 @@ class CombatResolver {
     _opponentBaseElement = opponentBaseElement;
   }
 
-  /// Apply a simple element advantage matrix to damage.
-  /// Elements are optional string tags on GameCard (e.g. 'Fire', 'Water', 'Nature').
-  /// If either card has no element, base damage is used.
+  /// Base damage calculator.
+  /// Card-vs-card element/terrain matchups are disabled; we start from
+  /// the attacker's raw damage and then apply zone-attunement + abilities.
   int _calculateElementalDamage(GameCard attacker, GameCard target) {
-    final base = attacker.damage;
-    if (attacker.element == null || target.element == null) {
-      return base;
-    }
-
-    final atk = attacker.element!;
-    final def = target.element!;
-
-    // Very small, readable matrix: Fire > Nature, Water > Fire, Nature > Water
-    double multiplier = 1.0;
-    if (atk == 'Fire' && def == 'Nature') multiplier = 1.25;
-    if (atk == 'Nature' && def == 'Water') multiplier = 1.25;
-    if (atk == 'Water' && def == 'Fire') multiplier = 1.25;
-
-    if (atk == 'Nature' && def == 'Fire') multiplier = 0.75;
-    if (atk == 'Water' && def == 'Nature') multiplier = 0.75;
-    if (atk == 'Fire' && def == 'Water') multiplier = 0.75;
-
-    final adjusted = (base * multiplier).round();
-    return adjusted.clamp(1, 9999);
+    return attacker.damage;
   }
 
   /// Resolve combat in a single lane
@@ -238,23 +221,25 @@ class CombatResolver {
       }
     }
 
-    // 1) Base attunement buff when fighting in own base with matching element.
-    final attunedElement = isPlayerAttacking
-        ? _playerBaseElement
-        : _opponentBaseElement;
-    if (attunedElement != null && attacker.element == attunedElement) {
-      final isInPlayerBase = _currentZone == Zone.playerBase;
-      final isInOpponentBase = _currentZone == Zone.enemyBase;
+    // 1) Zone attunement buff when fighting in a base zone whose terrain
+    // matches the attacker. Either base can grant this if its terrain matches.
+    final isInPlayerBase = _currentZone == Zone.playerBase;
+    final isInOpponentBase = _currentZone == Zone.enemyBase;
 
-      // Player's base is Zone.playerBase, opponent's is Zone.enemyBase.
-      final inOwnBase =
-          (isPlayerAttacking && isInPlayerBase) ||
-          (!isPlayerAttacking && isInOpponentBase);
+    // Attacker gets +1 if they are in the player base and match its terrain.
+    if (isInPlayerBase &&
+        _playerBaseElement != null &&
+        attacker.element == _playerBaseElement) {
+      damage += 1;
+      _append(' (+1 terrain buff @ player base)');
+    }
 
-      if (inOwnBase) {
-        damage += 1;
-        _append(' (+1 base buff)');
-      }
+    // Attacker also gets +1 if they are in the opponent base and match its terrain.
+    if (isInOpponentBase &&
+        _opponentBaseElement != null &&
+        attacker.element == _opponentBaseElement) {
+      damage += 1;
+      _append(' (+1 terrain buff @ enemy base)');
     }
 
     // 2) Fury: flat +2 damage for this attacker.

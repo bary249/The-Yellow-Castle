@@ -88,6 +88,52 @@ class MatchManager {
     }
   }
 
+  void _applyFatigueToSurvivors() {
+    if (_currentMatch == null) return;
+
+    _log('\n--- FATIGUE ---');
+
+    for (final lane in _currentMatch!.lanes) {
+      final laneLabel = lane.position.name.toUpperCase();
+
+      for (final card in lane.playerStack.aliveCards) {
+        final before = card.currentHealth;
+        if (before > 1) {
+          card.currentHealth = (card.currentHealth - 2).clamp(1, card.health);
+        }
+        final after = card.currentHealth;
+        if (after != before) {
+          _combatResolver.combatLog.add(
+            BattleLogEntry(
+              tick: 6,
+              laneDescription: laneLabel,
+              action: '🛡️ YOU ${card.name} (Fatigue)',
+              details: 'HP: $before → $after',
+            ),
+          );
+        }
+      }
+
+      for (final card in lane.opponentStack.aliveCards) {
+        final before = card.currentHealth;
+        if (before > 1) {
+          card.currentHealth = (card.currentHealth - 2).clamp(1, card.health);
+        }
+        final after = card.currentHealth;
+        if (after != before) {
+          _combatResolver.combatLog.add(
+            BattleLogEntry(
+              tick: 6,
+              laneDescription: laneLabel,
+              action: '⚔️ AI ${card.name} (Fatigue)',
+              details: 'HP: $before → $after',
+            ),
+          );
+        }
+      }
+    }
+  }
+
   /// Opponent (AI) submits their moves
   Future<void> submitOpponentMoves(
     Map<LanePosition, List<GameCard>> placements,
@@ -198,15 +244,19 @@ class MatchManager {
       }
     }
 
-    // Print combat log to terminal
+    // Check if any cards damaged crystals (winning a lane means attacking crystal)
+    _checkCrystalDamage();
+
+    // Apply post-combat fatigue: surviving cards lose a small amount of HP
+    // This also appends "Fatigue" entries (logical final tick) into the combat log.
+    _applyFatigueToSurvivors();
+
+    // Print combat log to terminal, including fatigue entries
     _log('\n--- BATTLE LOG ---');
     for (final entry in _combatResolver.logEntries) {
       _log(entry.formattedMessage);
     }
     _log('--- END BATTLE LOG ---\n');
-
-    // Check if any cards damaged crystals (winning a lane means attacking crystal)
-    _checkCrystalDamage();
 
     // Wait before showing final results (skip in fast/sim mode)
     if (!fastMode) {
@@ -450,7 +500,7 @@ class MatchManager {
         if (card == null) return '—';
         return '${card.name} (HP: ${card.currentHealth}/${card.health}, '
             'DMG: ${card.damage}, T: ${card.tick}'
-            '${card.element != null ? ', ${card.element}' : ''})';
+            '${card.element != null ? ', Terrain: ${card.element}' : ''})';
       }
 
       _log('  Player Front:  ${describeCard(playerFront)}');

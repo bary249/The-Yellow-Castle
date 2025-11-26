@@ -20,7 +20,7 @@
   - The board has **3 lanes**: Left, Center, Right.
 - Each lane has 3 zones:
   - **Your Base** → **Middle** → **Enemy Base**.
-- Your frontline and crystal can each have an **element attunement** (e.g. Fire, Water, Nature).
+- Each **base** (yours and your opponent's) can have a **terrain attunement** (e.g. Marsh, Woods, Lake, Desert).
 
 ---
 
@@ -29,13 +29,13 @@
   - **Damage** (how hard they hit).
   - **Health** (how much damage they can take).
   - **Tick** (1–5) = when/how often they act during combat.
-  - Optional **Element** (Fire, Water, Nature, etc.).
+  - Optional **Terrain tag** (Marsh, Woods, Lake, Desert, etc.).
   - Optional **Abilities** (keywords like Fury, Shield, Stack buffs/debuffs, etc.).
 - Hand rules:
   - You start with **6 cards**.
   - At the start of each new round you draw **2 cards**.
   - There is a **hand size limit** (around 8–9 cards; exact cap can be tuned).
-  - When the deck is empty, you **stop drawing** (no reshuffle).
+- When the deck is empty, you **stop drawing** (no reshuffle).
 
 Design intent: if you play too many cards early, you can run out of gas later.
 
@@ -111,20 +111,16 @@ For each **tick** in each lane:
 
 ---
 
-## 7. Damage, Elements & Abilities
+## 7. Damage, Terrain & Abilities
 
 ### 7.1 Base Damage
 - Each attack starts from the attacker’s **Damage stat**.
 
-### 7.2 Element System (Simplified Player View)
-- Cards and bases may have **elements** (e.g. Fire, Water, Nature).
-- Basic relationships (example):
-  - Fire **beats** Nature.
-  - Nature **beats** Water.
-  - Water **beats** Fire.
-- If your element has advantage over the target’s element, you deal **extra damage**.
-- If your element is at a disadvantage, you deal **less damage**.
-- Fighting in your **own base zone** with a card that matches your base’s element gives a **small bonus** to your damage.
+### 7.2 Terrain & Zone Attunement (Simplified Player View)
+- Cards and bases may have **terrain tags** (e.g. Marsh, Woods, Lake, Desert).
+- There is **no card-vs-card rock-paper-scissors** in the current implementation.
+- Terrain only matters via **zone attunement**:
+  - When combat happens in a **base zone** (either your base or the enemy base), if your card’s terrain matches that base’s terrain, that attack gets a **small bonus** to its damage.
 
 ### 7.3 Example Abilities
 (Exact numbers may vary; this is the intent.)
@@ -134,6 +130,15 @@ For each **tick** in each lane:
 - **Stack Debuff**: enemy attacks into this stack are slightly weaker.
 
 The UI will show these abilities as **keywords** on the card.
+
+---
+
+### 7.4 Fatigue (Survivor Wear-Down)
+
+- After each combat round (after lanes advance and crystals take damage), all **surviving cards** on both sides take a small **fatigue hit**.
+- Each surviving card loses **2 HP**, but this **cannot kill** the card:
+  - If a card would drop below 1 HP, it stays at **1 HP** instead.
+- This makes long-lived frontlines gradually weaken over multiple rounds, even if they keep winning.
 
 ---
 
@@ -150,7 +155,7 @@ Each lane tracks how far you’ve pushed toward the enemy crystal.
 - Reaching the **enemy base**:
   - Surviving cards in that lane directly deal their **Damage** to the **enemy crystal**.
 
-Zones also interact with the **element system** (e.g. stronger in your own base).
+Zones also interact with the **terrain attunement** system (e.g. slightly stronger in your own attuned base terrain; no direct terrain-vs-terrain matchup).
 
 ---
 

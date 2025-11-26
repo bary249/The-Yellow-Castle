@@ -46,8 +46,8 @@ Future<MatchOutcome> simulateSingleMatch({
     opponentName: 'Deck2',
     opponentDeck: p2Deck,
     opponentIsAI: true,
-    playerAttunedElement: 'Water',
-    opponentAttunedElement: 'Fire',
+    playerAttunedElement: 'Lake',
+    opponentAttunedElement: 'Desert',
   );
 
   // Log initial game state before any turns are played

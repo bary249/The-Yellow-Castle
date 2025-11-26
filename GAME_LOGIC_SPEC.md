@@ -20,7 +20,7 @@ This document captures the **implemented and intended logic** of the game, mappe
 - `damage` (base damage per attack).
 - `maxHealth` / `currentHealth`.
 - `tick` (1–5): timing profile.
-- `element` (nullable string: `Fire`, `Water`, `Nature`, etc.).
+- `element` (nullable string, treated as a **terrain tag** such as `Marsh`, `Woods`, `Lake`, `Desert`, etc.).
 - `abilities` (list of string tags):
   - Examples: `fury_2`, `shield_2`, `stack_buff_damage_2`, `stack_debuff_enemy_damage_2`.
 - `isAlive` (derived from `currentHealth > 0`).
@@ -251,20 +251,17 @@ For `tick` from 1 to 5:
 ### 3.3 Damage Calculation
 
 `_calculateElementalDamage(GameCard attacker, GameCard target)`:
-- Start from `attacker.damage`.
-- If either card has no element → return base damage.
-- Use a simple rock-paper-scissors matrix:
-  - Fire > Nature, Nature > Water, Water > Fire → multiplier ~1.25.
-  - Reverse matchups → multiplier ~0.75.
-- Round and clamp to `[1, 9999]`.
+- Starts from `attacker.damage`.
+- **No card-vs-card terrain matchup is applied** (no rock-paper-scissors).
+- Round/clamp logic is effectively a no-op at present; damage is the raw stat before other modifiers.
 
 `_performAttack(...)` then layers additional modifiers:
 
-1. **Base-Element Buff (zone + attunement)**
-   - Determine `attunedElement` = `playerBaseElement` or `opponentBaseElement` depending on attacker side.
-   - If `attunedElement != null` and `attacker.element == attunedElement`:
-     - Check if lane zone is **attacker’s own base** (`Zone.playerBase` for player, `Zone.enemyBase` for opponent).
-     - If yes → `damage += 1` (+1 base buff).
+1. **Zone-Attunement Buff (terrain + base zone)**
+   - Each lane knows the **current zone** (`Zone.playerBase`, `Zone.middle`, `Zone.enemyBase`) and the attuned terrain for each base (`playerBaseElement`, `opponentBaseElement`).
+   - Whenever combat happens in a **base zone** (either `Zone.playerBase` or `Zone.enemyBase`):
+     - If the **attacker’s terrain tag** matches that base’s attuned terrain:
+       - `damage += 1` (+1 terrain-attuned base buff in that base).
 
 2. **Fury**
    - If `attacker.abilities` contains `fury_2` → `damage += 2` (+2 fury).
@@ -306,6 +303,19 @@ When either stack becomes empty or ticks 1–5 finish:
   - Victory / Defeat / Draw for that lane.
 
 The animated path then waits briefly before moving to next lane.
+
+---
+
+### 3.5 Post-Combat Fatigue
+
+After all lanes have resolved, crystal damage has been applied, and zones advanced, a **fatigue pass** is applied:
+
+- For every lane, for both `playerStack` and `opponentStack`:
+  - For each card in `aliveCards`:
+    - Reduce `currentHealth` by 2, but never below 1.
+- Fatigue **cannot kill** a card; it only softens surviving units for future turns.
+
+This makes long-lived units gradually wear down over multiple rounds, even if they are winning consistently.
 
 ---
 
@@ -438,9 +448,9 @@ This section is meant as a **bridge** between `GAME_TODO.md` and the current cod
 - When changing lane/win rules:
   - Update `Lane.playerWon`, `Lane.advanceZone`, and `_checkCrystalDamage()` together.
 
-- When expanding the element system:
-  - Extend `_calculateElementalDamage` and `Zone` handling.
-  - Keep the core matrix small and legible to simplify reasoning and balancing.
+- When expanding the **terrain/attunement system**:
+  - Consider whether to introduce card-vs-card terrain relationships again or keep it purely zone-based.
+  - Keep any matrices small and legible to simplify reasoning and balancing.
 
 - When wiring Heroes or Ultimates:
   - Keep **core combat deterministic**; abilities should modify inputs but not add non-deterministic randomness mid-resolution.

@@ -226,6 +226,8 @@ class _OnlineMatchScreenState extends State<OnlineMatchScreen> {
       opponentName: oppName,
       opponentDeck: Deck.starter(playerId: 'opponent'),
       opponentIsAI: false, // Not AI - real player
+      playerAttunedElement: 'Lake',
+      opponentAttunedElement: 'Desert',
     );
     _clearStaging();
     setState(() {});
@@ -279,6 +281,8 @@ class _OnlineMatchScreenState extends State<OnlineMatchScreen> {
               'damage': card.damage,
               'health': card.health,
               'tick': card.tick,
+              'element': card.element,
+              'abilities': card.abilities,
             },
           )
           .toList();
@@ -342,6 +346,12 @@ class _OnlineMatchScreenState extends State<OnlineMatchScreen> {
             damage: cardData['damage'] as int? ?? 5,
             health: cardData['health'] as int? ?? 5,
             tick: cardData['tick'] as int? ?? 3,
+            element: cardData['element'] as String?,
+            abilities:
+                (cardData['abilities'] as List<dynamic>?)
+                    ?.map((e) => e.toString())
+                    .toList() ??
+                const [],
           ),
         );
       }
@@ -840,6 +850,15 @@ class _OnlineMatchScreenState extends State<OnlineMatchScreen> {
               const Icon(Icons.monetization_on, color: Colors.amber, size: 18),
               const SizedBox(width: 4),
               Text('${player.gold}'),
+              const SizedBox(width: 16),
+              if (player.attunedElement != null) ...[
+                const Icon(Icons.terrain, size: 16, color: Colors.brown),
+                const SizedBox(width: 4),
+                Text(
+                  'Base: ${player.attunedElement}',
+                  style: const TextStyle(fontSize: 11),
+                ),
+              ],
             ],
           ),
         ],
@@ -952,8 +971,13 @@ class _OnlineMatchScreenState extends State<OnlineMatchScreen> {
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      ...stagedCardsInLane.map(
-                        (card) => _buildStagedCard(card, position),
+                      ...stagedCardsInLane.asMap().entries.map(
+                        (entry) => _buildStagedCard(
+                          entry.value,
+                          position,
+                          indexInLane: entry.key,
+                          hasSurvivors: lane.playerStack.aliveCards.isNotEmpty,
+                        ),
                       ),
                     ],
                   ),
@@ -998,7 +1022,12 @@ class _OnlineMatchScreenState extends State<OnlineMatchScreen> {
     );
   }
 
-  Widget _buildStagedCard(GameCard card, LanePosition lane) {
+  Widget _buildStagedCard(
+    GameCard card,
+    LanePosition lane, {
+    required int indexInLane,
+    required bool hasSurvivors,
+  }) {
     return Container(
       margin: const EdgeInsets.all(2),
       padding: const EdgeInsets.all(4),
@@ -1025,9 +1054,22 @@ class _OnlineMatchScreenState extends State<OnlineMatchScreen> {
                   'HP: ${card.health} DMG: ${card.damage} T:${card.tick}',
                   style: const TextStyle(fontSize: 9),
                 ),
+                Builder(
+                  builder: (context) {
+                    final posLabel = hasSurvivors
+                        ? 'BACK'
+                        : (indexInLane == 0 ? 'FRONT' : 'BACK');
+                    return Text(
+                      'Position: $posLabel',
+                      style: const TextStyle(fontSize: 8),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    );
+                  },
+                ),
                 if (card.element != null)
                   Text(
-                    'Elem: ${card.element}',
+                    'Terrain: ${card.element}',
                     style: const TextStyle(fontSize: 8),
                   ),
                 if (card.abilities.isNotEmpty)
@@ -1092,12 +1134,19 @@ class _OnlineMatchScreenState extends State<OnlineMatchScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              '[${entry.laneDescription}] T${entry.tick}',
-                              style: TextStyle(
-                                fontSize: 9,
-                                color: Colors.grey[600],
-                              ),
+                            Builder(
+                              builder: (context) {
+                                final tickLabel = entry.tick == 6
+                                    ? 'Fatigue'
+                                    : 'T${entry.tick}';
+                                return Text(
+                                  '[${entry.laneDescription}] $tickLabel',
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    color: Colors.grey[600],
+                                  ),
+                                );
+                              },
                             ),
                             Text(
                               entry.action,
@@ -1135,13 +1184,13 @@ class _OnlineMatchScreenState extends State<OnlineMatchScreen> {
           _buildCardWidgetWithPosition(
             stack.topCard!,
             color,
-            position: hasMultiple ? '🔼 TOP' : null,
+            position: hasMultiple ? '🔼 FRONT' : 'FRONT',
           ),
         if (stack.bottomCard != null)
           _buildCardWidgetWithPosition(
             stack.bottomCard!,
             color,
-            position: hasMultiple ? '🔽 BOTTOM' : null,
+            position: hasMultiple ? '🔽 BACK' : 'BACK',
           ),
       ],
     );
@@ -1221,7 +1270,10 @@ class _OnlineMatchScreenState extends State<OnlineMatchScreen> {
             style: const TextStyle(fontSize: 7),
           ),
           if (card.element != null)
-            Text('Elem:${card.element}', style: const TextStyle(fontSize: 7)),
+            Text(
+              'Terrain:${card.element}',
+              style: const TextStyle(fontSize: 7),
+            ),
           if (card.abilities.isNotEmpty)
             Text(
               card.abilities.join(', '),

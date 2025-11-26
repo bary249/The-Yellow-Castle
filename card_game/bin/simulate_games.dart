@@ -7,16 +7,16 @@ import 'package:card_game/data/card_library.dart';
 Future<void> main(List<String> args) async {
   const games = 10;
 
-  // For simulations, use element-focused decks: Water Control vs Fire Aggro.
+  // For simulations, use terrain-focused decks: Lake Control vs Desert Aggro.
   final deck1 = Deck(
-    id: 'water_control',
-    name: 'Water Control',
+    id: 'lake_control',
+    name: 'Lake Control',
     cards: buildWaterControlDeck(),
   );
 
   final deck2 = Deck(
-    id: 'fire_aggro',
-    name: 'Fire Aggro',
+    id: 'desert_aggro',
+    name: 'Desert Aggro',
     cards: buildFireAggroDeck(),
   );
 

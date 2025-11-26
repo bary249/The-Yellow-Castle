@@ -75,7 +75,7 @@
 - [ ] Create **Card** model
   - [ ] id, name, type (general/character)
   - [ ] damage, health, tick (1-5)
-  - [ ] element (nullable)
+  - [ ] terrain tag (nullable, used for zone attunement)
   - [ ] character family (nullable)
   - [ ] variation (1-3 for character cards)
   - [ ] skills/abilities list
@@ -85,7 +85,7 @@
   - [ ] 25-card list
   - [ ] deck name, id
   - [ ] assigned hero
-  - [ ] element configuration
+  - [ ] terrain configuration
   - [ ] validation logic (max 25 cards)
 - [ ] Create **Hero** model
   - [ ] id, name, description
@@ -93,16 +93,15 @@
   - [ ] ability used flag (true/false)
   - [ ] visual/animation data
   - [ ] 10 heroes total to choose from
-- [ ] Create **Element** enum (Fire, Water, Grass, etc.)
-  - [ ] Element strength/weakness matrix
-  - [ ] Buff/debuff calculations
+- [ ] Create **Terrain** enum (Marsh, Woods, Lake, Desert, etc.)
+  - [ ] Zone-attunement buff/debuff calculations (no direct card-vs-card matrix for now)
 - [ ] Create **Lane** model
   - [ ] Lane position (left/center/right)
   - [ ] Current zone (player base, middle, enemy base)
   - [ ] Tier (1 or 2)
 - [ ] Create **Crystal** model
   - [ ] HP (current/max)
-  - [ ] Element affinity
+  - [ ] Terrain affinity (for base/crystal zone attunement)
   - [ ] Visual state
 - [ ] Create **PlayerState** model
   - [ ] Hand (List<Card>, max 8-9)
@@ -205,7 +204,7 @@
   - [ ] Process all 3 lanes sequentially
   - [ ] Implement tick system (1-5)
   - [ ] Handle simultaneous card actions within ticks
-  - [ ] Calculate damage with element modifiers
+  - [ ] Calculate damage with zone-based buffs
   - [ ] Apply overflow damage rules
   - [ ] Track card deaths
   - [ ] Award gold for destroyed cards (50-200)
@@ -216,8 +215,7 @@
   - [ ] Handle simultaneous actions per tick
 - [ ] Create **Damage Calculator**
   - [ ] Base damage from card stats
-  - [ ] Element advantage/disadvantage modifiers
-  - [ ] Zone-based buffs (frontline element)
+  - [ ] Zone-based buffs based on terrain attunement (frontline vs base terrain)
   - [ ] Hero ability modifiers
   - [ ] Overflow damage to next card in stack
 - [ ] Implement **Card Activation Rules**
@@ -256,15 +254,14 @@
   - [ ] Calculate 25% carryover for post-match shop
   - [ ] Display gold counter in UI
 
-### 3.6 Element System
-- [ ] Create **ElementManager** service
-  - [ ] Define element types (Fire, Water, Grass, etc.)
-  - [ ] Implement strength/weakness matrix
-  - [ ] Calculate buffs for matching elements
-  - [ ] Calculate debuffs for opposing elements
+### 3.6 Terrain / Attunement System
+- [ ] Create **TerrainManager** service
+  - [ ] Define terrain types (Marsh, Woods, Lake, Desert, etc.)
+  - [ ] Implement zone-attunement buffs based on matching terrain between card and base
+  - [ ] (Optional future) Explore card-vs-card terrain interactions if desired
   - [ ] Handle neutral zone (middle)
-  - [ ] Allow element switching outside combat (gold cost)
-- [ ] Create element visual effects
+  - [ ] Allow terrain/attunement switching outside combat (gold cost)
+- [ ] Create terrain visual effects
   - [ ] Zone background tinting
   - [ ] Card glow when buffed
   - [ ] Damage number colors
@@ -313,7 +310,7 @@
 ### 4.1 Card Visuals
 - [ ] **Design card frame template** (mark if copyrighted, replace later)
   - [ ] General card frame
-  - [ ] Character card frame (with element indicator)
+  - [ ] Character card frame (with terrain indicator)
   - [ ] Rare/epic/legendary variants
 - [ ] **Create card art placeholders** (FREE to use or marked)
   - [ ] Use placeholder illustrations initially
@@ -323,7 +320,7 @@
   - [ ] Damage indicator
   - [ ] Health indicator
   - [ ] Tick number badge
-  - [ ] Element icon
+  - [ ] Terrain icon
   - [ ] Character family icon
 - [ ] Implement card glow/highlight states
   - [ ] Selected state
@@ -333,16 +330,16 @@
 
 ### 4.2 Lane & Zone Visuals
 - [ ] **Create zone backgrounds** (3 zones × 2 players)
-  - [ ] Player Base (element-based)
+  - [ ] Player Base (terrain-based)
   - [ ] Middle (neutral)
-  - [ ] Enemy Base (element-based)
+  - [ ] Enemy Base (terrain-based)
   - [ ] Use FREE tiled backgrounds or procedural generation
 - [ ] **Create lane dividers/borders**
   - [ ] Visual separation between 3 lanes
   - [ ] Highlight active lane
 - [ ] **Create crystal visuals**
   - [ ] HP bar
-  - [ ] Element-based glow/color
+  - [ ] Terrain-based glow/color
   - [ ] Damage effects
   - [ ] Low HP warning state
 - [ ] **Create progression indicators**
@@ -368,7 +365,7 @@
   - [ ] Background (FREE or procedural)
 - [ ] **Create pre-match setup screen**
   - [ ] Deck selection (choose from saved decks)
-  - [ ] Base attunement element picker (Fire/Water/Nature/etc.)
+  - [ ] Base terrain attunement picker (Marsh/Woods/Lake/Desert/etc.)
   - [ ] Hero selection (pick 1 of 10 heroes)
   - [ ] Confirm/Ready button
 - [ ] **Create battle UI overlay**
@@ -378,7 +375,7 @@
   - [ ] Win streak indicator
   - [ ] "Start Combat" button
   - [ ] **Hero ability button** (single use, greyed out after used)
-  - [ ] Base attunement indicator (show player's element)
+  - [ ] Base terrain attunement indicator (show player's terrain)
 - [ ] **Create hand UI**
   - [ ] Horizontal scrollable card list
   - [ ] Collapsible option
@@ -397,7 +394,7 @@
 - [ ] **Create deck builder UI**
   - [ ] Card collection grid
   - [ ] Current deck list (25 max)
-  - [ ] Filter by element, type, rarity
+  - [ ] Filter by terrain tag, type, rarity
   - [ ] Hero selection
   - [ ] Save/load deck
 - [ ] **Create post-match shop UI**
@@ -415,10 +412,11 @@
   - [ ] Damage numbers (floating text)
   - [ ] Card death/destruction effect
   - [ ] Overflow damage indicator
-- [ ] **Element effect particles**
-  - [ ] Fire: flames, embers
-  - [ ] Water: droplets, waves
-  - [ ] Grass: leaves, vines
+- [ ] **Terrain effect particles**
+  - [ ] Marsh: mist, water
+  - [ ] Woods: leaves, vines
+  - [ ] Lake: ripples, waves
+  - [ ] Desert: sand, dust
   - [ ] Use Flame particle system or FREE sprite sheets
 - [ ] **Hero ability effects**
   - [ ] Buff glow/aura
@@ -501,7 +499,7 @@
 - [ ] Create **CrystalComponent** (SpriteComponent)
   - [ ] HP bar
   - [ ] Damage flash animation
-  - [ ] Element glow effect
+  - [ ] Terrain-based glow effect
 - [ ] Create **HeroAbilityButton** (ButtonComponent)
   - [ ] Icon sprite
   - [ ] Cooldown overlay
@@ -558,7 +556,7 @@
   - [ ] Calculate card value (damage, health, tick)
   - [ ] Evaluate lane states
   - [ ] Prioritize targets
-  - [ ] Element advantage consideration
+  - [ ] Terrain / zone-attunement consideration
 
 ### 7.2 Online Multiplayer System (Firebase)
 
@@ -735,7 +733,7 @@
 - [ ] Unlock features gradually
   - [ ] Basic cards → Character cards → Heroes
   - [ ] Basic deck → Multiple decks
-  - [ ] Element system explanation
+  - [ ] Terrain & zone-attunement explanation
   - [ ] Ultimate abilities
 
 ---
@@ -750,7 +748,7 @@
 - [ ] Test tick scheduler
 - [ ] Test deck validation
 - [ ] Test gold calculations
-- [ ] Test element system
+- [ ] Test terrain/zone-attunement system
 - [ ] Test hero abilities
 - [ ] Test ultimate triggers
 
@@ -864,7 +862,7 @@
 - [ ] Finalize game rules document
 - [ ] Create card database spreadsheet
 - [ ] Document hero abilities
-- [ ] Document element system
+- [ ] Document terrain/zone-attunement system
 - [ ] Create balance notes
 
 ### 13.3 Asset Documentation
@@ -1048,5 +1046,4 @@
 
 ---
 
-**Total Estimated Timeline**: 4-5 months for initial release with online multiplayer  
-**Key Dependencies**: Firebase setup, matchmaking logic, asset creation, anti-cheat validation, playtesting feedback
+

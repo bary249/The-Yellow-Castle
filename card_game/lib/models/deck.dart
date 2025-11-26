@@ -54,7 +54,7 @@ class Deck {
     final cards = buildStarterCardPool();
     return Deck(
       id: 'starter_${playerId ?? "default"}',
-      name: 'Elemental Starter Deck',
+      name: 'Terrain Starter Deck',
       cards: cards,
     );
   }

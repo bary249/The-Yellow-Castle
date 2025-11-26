@@ -8,135 +8,135 @@ import '../models/card.dart';
 /// Basic archetype identifiers
 // We use simple IDs; decks will refer to these by copying.
 
-GameCard fireQuickStrike(int index) => GameCard(
-  id: 'fire_qs_$index',
-  name: 'Fire Quick Strike',
+GameCard desertQuickStrike(int index) => GameCard(
+  id: 'desert_qs_$index',
+  name: 'Desert Quick Strike',
   damage: 4,
   health: 4,
   tick: 1,
-  element: 'Fire',
+  element: 'Desert',
   abilities: const [],
   cost: 1,
   rarity: 1,
 );
 
-GameCard waterQuickStrike(int index) => GameCard(
-  id: 'water_qs_$index',
-  name: 'Water Quick Strike',
+GameCard lakeQuickStrike(int index) => GameCard(
+  id: 'lake_qs_$index',
+  name: 'Lake Quick Strike',
   damage: 3,
   health: 6,
   tick: 1,
-  element: 'Water',
+  element: 'Lake',
   abilities: const [],
   cost: 1,
   rarity: 1,
 );
 
-GameCard natureQuickStrike(int index) => GameCard(
-  id: 'nature_qs_$index',
-  name: 'Nature Quick Strike',
+GameCard woodsQuickStrike(int index) => GameCard(
+  id: 'woods_qs_$index',
+  name: 'Woods Quick Strike',
   damage: 3,
   health: 5,
   tick: 1,
-  element: 'Nature',
+  element: 'Woods',
   abilities: const [],
   cost: 1,
   rarity: 1,
 );
 
-GameCard fireWarrior(int index) => GameCard(
-  id: 'fire_war_$index',
-  name: 'Fire Warrior',
+GameCard desertWarrior(int index) => GameCard(
+  id: 'desert_war_$index',
+  name: 'Desert Warrior',
   damage: 6,
   health: 9,
   tick: 3,
-  element: 'Fire',
+  element: 'Desert',
   abilities: const [],
   cost: 2,
   rarity: 1,
 );
 
-GameCard waterWarrior(int index) => GameCard(
-  id: 'water_war_$index',
-  name: 'Water Warrior',
+GameCard lakeWarrior(int index) => GameCard(
+  id: 'lake_war_$index',
+  name: 'Lake Warrior',
   damage: 5,
   health: 11,
   tick: 3,
-  element: 'Water',
+  element: 'Lake',
   abilities: const [],
   cost: 2,
   rarity: 1,
 );
 
-GameCard natureWarrior(int index) => GameCard(
-  id: 'nature_war_$index',
-  name: 'Nature Warrior',
+GameCard woodsWarrior(int index) => GameCard(
+  id: 'woods_war_$index',
+  name: 'Woods Warrior',
   damage: 5,
   health: 10,
   tick: 3,
-  element: 'Nature',
+  element: 'Woods',
   abilities: const [],
   cost: 2,
   rarity: 1,
 );
 
-GameCard fireTank(int index) => GameCard(
-  id: 'fire_tank_$index',
-  name: 'Fire Tank',
+GameCard desertTank(int index) => GameCard(
+  id: 'desert_tank_$index',
+  name: 'Desert Tank',
   damage: 9,
   health: 14,
   tick: 5,
-  element: 'Fire',
+  element: 'Desert',
   abilities: const [],
   cost: 3,
   rarity: 1,
 );
 
-GameCard waterTank(int index) => GameCard(
-  id: 'water_tank_$index',
-  name: 'Water Tank',
+GameCard lakeTank(int index) => GameCard(
+  id: 'lake_tank_$index',
+  name: 'Lake Tank',
   damage: 8,
   health: 16,
   tick: 5,
-  element: 'Water',
+  element: 'Lake',
   abilities: const [],
   cost: 3,
   rarity: 1,
 );
 
-GameCard natureTank(int index) => GameCard(
-  id: 'nature_tank_$index',
-  name: 'Nature Tank',
+GameCard woodsTank(int index) => GameCard(
+  id: 'woods_tank_$index',
+  name: 'Woods Tank',
   damage: 8,
   health: 15,
   tick: 5,
-  element: 'Nature',
+  element: 'Woods',
   abilities: const [],
   cost: 3,
   rarity: 1,
 );
 
-/// Support card: 0 damage, 1 HP, provides defensive buffs/debuffs for Water lanes.
-GameCard waterShieldTotem(int index) => GameCard(
-  id: 'water_shield_$index',
-  name: 'Water Shield Totem',
+/// Support card: 0 damage, 1 HP, provides defensive buffs/debuffs for Lake-aligned lanes.
+GameCard lakeShieldTotem(int index) => GameCard(
+  id: 'lake_shield_$index',
+  name: 'Lake Shield Totem',
   damage: 0,
   health: 1,
   tick: 3,
-  element: 'Water',
+  element: 'Lake',
   abilities: const ['shield_2', 'stack_debuff_enemy_damage_2'],
   cost: 2,
   rarity: 1,
 );
 
-/// Support card: 0 damage, 1 HP, provides offensive buffs for Fire lanes.
-GameCard fireWarBanner(int index) => GameCard(
-  id: 'fire_banner_$index',
-  name: 'Fire War Banner',
+/// Support card: 0 damage, 1 HP, provides offensive buffs for Desert-aligned lanes.
+GameCard desertWarBanner(int index) => GameCard(
+  id: 'desert_banner_$index',
+  name: 'Desert War Banner',
   damage: 0,
   health: 1,
   tick: 3,
-  element: 'Fire',
+  element: 'Desert',
   abilities: const ['fury_2', 'stack_buff_damage_2'],
   cost: 2,
   rarity: 1,
@@ -148,112 +148,112 @@ List<GameCard> buildStarterCardPool() {
 
   // 9 Quick Strikes: 3 of each element
   for (int i = 0; i < 3; i++) {
-    cards.add(fireQuickStrike(i));
-    cards.add(waterQuickStrike(i));
-    cards.add(natureQuickStrike(i));
+    cards.add(desertQuickStrike(i));
+    cards.add(lakeQuickStrike(i));
+    cards.add(woodsQuickStrike(i));
   }
 
   // 9 Warriors: 3 of each element
   for (int i = 0; i < 3; i++) {
-    cards.add(fireWarrior(i));
-    cards.add(waterWarrior(i));
-    cards.add(natureWarrior(i));
+    cards.add(desertWarrior(i));
+    cards.add(lakeWarrior(i));
+    cards.add(woodsWarrior(i));
   }
 
   // 7 Tanks: spread across elements (3 Fire, 2 Water, 2 Nature)
-  cards.add(fireTank(0));
-  cards.add(fireTank(1));
-  cards.add(fireTank(2));
-  cards.add(waterTank(0));
-  cards.add(waterTank(1));
-  cards.add(natureTank(0));
-  cards.add(natureTank(1));
+  cards.add(desertTank(0));
+  cards.add(desertTank(1));
+  cards.add(desertTank(2));
+  cards.add(lakeTank(0));
+  cards.add(lakeTank(1));
+  cards.add(woodsTank(0));
+  cards.add(woodsTank(1));
 
   assert(cards.length == 25);
   return cards;
 }
 
-/// Element-focused deck: Water Control.
-/// Heavier on Water units with some Nature/Fire splash.
+/// Terrain-focused deck: Lake Control.
+/// Heavier on Lake units with some Woods/Desert splash.
 List<GameCard> buildWaterControlDeck() {
   final cards = <GameCard>[];
 
   // Quick Strikes (8): 5 Water, 2 Nature, 1 Fire
   for (int i = 0; i < 6; i++) {
-    cards.add(waterQuickStrike(i));
+    cards.add(lakeQuickStrike(i));
   }
   // Drop one Water QS to make room for support
   cards.removeLast();
-  cards.add(natureQuickStrike(0));
-  cards.add(natureQuickStrike(1));
-  cards.add(fireQuickStrike(0));
+  cards.add(woodsQuickStrike(0));
+  cards.add(woodsQuickStrike(1));
+  cards.add(desertQuickStrike(0));
 
   // Warriors (8): 4 Water, 3 Nature, 1 Fire
   for (int i = 0; i < 5; i++) {
-    cards.add(waterWarrior(i));
+    cards.add(lakeWarrior(i));
   }
   // Drop one Water Warrior to make room for support
   cards.removeLast();
-  cards.add(natureWarrior(0));
-  cards.add(natureWarrior(1));
-  cards.add(natureWarrior(2));
-  cards.add(fireWarrior(0));
+  cards.add(woodsWarrior(0));
+  cards.add(woodsWarrior(1));
+  cards.add(woodsWarrior(2));
+  cards.add(desertWarrior(0));
 
   // Tanks (7): 3 Water, 2 Nature, 2 Fire
-  cards.add(waterTank(0));
-  cards.add(waterTank(1));
-  cards.add(waterTank(2));
-  cards.add(natureTank(0));
-  cards.add(natureTank(1));
-  cards.add(fireTank(0));
-  cards.add(fireTank(1));
+  cards.add(lakeTank(0));
+  cards.add(lakeTank(1));
+  cards.add(lakeTank(2));
+  cards.add(woodsTank(0));
+  cards.add(woodsTank(1));
+  cards.add(desertTank(0));
+  cards.add(desertTank(1));
 
   // Support: 2 Water Shield Totems (0 dmg / 1 HP buff cards)
-  cards.add(waterShieldTotem(0));
-  cards.add(waterShieldTotem(1));
+  cards.add(lakeShieldTotem(0));
+  cards.add(lakeShieldTotem(1));
 
   assert(cards.length == 25);
   return cards;
 }
 
-/// Element-focused deck: Fire Aggro.
-/// Heavier on Fire units with some Nature/Water splash.
+/// Terrain-focused deck: Desert Aggro.
+/// Heavier on Desert units with some Woods/Lake splash.
 List<GameCard> buildFireAggroDeck() {
   final cards = <GameCard>[];
 
   // Quick Strikes (8): 5 Fire, 2 Nature, 1 Water
   for (int i = 0; i < 6; i++) {
-    cards.add(fireQuickStrike(i));
+    cards.add(desertQuickStrike(i));
   }
   // Drop one Fire QS to make room for support
   cards.removeLast();
-  cards.add(natureQuickStrike(0));
-  cards.add(natureQuickStrike(1));
-  cards.add(waterQuickStrike(0));
+  cards.add(woodsQuickStrike(0));
+  cards.add(woodsQuickStrike(1));
+  cards.add(lakeQuickStrike(0));
 
   // Warriors (8): 4 Fire, 3 Nature, 1 Water
   for (int i = 0; i < 5; i++) {
-    cards.add(fireWarrior(i));
+    cards.add(desertWarrior(i));
   }
   // Drop one Fire Warrior to make room for support
   cards.removeLast();
-  cards.add(natureWarrior(0));
-  cards.add(natureWarrior(1));
-  cards.add(natureWarrior(2));
-  cards.add(waterWarrior(0));
+  cards.add(woodsWarrior(0));
+  cards.add(woodsWarrior(1));
+  cards.add(woodsWarrior(2));
+  cards.add(lakeWarrior(0));
 
   // Tanks (7): 3 Fire, 2 Nature, 2 Water
-  cards.add(fireTank(0));
-  cards.add(fireTank(1));
-  cards.add(fireTank(2));
-  cards.add(natureTank(0));
-  cards.add(natureTank(1));
-  cards.add(waterTank(0));
-  cards.add(waterTank(1));
+  cards.add(desertTank(0));
+  cards.add(desertTank(1));
+  cards.add(desertTank(2));
+  cards.add(woodsTank(0));
+  cards.add(woodsTank(1));
+  cards.add(lakeTank(0));
+  cards.add(lakeTank(1));
 
   // Support: 2 Fire War Banners (0 dmg / 1 HP buff cards)
-  cards.add(fireWarBanner(0));
-  cards.add(fireWarBanner(1));
+  cards.add(desertWarBanner(0));
+  cards.add(desertWarBanner(1));
 
   assert(cards.length == 25);
   return cards;
