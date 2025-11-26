@@ -89,9 +89,10 @@
   - [ ] validation logic (max 25 cards)
 - [ ] Create **Hero** model
   - [ ] id, name, description
-  - [ ] 2 ability definitions
-  - [ ] ability cooldowns/charges
+  - [ ] 1 ability definition (single-use per game)
+  - [ ] ability used flag (true/false)
   - [ ] visual/animation data
+  - [ ] 10 heroes total to choose from
 - [ ] Create **Element** enum (Fire, Water, Grass, etc.)
   - [ ] Element strength/weakness matrix
   - [ ] Buff/debuff calculations
@@ -271,18 +272,22 @@
 ### 3.7 Hero Ability System
 - [ ] Create **HeroManager** service
   - [ ] Track hero assigned to deck
-  - [ ] Manage 2 ability charges per combat
-  - [ ] Handle ability activation
+  - [ ] **1 ability per hero, 1 use per game**
+  - [ ] Handle ability activation during any turn (player clicks button)
   - [ ] Apply ability effects (buffs, heals, draws, etc.)
-  - [ ] Cooldown/charge tracking
+  - [ ] Track if ability has been used (disable button after use)
   - [ ] Heroes cannot be killed
-- [ ] Implement hero abilities
+- [ ] Implement 10 hero abilities (1 per hero)
   - [ ] Buff elemental cards
   - [ ] Heal crystal
   - [ ] Extra card draws
   - [ ] Damage boosts
   - [ ] Defensive shields
   - [ ] AOE effects
+  - [ ] Zone manipulation
+  - [ ] Card resurrection
+  - [ ] Enemy debuff
+  - [ ] Gold bonus
 
 ### 3.8 Character Ultimate System
 - [ ] Create **UltimateTracker** service
@@ -361,13 +366,19 @@
   - [ ] Collection button
   - [ ] Settings button
   - [ ] Background (FREE or procedural)
+- [ ] **Create pre-match setup screen**
+  - [ ] Deck selection (choose from saved decks)
+  - [ ] Base attunement element picker (Fire/Water/Nature/etc.)
+  - [ ] Hero selection (pick 1 of 10 heroes)
+  - [ ] Confirm/Ready button
 - [ ] **Create battle UI overlay**
   - [ ] Turn timer (circular or bar)
   - [ ] Gold counter
   - [ ] Crystal HP (player & opponent)
   - [ ] Win streak indicator
   - [ ] "Start Combat" button
-  - [ ] Hero ability buttons
+  - [ ] **Hero ability button** (single use, greyed out after used)
+  - [ ] Base attunement indicator (show player's element)
 - [ ] **Create hand UI**
   - [ ] Horizontal scrollable card list
   - [ ] Collapsible option
@@ -952,6 +963,63 @@
 - Social features (friend lists, clans)
 - Tournaments/events
 - Potential MOBA mode (future vision)
+
+---
+
+## 🔧 15. Active Fixes & Improvements
+
+### 15.1 UI/UX Terminology Fixes
+- [ ] Change "Top/Bottom" stack terminology to "Front/Back"
+  - [ ] Update `_buildCardStack` labels in both match screens
+  - [ ] Update combat log messages
+  - [ ] Update any tooltip/help text
+- [ ] Make sure players see opponent's front and back correctly (perspective fix)
+- [ ] Test and fix card remove/place for front and back positions
+- [ ] Add the base attunement indicator to the match UI
+  - [ ] Show player's attuned element in player info bar
+  - [ ] Show opponent's attuned element
+
+### 15.2 Small UI Additions
+- [ ] Add UI tags/badges for front and back cards in stacks
+
+---
+
+## 🎯 16. Planned Card Abilities
+
+### 16.1 Implemented Abilities
+- [x] `fury_2` - +2 damage for attacker
+- [x] `shield_2` - Reduce incoming damage by 2 (min 1)
+- [x] `stack_buff_damage_2` - +2 damage to stack partner
+- [x] `stack_debuff_enemy_damage_2` - -2 damage to enemy attacker
+
+### 16.2 Non-Damage Support Card Abilities (Planned)
+- [ ] Attune cards in same stack to a different element
+- [ ] Add HP to stacking card
+- [ ] Add damage to stacking card
+- [ ] Apply debuff to opponent cards
+
+### 16.3 Medium Complexity Abilities (Planned)
+- [ ] **Absorb Damage** - Card absorbs X damage before taking HP loss
+- [ ] **Crystal Strike** - Special ability to attack crystal directly (bypass cards)
+- [ ] **Zone Jump** - Ability to jump above 1 zone (skip advancement)
+
+---
+
+## 📜 17. Big Additions (Future)
+
+### 17.1 Lore & Theme
+- [ ] History-based lore system
+  - [ ] Card flavor text
+  - [ ] Character backstories
+  - [ ] World-building elements
+
+### 17.2 Major Mechanics
+- [ ] **3 Ages System** - 3 decks that progress with number of turns
+  - [ ] Age 1 deck (early game, turns 1-X)
+  - [ ] Age 2 deck (mid game)
+  - [ ] Age 3 deck (late game)
+  - [ ] Automatic deck switching at turn thresholds
+  - [ ] UI to show current age/deck
 
 ---
 
