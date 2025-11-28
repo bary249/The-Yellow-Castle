@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/card.dart';
 import '../data/card_library.dart';
@@ -12,12 +13,36 @@ class DeckStorageService {
   factory DeckStorageService() => _instance;
   DeckStorageService._internal();
 
+  /// In-memory fallback for when SharedPreferences fails (e.g., web without proper setup)
+  static List<GameCard>? _inMemoryDeck;
+  static bool _storageAvailable = true;
+
+  /// Try to get SharedPreferences, return null if unavailable
+  Future<SharedPreferences?> _getPrefs() async {
+    if (!_storageAvailable) return null;
+
+    try {
+      return await SharedPreferences.getInstance();
+    } catch (e) {
+      debugPrint('SharedPreferences not available: $e');
+      _storageAvailable = false;
+      return null;
+    }
+  }
+
   /// Save deck to local storage
   /// Stores card data as JSON for full reconstruction
   Future<bool> saveDeck(List<GameCard> deck) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
+    // Always save to memory as backup
+    _inMemoryDeck = List.from(deck);
 
+    final prefs = await _getPrefs();
+    if (prefs == null) {
+      debugPrint('Using in-memory storage for deck');
+      return true; // Saved to memory
+    }
+
+    try {
       // Convert cards to JSON-serializable format
       final cardDataList = deck
           .map(
@@ -39,16 +64,25 @@ class DeckStorageService {
       await prefs.setString(_deckKey, jsonString);
       return true;
     } catch (e) {
-      print('Error saving deck: $e');
-      return false;
+      debugPrint('Error saving deck: $e');
+      return true; // Still saved to memory
     }
   }
 
   /// Load deck from local storage
   /// Returns saved deck, or default starter deck if none saved
   Future<List<GameCard>> loadDeck() async {
+    // Check in-memory first
+    if (_inMemoryDeck != null) {
+      return List.from(_inMemoryDeck!);
+    }
+
+    final prefs = await _getPrefs();
+    if (prefs == null) {
+      return buildStarterCardPool();
+    }
+
     try {
-      final prefs = await SharedPreferences.getInstance();
       final jsonString = prefs.getString(_deckKey);
 
       if (jsonString == null || jsonString.isEmpty) {
@@ -72,9 +106,11 @@ class DeckStorageService {
         );
       }).toList();
 
+      // Cache in memory
+      _inMemoryDeck = List.from(deck);
       return deck;
     } catch (e) {
-      print('Error loading deck: $e');
+      debugPrint('Error loading deck: $e');
       // Return default deck on error
       return buildStarterCardPool();
     }
@@ -82,8 +118,12 @@ class DeckStorageService {
 
   /// Check if player has a saved deck
   Future<bool> hasSavedDeck() async {
+    if (_inMemoryDeck != null) return true;
+
+    final prefs = await _getPrefs();
+    if (prefs == null) return false;
+
     try {
-      final prefs = await SharedPreferences.getInstance();
       return prefs.containsKey(_deckKey);
     } catch (e) {
       return false;
@@ -92,13 +132,17 @@ class DeckStorageService {
 
   /// Clear saved deck (reset to default)
   Future<bool> clearDeck() async {
+    _inMemoryDeck = null;
+
+    final prefs = await _getPrefs();
+    if (prefs == null) return true;
+
     try {
-      final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_deckKey);
       return true;
     } catch (e) {
-      print('Error clearing deck: $e');
-      return false;
+      debugPrint('Error clearing deck: $e');
+      return true; // Memory already cleared
     }
   }
 }
