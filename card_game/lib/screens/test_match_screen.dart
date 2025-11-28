@@ -645,11 +645,47 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     final tile = match.getTile(row, col);
     final stagedCardsOnTile = _getStagedCards(row, col);
 
+    // Get lane for this column to check zone and get survivor cards
+    final lanePos = [
+      LanePosition.left,
+      LanePosition.center,
+      LanePosition.right,
+    ][col];
+    final lane = match.getLane(lanePos);
+
+    // Map zone to row: playerBase=2, middle=1, enemyBase=0
+    int zoneToRow(Zone z) {
+      switch (z) {
+        case Zone.playerBase:
+          return 2;
+        case Zone.middle:
+          return 1;
+        case Zone.enemyBase:
+          return 0;
+      }
+    }
+
+    // Get survivor cards from lane based on zone position
+    List<GameCard> survivorCards = [];
+    final currentZoneRow = zoneToRow(lane.currentZone);
+    if (row == currentZoneRow) {
+      // This tile is where the combat zone is - show player survivors here
+      survivorCards = lane.playerStack.aliveCards;
+    }
+    // Show opponent cards on opponent-controlled tiles
+    List<GameCard> opponentCards = [];
+    if (row == 0) {
+      // Enemy base - show opponent cards
+      opponentCards = lane.opponentStack.aliveCards;
+    }
+
+    // Count existing cards for placement check
+    final existingCount = survivorCards.length + opponentCards.length;
+
     // Can place on player-owned tiles with room, but NOT enemy base (row 0)
     final isPlayerOwned = tile.owner == TileOwner.player;
     final isNotEnemyBase =
         row != 0; // Cannot stage on enemy base even if captured
-    final existingCount = tile.cards.length;
     final stagedCount = stagedCardsOnTile.length;
     final canPlace =
         isPlayerOwned &&
@@ -667,8 +703,12 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       bgColor = Colors.grey[100]!;
     }
 
-    // Get cards to show: existing on tile + staged
-    List<GameCard> cardsToShow = [...tile.aliveCards, ...stagedCardsOnTile];
+    // Get cards to show: survivors + opponent + staged
+    List<GameCard> cardsToShow = [
+      ...survivorCards,
+      ...opponentCards,
+      ...stagedCardsOnTile,
+    ];
 
     return GestureDetector(
       onTap: canPlace ? () => _placeCardOnTile(row, col) : null,
@@ -718,17 +758,32 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 2),
                   children: cardsToShow.map((card) {
                     final isStaged = stagedCardsOnTile.contains(card);
+                    final isOpponent = opponentCards.contains(card);
+                    final isSurvivor = survivorCards.contains(card);
+
+                    // Determine card color
+                    Color cardColor;
+                    if (isStaged) {
+                      cardColor = Colors.amber[100]!;
+                    } else if (isOpponent) {
+                      cardColor = Colors.red[200]!;
+                    } else if (isSurvivor) {
+                      cardColor = Colors.blue[200]!;
+                    } else {
+                      cardColor = Colors.grey[200]!;
+                    }
+
                     return Container(
                       margin: const EdgeInsets.symmetric(vertical: 1),
                       padding: const EdgeInsets.all(3),
                       decoration: BoxDecoration(
-                        color: isStaged
-                            ? Colors.amber[100]
-                            : (row == 0 ? Colors.red[200] : Colors.blue[200]),
+                        color: cardColor,
                         borderRadius: BorderRadius.circular(4),
                         border: isStaged
                             ? Border.all(color: Colors.amber, width: 2)
-                            : null,
+                            : (isSurvivor
+                                  ? Border.all(color: Colors.blue, width: 1)
+                                  : null),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
