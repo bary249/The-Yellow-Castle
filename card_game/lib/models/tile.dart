@@ -108,11 +108,12 @@ class Tile {
     return '$colName $rowName';
   }
 
-  /// Short display name.
+  /// Short display name (e.g., WEB=West Enemy Base, WPB=West Player Base, WM=West Middle)
   String get shortName {
     final col = ['W', 'C', 'E'][column];
-    final row = ['E', 'M', 'Y'][2 - this.row]; // E=enemy, M=middle, Y=yours
-    return '$col$row';
+    // Row 0 = Enemy Base, Row 1 = Middle, Row 2 = Player Base
+    final rowSuffix = row == 0 ? 'EB' : (row == 1 ? 'M' : 'PB');
+    return '$col$rowSuffix';
   }
 
   @override
