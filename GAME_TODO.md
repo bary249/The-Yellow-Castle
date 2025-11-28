@@ -6,6 +6,34 @@
 
 ---
 
+## 🎯 Current Sprint: Hero System & 3×3 Board
+
+### Hero System ✅
+- [x] Create `GameHero` model with terrain affinities and abilities
+- [x] Create `HeroLibrary` with 3 starter heroes:
+  - Napoleon (Woods/Lake) - Draw 2 extra cards
+  - Saladin (Desert) - +1 damage boost
+  - Admiral Nelson (Lake) - Heal 3 HP
+- [x] Add hero to Player model
+- [x] Wire hero abilities into MatchManager
+- [x] Add hero ability button to TestMatchScreen UI
+- [x] Create HeroSelectionScreen (pre-match hero picker)
+- [x] Update main menu flow: Menu → Hero Selection → Match
+
+### 3×3 Board Redesign (In Progress)
+- [x] Create `Tile` model (row, col, terrain, owner, cards)
+- [x] Create `GameBoard` model (3×3 grid management)
+- [x] Add GameBoard to MatchState
+- [x] Update MatchManager to create board with hero terrains
+- [x] Update TestMatchScreen UI to show 3×3 grid
+- [x] Update staging to tile-based (place on any owned tile)
+- [ ] Migrate combat from lanes to tiles
+- [ ] Tile ownership capture after combat victory
+- [ ] Card advancement between tile rows
+- [ ] Remove legacy Lane system
+
+---
+
 ## 🏗️ 1. Project Setup & Architecture
 
 ### 1.1 Project Initialization
