@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
-import 'test_match_screen.dart';
+import 'hero_selection_screen.dart';
 import 'matchmaking_screen.dart';
 
 /// Main menu screen with Play vs AI and Play Online options
@@ -47,7 +47,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
   void _playVsAI() {
     Navigator.of(
       context,
-    ).push(MaterialPageRoute(builder: (_) => const TestMatchScreen()));
+    ).push(MaterialPageRoute(builder: (_) => const HeroSelectionScreen()));
   }
 
   void _playOnline() {

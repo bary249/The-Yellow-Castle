@@ -12,7 +12,10 @@ import '../services/auth_service.dart';
 
 /// Simple test screen to verify game logic with drag-and-drop card placement
 class TestMatchScreen extends StatefulWidget {
-  const TestMatchScreen({super.key});
+  /// Optional hero selected before the match. If null, uses default (Napoleon).
+  final GameHero? selectedHero;
+
+  const TestMatchScreen({super.key, this.selectedHero});
 
   @override
   State<TestMatchScreen> createState() => _TestMatchScreenState();
@@ -65,9 +68,8 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     final id = _playerId ?? 'player1';
     final name = _playerName ?? 'You';
 
-    // For now, use Napoleon as the default player hero
-    // TODO: Add hero selection screen
-    final playerHero = HeroLibrary.napoleon();
+    // Use selected hero or default to Napoleon
+    final playerHero = widget.selectedHero ?? HeroLibrary.napoleon();
     final aiHero = HeroLibrary.saladin(); // AI uses Saladin
 
     _matchManager.startMatch(
