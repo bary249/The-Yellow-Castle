@@ -283,6 +283,10 @@ class MatchManager {
     _log('TURN ${_currentMatch!.turnNumber} - COMBAT RESOLUTION');
     _log('=' * 80);
 
+    // Log board state BEFORE combat (shows staging result)
+    _log('\n--- BOARD STATE (AFTER STAGING) ---');
+    _logBoardState();
+
     // Resolve each lane with tick-by-tick animation
     for (final lane in _currentMatch!.lanes) {
       if (lane.hasActiveCards) {
@@ -542,6 +546,7 @@ class MatchManager {
     _log('--- END ZONE ADVANCEMENT ---');
 
     // Log the board state after zone advancement
+    _log('\n--- BOARD STATE (AFTER COMBAT) ---');
     _logBoardState();
   }
 

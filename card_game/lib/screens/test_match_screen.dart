@@ -728,11 +728,11 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       bgColor = Colors.grey[100]!;
     }
 
-    // Get cards to show: survivors + opponent + staged
+    // Get cards to show: opponent first (top/closer to enemy), then player (bottom/closer to you)
     List<GameCard> cardsToShow = [
-      ...survivorCards,
-      ...opponentCards,
-      ...stagedCardsOnTile,
+      ...opponentCards, // Enemy cards at TOP (row 0 direction)
+      ...survivorCards, // Player survivors
+      ...stagedCardsOnTile, // Player staged cards at BOTTOM (row 2 direction)
     ];
 
     return GestureDetector(

@@ -38,6 +38,8 @@
 - [x] Renamed lanes: left/right → west/east
 - [x] Added visual grid in battle logs showing board state
 - [ ] Migrate combat from lanes to tiles (still using legacy lane stacks)
+  - **Known limitation**: Can't have 2 cards at base AND 2 at middle (max 2 per lane total)
+  - Need tile-based card storage to support base cards staying when mid is full
 - [ ] Remove legacy Lane system (deferred - working as hybrid)
 
 ---
