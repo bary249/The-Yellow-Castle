@@ -31,14 +31,19 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   String? _playerName;
   int? _playerElo;
 
-  // Staging area: cards placed in lanes before submitting
-  final Map<LanePosition, List<GameCard>> _stagedCards = {
-    LanePosition.left: [],
-    LanePosition.center: [],
-    LanePosition.right: [],
-  };
+  // Staging area: cards placed on tiles before submitting
+  // Key is "row,col" string (e.g., "2,0" for player base left)
+  final Map<String, List<GameCard>> _stagedCards = {};
 
   GameCard? _selectedCard;
+
+  /// Get the staging key for a tile.
+  String _tileKey(int row, int col) => '$row,$col';
+
+  /// Get staged cards for a specific tile.
+  List<GameCard> _getStagedCards(int row, int col) {
+    return _stagedCards[_tileKey(row, col)] ?? [];
+  }
 
   @override
   void initState() {
@@ -91,32 +96,49 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   }
 
   void _clearStaging() {
-    _stagedCards[LanePosition.left]!.clear();
-    _stagedCards[LanePosition.center]!.clear();
-    _stagedCards[LanePosition.right]!.clear();
+    _stagedCards.clear();
     _selectedCard = null;
   }
 
-  void _placeCardInLane(LanePosition lane) {
+  /// Place a card on a specific tile.
+  void _placeCardOnTile(int row, int col) {
     final match = _matchManager.currentMatch;
     if (match == null || _selectedCard == null) return;
 
-    // Check if lane already has 2 cards
-    if (_stagedCards[lane]!.length >= 2) {
+    final tile = match.getTile(row, col);
+    final key = _tileKey(row, col);
+
+    // Initialize list if needed
+    _stagedCards[key] ??= [];
+
+    // Check tile ownership - must be player-owned
+    if (tile.owner != TileOwner.player) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Lane is full (max 2 cards)!')),
+        const SnackBar(content: Text('You don\'t own this tile!')),
+      );
+      return;
+    }
+
+    // Check if tile already has 2 cards (existing + staged)
+    final existingCount = tile.cards.length;
+    final stagedCount = _stagedCards[key]!.length;
+    if (existingCount + stagedCount >= 2) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Tile is full (max 2 cards)!')),
       );
       return;
     }
 
     // Move card from hand to staging
-    _stagedCards[lane]!.add(_selectedCard!);
+    _stagedCards[key]!.add(_selectedCard!);
     _selectedCard = null;
     setState(() {});
   }
 
-  void _removeCardFromLane(LanePosition lane, GameCard card) {
-    _stagedCards[lane]!.remove(card);
+  /// Remove a card from a tile's staging area.
+  void _removeCardFromTile(int row, int col, GameCard card) {
+    final key = _tileKey(row, col);
+    _stagedCards[key]?.remove(card);
     setState(() {});
   }
 
@@ -129,20 +151,45 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       0,
       (sum, list) => sum + list.length,
     );
-    // if (totalPlaced == 0) {
-    //   ScaffoldMessenger.of(
-    //     context,
-    //   ).showSnackBar(const SnackBar(content: Text('Place at least one card!')));
-    //   return;
-    // }
 
     // Set up animation callback
     _matchManager.onCombatUpdate = () {
       if (mounted) setState(() {});
     };
 
-    // Submit player moves
-    await _matchManager.submitPlayerMoves(Map.from(_stagedCards));
+    // Convert tile-based staging to lane-based for legacy combat system
+    // Row 2 = player base, cols 0,1,2 = left, center, right lanes
+    final lanePlacements = <LanePosition, List<GameCard>>{
+      LanePosition.left: [],
+      LanePosition.center: [],
+      LanePosition.right: [],
+    };
+
+    // Also place cards on actual tiles for the new system
+    for (final entry in _stagedCards.entries) {
+      final parts = entry.key.split(',');
+      final row = int.parse(parts[0]);
+      final col = int.parse(parts[1]);
+
+      // Add to tiles
+      final tile = match.getTile(row, col);
+      for (final card in entry.value) {
+        tile.addCard(card);
+      }
+
+      // Map to lanes (only base row for now)
+      if (row == 2) {
+        final lanePos = [
+          LanePosition.left,
+          LanePosition.center,
+          LanePosition.right,
+        ][col];
+        lanePlacements[lanePos]!.addAll(entry.value);
+      }
+    }
+
+    // Submit player moves using legacy lane system
+    await _matchManager.submitPlayerMoves(lanePlacements);
 
     // AI makes its moves
     final aiMoves = _ai.generateMoves(match.opponent);
@@ -587,19 +634,16 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   /// Build a single tile widget.
   Widget _buildTile(MatchState match, int row, int col) {
     final tile = match.getTile(row, col);
-    final lanePos = [
-      LanePosition.left,
-      LanePosition.center,
-      LanePosition.right,
-    ][col];
-    final lane = match.getLane(lanePos);
-    final stagedCardsInLane = _stagedCards[lanePos]!;
+    final stagedCardsOnTile = _getStagedCards(row, col);
 
-    // Can place on player's base tiles (row 2) only
-    final isPlayerBase = row == 2;
-    final survivingCount = lane.playerStack.aliveCards.length;
-    final totalCards = survivingCount + stagedCardsInLane.length;
-    final canPlace = isPlayerBase && _selectedCard != null && totalCards < 2;
+    // Can place on any player-owned tile with room
+    final isPlayerOwned = tile.owner == TileOwner.player;
+    final existingCount = tile.cards.length;
+    final stagedCount = stagedCardsOnTile.length;
+    final canPlace =
+        isPlayerOwned &&
+        _selectedCard != null &&
+        (existingCount + stagedCount) < 2;
 
     // Determine tile color based on owner and terrain
     Color bgColor;
@@ -611,24 +655,11 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       bgColor = Colors.grey[100]!;
     }
 
-    // Get cards to show based on row
-    List<GameCard> cardsToShow = [];
-    if (row == 0) {
-      // Opponent base row - show opponent cards
-      cardsToShow = lane.opponentStack.aliveCards;
-    } else if (row == 2) {
-      // Player base row - show player cards (survivors + staged)
-      cardsToShow = [...lane.playerStack.aliveCards, ...stagedCardsInLane];
-    } else {
-      // Middle row - show current zone combat (if applicable)
-      // For now, show an indicator if zone is in middle
-      if (lane.currentZone == Zone.middle) {
-        // Combat happens here
-      }
-    }
+    // Get cards to show: existing on tile + staged
+    List<GameCard> cardsToShow = [...tile.aliveCards, ...stagedCardsOnTile];
 
     return GestureDetector(
-      onTap: canPlace ? () => _placeCardInLane(lanePos) : null,
+      onTap: canPlace ? () => _placeCardOnTile(row, col) : null,
       child: Container(
         margin: const EdgeInsets.all(2),
         decoration: BoxDecoration(
@@ -663,14 +694,9 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
             const SizedBox(height: 2),
 
             // Cards on this tile
-            if (cardsToShow.isEmpty && row == 1)
+            if (cardsToShow.isEmpty)
               Text(
-                lane.zoneDisplay,
-                style: TextStyle(fontSize: 10, color: Colors.grey[600]),
-              )
-            else if (cardsToShow.isEmpty)
-              Text(
-                tile.shortName,
+                row == 1 ? 'Middle' : tile.shortName,
                 style: TextStyle(fontSize: 10, color: Colors.grey[500]),
               )
             else
@@ -679,7 +705,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                   shrinkWrap: true,
                   padding: const EdgeInsets.symmetric(horizontal: 2),
                   children: cardsToShow.map((card) {
-                    final isStaged = stagedCardsInLane.contains(card);
+                    final isStaged = stagedCardsOnTile.contains(card);
                     return Container(
                       margin: const EdgeInsets.symmetric(vertical: 1),
                       padding: const EdgeInsets.all(3),
@@ -742,233 +768,6 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       default:
         return Colors.grey[600]!;
     }
-  }
-
-  Widget _buildLane(MatchState match, LanePosition position) {
-    final lane = match.getLane(position);
-    final stagedCardsInLane = _stagedCards[position]!;
-
-    // Check total cards: survivors + staged cards must not exceed 2
-    final survivingCount = lane.playerStack.aliveCards.length;
-    final totalCards = survivingCount + stagedCardsInLane.length;
-    final canPlace = _selectedCard != null && totalCards < 2;
-
-    return GestureDetector(
-      onTap: canPlace ? () => _placeCardInLane(position) : null,
-      child: Container(
-        margin: const EdgeInsets.all(4),
-        decoration: BoxDecoration(
-          border: Border.all(
-            color: canPlace ? Colors.green : Colors.grey,
-            width: canPlace ? 3 : 1,
-          ),
-          borderRadius: BorderRadius.circular(8),
-          color: canPlace ? Colors.green.withValues(alpha: 0.1) : null,
-        ),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                position.name.toUpperCase(),
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
-              ),
-              // Zone display
-              Container(
-                margin: const EdgeInsets.symmetric(vertical: 4),
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Colors.purple[100],
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.purple),
-                ),
-                child: Text(
-                  lane.zoneDisplay,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-
-              // Opponent cards
-              _buildCardStack(lane.opponentStack, Colors.red[200]!),
-
-              const Divider(),
-
-              // Surviving player cards from previous turn
-              if (lane.playerStack.aliveCards.isNotEmpty)
-                Container(
-                  padding: const EdgeInsets.all(4),
-                  margin: const EdgeInsets.only(bottom: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.blue[100],
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(color: Colors.blue, width: 2),
-                  ),
-                  child: Column(
-                    children: [
-                      const Text(
-                        '💪 Survivors',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      _buildCardStack(lane.playerStack, Colors.blue[200]!),
-                    ],
-                  ),
-                ),
-
-              // Staged/Deployed cards (player's cards for this turn)
-              if (stagedCardsInLane.isNotEmpty)
-                Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: match.playerSubmitted
-                        ? Colors.green[100]
-                        : Colors.yellow[100],
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(
-                      color: match.playerSubmitted
-                          ? Colors.green
-                          : Colors.orange,
-                      width: 2,
-                    ),
-                  ),
-                  child: Column(
-                    children: [
-                      Text(
-                        match.playerSubmitted ? '✅ Deployed' : '⏳ Staged',
-                        style: const TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      ...stagedCardsInLane.asMap().entries.map(
-                        (entry) => _buildStagedCard(
-                          entry.value,
-                          position,
-                          indexInLane: entry.key,
-                          hasSurvivors: lane.playerStack.aliveCards.isNotEmpty,
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              else if (canPlace)
-                Container(
-                  height: 60,
-                  margin: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: Colors.green.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(
-                      color: Colors.green,
-                      style: BorderStyle.solid,
-                      width: 2,
-                    ),
-                  ),
-                  child: const Center(
-                    child: Icon(
-                      Icons.add_circle_outline,
-                      color: Colors.green,
-                      size: 32,
-                    ),
-                  ),
-                )
-              else
-                Container(
-                  height: 60,
-                  margin: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[200],
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: const Center(
-                    child: Text('Empty', style: TextStyle(color: Colors.grey)),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStagedCard(
-    GameCard card,
-    LanePosition lane, {
-    required int indexInLane,
-    required bool hasSurvivors,
-  }) {
-    return Container(
-      margin: const EdgeInsets.all(2),
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: Colors.yellow[200],
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: Colors.orange),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  card.name,
-                  style: const TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                Builder(
-                  builder: (context) {
-                    final posLabel = hasSurvivors
-                        ? 'BACK'
-                        : (indexInLane == 0 ? 'FRONT' : 'BACK');
-                    return Text(
-                      'Position: $posLabel',
-                      style: const TextStyle(fontSize: 8),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    );
-                  },
-                ),
-                Text(
-                  'HP: ${card.health} DMG: ${card.damage} T:${card.tick}',
-                  style: const TextStyle(fontSize: 9),
-                ),
-                if (card.element != null)
-                  Text(
-                    'Terrain: ${card.element}',
-                    style: const TextStyle(fontSize: 8),
-                  ),
-                if (card.abilities.isNotEmpty)
-                  Text(
-                    'Abilities: ${card.abilities.join(", ")}',
-                    style: const TextStyle(fontSize: 7),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-              ],
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.close, size: 16),
-            onPressed: () => _removeCardFromLane(lane, card),
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(),
-          ),
-        ],
-      ),
-    );
   }
 
   Widget _buildBattleLog() {
