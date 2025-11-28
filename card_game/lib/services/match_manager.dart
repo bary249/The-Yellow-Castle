@@ -506,6 +506,83 @@ class MatchManager {
     }
 
     _log('--- END ZONE ADVANCEMENT ---');
+
+    // Log the board state after zone advancement
+    _logBoardState();
+  }
+
+  /// Log the current board state showing tiles and cards
+  void _logBoardState() {
+    if (_currentMatch == null) return;
+
+    final board = _currentMatch!.board;
+    final lanes = _currentMatch!.lanes;
+
+    _log('\n╔════════════════════════════════════╗');
+    _log('║         BOARD STATE                ║');
+    _log('╠════════════════════════════════════╣');
+
+    // Row labels
+    final rowLabels = ['Enemy Base', 'Middle    ', 'Your Base '];
+
+    for (int row = 0; row < 3; row++) {
+      _log('║ ${rowLabels[row]}:');
+
+      for (int col = 0; col < 3; col++) {
+        final tile = board.getTile(row, col);
+        final lane = lanes[col];
+
+        // Get owner symbol
+        String ownerSymbol;
+        switch (tile.owner) {
+          case TileOwner.player:
+            ownerSymbol = '🔵';
+          case TileOwner.opponent:
+            ownerSymbol = '🔴';
+          case TileOwner.neutral:
+            ownerSymbol = '⚪';
+        }
+
+        // Map zone to row for card display
+        int zoneToRow(Zone z) {
+          switch (z) {
+            case Zone.playerBase:
+              return 2;
+            case Zone.middle:
+              return 1;
+            case Zone.enemyBase:
+              return 0;
+          }
+        }
+
+        // Get cards at this tile based on zone
+        final currentZoneRow = zoneToRow(lane.currentZone);
+        List<String> cardNames = [];
+
+        // Player cards show at their zone position
+        if (row == currentZoneRow) {
+          for (final card in lane.playerStack.aliveCards) {
+            cardNames.add('P:${card.name}(${card.currentHealth}hp)');
+          }
+        }
+
+        // Opponent cards - show at enemy base (row 0) or their advanced position
+        // For simplicity, opponent cards show based on inverse zone
+        if (row == 0) {
+          for (final card in lane.opponentStack.aliveCards) {
+            cardNames.add('O:${card.name}(${card.currentHealth}hp)');
+          }
+        }
+
+        final colName = ['L', 'C', 'R'][col];
+        final terrain = tile.terrain ?? '-';
+        final cardsStr = cardNames.isEmpty ? 'empty' : cardNames.join(', ');
+
+        _log('║   [$colName] $ownerSymbol $terrain: $cardsStr');
+      }
+    }
+
+    _log('╚════════════════════════════════════╝');
   }
 
   /// Update tile ownership when zone advances.
