@@ -37,9 +37,11 @@
   - Hit crystal → return to middle
 - [x] Renamed lanes: left/right → west/east
 - [x] Added visual grid in battle logs showing board state
-- [ ] Migrate combat from lanes to tiles (still using legacy lane stacks)
-  - **Known limitation**: Can't have 2 cards at base AND 2 at middle (max 2 per lane total)
-  - Need tile-based card storage to support base cards staying when mid is full
+- [x] Implemented tile-based card storage with PositionalCards:
+  - Base cards (row 2/0) and middle cards (row 1) tracked separately
+  - Max 2 cards at base AND max 2 at middle per lane
+  - Cards advance from base → middle if room available
+  - Combat still uses middleCards (legacy compatibility)
 - [ ] Remove legacy Lane system (deferred - working as hybrid)
 
 ---
