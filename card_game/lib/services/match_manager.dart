@@ -430,20 +430,29 @@ class MatchManager {
       final colIndex = lane.position.index; // 0=left, 1=center, 2=right
 
       if (playerWon == true) {
-        // Player won lane - advance toward enemy base
+        // Player won lane - check advancement
         _log('$laneName: Player victory! ${lane.zoneDisplay}');
-        final reachedBase = lane.advanceZone(true);
-        _log('$laneName: Advanced to ${lane.zoneDisplay}');
 
-        // Update tile ownership for middle tiles
-        _updateTileOwnership(
-          colIndex,
-          lane.currentZone,
-          isPlayerAdvancing: true,
-        );
+        // Check if enemy base has defenders BEFORE advancing
+        final currentZone = lane.currentZone;
+        final enemyHasDefenders = lane.opponentStack.aliveCards.isNotEmpty;
 
-        if (reachedBase) {
-          // At enemy base - deal crystal damage
+        if (currentZone == Zone.middle && !enemyHasDefenders) {
+          // At middle with NO enemy defenders at base → hit crystal, stay at middle
+          final totalDamage = lane.playerStack.aliveCards.fold<int>(
+            0,
+            (sum, card) => sum + card.damage,
+          );
+          _currentMatch!.opponent.takeCrystalDamage(totalDamage);
+          _log(
+            '$laneName: 💥 $totalDamage crystal damage to AI! (uncontested from middle)',
+          );
+          // Zone stays at middle - don't advance
+
+          // Capture middle tile
+          _updateTileOwnership(colIndex, Zone.middle, isPlayerAdvancing: true);
+        } else if (currentZone == Zone.enemyBase) {
+          // Already at enemy base, won combat → hit crystal, return to middle
           final totalDamage = lane.playerStack.aliveCards.fold<int>(
             0,
             (sum, card) => sum + card.damage,
@@ -451,28 +460,51 @@ class MatchManager {
           _currentMatch!.opponent.takeCrystalDamage(totalDamage);
           _log('$laneName: 💥 $totalDamage crystal damage to AI!');
 
-          // After hitting crystal, survivors return to middle
+          // Return to middle after hitting crystal
           lane.retreatZone(true);
-          _log('$laneName: ↩️ Survivors return to middle after attack');
+          _log('$laneName: ↩️ Survivors return to middle');
+
+          // Capture middle tile
+          _updateTileOwnership(colIndex, Zone.middle, isPlayerAdvancing: true);
+        } else {
+          // Advance zone (middle → enemyBase with defenders, or playerBase → middle)
+          lane.advanceZone(true);
+          _log('$laneName: Advanced to ${lane.zoneDisplay}');
+
+          // Capture middle tile if advancing to/through it
+          _updateTileOwnership(
+            colIndex,
+            lane.currentZone,
+            isPlayerAdvancing: true,
+          );
         }
 
         // Award gold for winning lane
         _currentMatch!.player.earnGold(400);
       } else if (playerWon == false) {
-        // Opponent won lane - advance toward player base
+        // Opponent won lane - check advancement
         _log('$laneName: AI victory! ${lane.zoneDisplay}');
-        final reachedBase = lane.advanceZone(false);
-        _log('$laneName: Advanced to ${lane.zoneDisplay}');
 
-        // Update tile ownership for middle tiles
-        _updateTileOwnership(
-          colIndex,
-          lane.currentZone,
-          isPlayerAdvancing: false,
-        );
+        // Check if player base has defenders BEFORE advancing
+        final currentZone = lane.currentZone;
+        final playerHasDefenders = lane.playerStack.aliveCards.isNotEmpty;
 
-        if (reachedBase) {
-          // At player base - deal crystal damage
+        if (currentZone == Zone.middle && !playerHasDefenders) {
+          // At middle with NO player defenders at base → hit crystal, stay at middle
+          final totalDamage = lane.opponentStack.aliveCards.fold<int>(
+            0,
+            (sum, card) => sum + card.damage,
+          );
+          _currentMatch!.player.takeCrystalDamage(totalDamage);
+          _log(
+            '$laneName: 💥 $totalDamage crystal damage to Player! (uncontested from middle)',
+          );
+          // Zone stays at middle - don't advance
+
+          // Capture middle tile
+          _updateTileOwnership(colIndex, Zone.middle, isPlayerAdvancing: false);
+        } else if (currentZone == Zone.playerBase) {
+          // Already at player base, won combat → hit crystal, return to middle
           final totalDamage = lane.opponentStack.aliveCards.fold<int>(
             0,
             (sum, card) => sum + card.damage,
@@ -480,9 +512,23 @@ class MatchManager {
           _currentMatch!.player.takeCrystalDamage(totalDamage);
           _log('$laneName: 💥 $totalDamage crystal damage to Player!');
 
-          // After hitting crystal, survivors return to middle
+          // Return to middle after hitting crystal
           lane.retreatZone(false);
-          _log('$laneName: ↩️ AI survivors return to middle after attack');
+          _log('$laneName: ↩️ AI survivors return to middle');
+
+          // Capture middle tile
+          _updateTileOwnership(colIndex, Zone.middle, isPlayerAdvancing: false);
+        } else {
+          // Advance zone (middle → playerBase with defenders, or enemyBase → middle)
+          lane.advanceZone(false);
+          _log('$laneName: Advanced to ${lane.zoneDisplay}');
+
+          // Capture middle tile if advancing to/through it
+          _updateTileOwnership(
+            colIndex,
+            lane.currentZone,
+            isPlayerAdvancing: false,
+          );
         }
 
         // Award gold for winning lane

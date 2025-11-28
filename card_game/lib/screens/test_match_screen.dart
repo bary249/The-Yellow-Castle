@@ -747,101 +747,108 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
           ),
           borderRadius: BorderRadius.circular(6),
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // Terrain tag
-            if (tile.terrain != null)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                decoration: BoxDecoration(
-                  color: _getTerrainColor(tile.terrain!),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  tile.terrain!,
-                  style: const TextStyle(
-                    fontSize: 9,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(6),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Terrain tag
+              if (tile.terrain != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 1,
+                  ),
+                  decoration: BoxDecoration(
+                    color: _getTerrainColor(tile.terrain!),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    tile.terrain!,
+                    style: const TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
-              ),
 
-            const SizedBox(height: 2),
+              const SizedBox(height: 2),
 
-            // Cards on this tile
-            if (cardsToShow.isEmpty)
-              Text(
-                row == 1 ? 'Middle' : tile.shortName,
-                style: TextStyle(fontSize: 10, color: Colors.grey[500]),
-              )
-            else
-              Expanded(
-                child: ListView(
-                  shrinkWrap: true,
-                  padding: const EdgeInsets.symmetric(horizontal: 2),
-                  children: cardsToShow.map((card) {
-                    final isStaged = stagedCardsOnTile.contains(card);
-                    final isOpponent = opponentCards.contains(card);
-                    final isSurvivor = survivorCards.contains(card);
+              // Cards on this tile
+              if (cardsToShow.isEmpty)
+                Text(
+                  row == 1 ? 'Middle' : tile.shortName,
+                  style: TextStyle(fontSize: 10, color: Colors.grey[500]),
+                )
+              else
+                Expanded(
+                  child: ListView(
+                    shrinkWrap: true,
+                    padding: const EdgeInsets.symmetric(horizontal: 2),
+                    children: cardsToShow.map((card) {
+                      final isStaged = stagedCardsOnTile.contains(card);
+                      final isOpponent = opponentCards.contains(card);
+                      final isSurvivor = survivorCards.contains(card);
 
-                    // Determine card color
-                    Color cardColor;
-                    if (isStaged) {
-                      cardColor = Colors.amber[100]!;
-                    } else if (isOpponent) {
-                      cardColor = Colors.red[200]!;
-                    } else if (isSurvivor) {
-                      cardColor = Colors.blue[200]!;
-                    } else {
-                      cardColor = Colors.grey[200]!;
-                    }
+                      // Determine card color
+                      Color cardColor;
+                      if (isStaged) {
+                        cardColor = Colors.amber[100]!;
+                      } else if (isOpponent) {
+                        cardColor = Colors.red[200]!;
+                      } else if (isSurvivor) {
+                        cardColor = Colors.blue[200]!;
+                      } else {
+                        cardColor = Colors.grey[200]!;
+                      }
 
-                    return Container(
-                      margin: const EdgeInsets.symmetric(vertical: 1),
-                      padding: const EdgeInsets.all(3),
-                      decoration: BoxDecoration(
-                        color: cardColor,
-                        borderRadius: BorderRadius.circular(4),
-                        border: isStaged
-                            ? Border.all(color: Colors.amber, width: 2)
-                            : (isSurvivor
-                                  ? Border.all(color: Colors.blue, width: 1)
-                                  : null),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            card.name,
-                            style: const TextStyle(
-                              fontSize: 9,
-                              fontWeight: FontWeight.bold,
+                      return Container(
+                        margin: const EdgeInsets.symmetric(vertical: 1),
+                        padding: const EdgeInsets.all(3),
+                        decoration: BoxDecoration(
+                          color: cardColor,
+                          borderRadius: BorderRadius.circular(4),
+                          border: isStaged
+                              ? Border.all(color: Colors.amber, width: 2)
+                              : (isSurvivor
+                                    ? Border.all(color: Colors.blue, width: 1)
+                                    : null),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              card.name,
+                              style: const TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                '⚔${card.damage}',
-                                style: const TextStyle(fontSize: 8),
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                '❤${card.currentHealth}/${card.health}',
-                                style: const TextStyle(fontSize: 8),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    );
-                  }).toList(),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  '⚔${card.damage}',
+                                  style: const TextStyle(fontSize: 8),
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '❤${card.currentHealth}/${card.health}',
+                                  style: const TextStyle(fontSize: 8),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );
