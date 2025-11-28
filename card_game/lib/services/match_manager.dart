@@ -149,25 +149,32 @@ class MatchManager {
   /// Get the damage boost amount for player cards this turn.
   int get playerDamageBoost => _playerDamageBoostActive ? 1 : 0;
 
-  /// Player submits their card placements for the turn
-  Future<void> submitPlayerMoves(
-    Map<LanePosition, List<GameCard>> placements,
+  /// Player submits their card placements for the turn (tile-based)
+  /// placements is a Map<String, List<GameCard>> where key is "row,col"
+  Future<void> submitPlayerTileMoves(
+    Map<String, List<GameCard>> tilePlacements,
   ) async {
     if (_currentMatch == null) return;
     if (_currentMatch!.playerSubmitted) return;
 
-    // Place cards in lanes
-    for (final entry in placements.entries) {
-      final lane = _currentMatch!.getLane(entry.key);
+    // Place cards at their tile positions
+    for (final entry in tilePlacements.entries) {
+      final parts = entry.key.split(',');
+      final row = int.parse(parts[0]);
+      final col = int.parse(parts[1]);
       final cards = entry.value;
 
-      // Remove cards from hand and place in lane
-      // Fresh cards ALWAYS go to bottom if there are survivors
+      final lane = _currentMatch!.lanes[col];
+
       for (final card in cards) {
         if (_currentMatch!.player.playCard(card)) {
-          // If lane has survivors, place new card at bottom
-          final hasSurvivors = lane.playerStack.topCard != null;
-          lane.playerStack.addCard(card, asTopCard: !hasSurvivors);
+          if (row == 2) {
+            // Player's base tile - add to baseCards
+            lane.playerCards.baseCards.addCard(card, asTopCard: false);
+          } else if (row == 1) {
+            // Middle tile - add to middleCards
+            lane.playerCards.middleCards.addCard(card, asTopCard: false);
+          }
         }
       }
     }
@@ -180,21 +187,50 @@ class MatchManager {
     }
   }
 
-  /// Opponent (AI) submits their moves
+  /// Legacy: Player submits their card placements for the turn (lane-based)
+  Future<void> submitPlayerMoves(
+    Map<LanePosition, List<GameCard>> placements,
+  ) async {
+    if (_currentMatch == null) return;
+    if (_currentMatch!.playerSubmitted) return;
+
+    // Place cards in lanes (at base position)
+    for (final entry in placements.entries) {
+      final lane = _currentMatch!.getLane(entry.key);
+      final cards = entry.value;
+
+      for (final card in cards) {
+        if (_currentMatch!.player.playCard(card)) {
+          // Place at base position
+          lane.playerCards.baseCards.addCard(card, asTopCard: false);
+        }
+      }
+    }
+
+    _currentMatch!.playerSubmitted = true;
+
+    // Check if both players submitted
+    if (_currentMatch!.bothPlayersSubmitted) {
+      await _resolveCombat();
+    }
+  }
+
+  /// Opponent (AI) submits their moves (always at their base - row 0)
   Future<void> submitOpponentMoves(
     Map<LanePosition, List<GameCard>> placements,
   ) async {
     if (_currentMatch == null) return;
     if (_currentMatch!.opponentSubmitted) return;
 
-    // Place cards in lanes
+    // Place cards in lanes at opponent's base position
     for (final entry in placements.entries) {
       final lane = _currentMatch!.getLane(entry.key);
       final cards = entry.value;
 
       for (final card in cards) {
         if (_currentMatch!.opponent.playCard(card)) {
-          lane.opponentStack.addCard(card);
+          // AI stages at their base
+          lane.opponentCards.baseCards.addCard(card, asTopCard: false);
         }
       }
     }
@@ -215,14 +251,14 @@ class MatchManager {
     if (_currentMatch == null) return;
     if (_currentMatch!.opponentSubmitted) return;
 
-    // Place cards directly in lanes (no hand check for online opponent)
+    // Place cards directly in lanes at opponent's base
     for (final entry in placements.entries) {
       final lane = _currentMatch!.getLane(entry.key);
       final cards = entry.value;
 
       for (final card in cards) {
-        // Add directly to opponent stack - these are reconstructed from Firebase
-        lane.opponentStack.addCard(card);
+        // Add directly to opponent base - these are reconstructed from Firebase
+        lane.opponentCards.baseCards.addCard(card, asTopCard: false);
       }
     }
 
@@ -283,8 +319,35 @@ class MatchManager {
     _log('TURN ${_currentMatch!.turnNumber} - COMBAT RESOLUTION');
     _log('=' * 80);
 
-    // Log board state BEFORE combat (shows staging result)
+    // Log board state BEFORE advancement (shows staging result)
     _log('\n--- BOARD STATE (AFTER STAGING) ---');
+    _logBoardState();
+
+    // Advance cards from base to middle (if room available)
+    _log('\n--- CARD ADVANCEMENT ---');
+    for (final lane in _currentMatch!.lanes) {
+      final laneName = lane.position.name.toUpperCase();
+
+      // Player cards advance from base to middle
+      final playerAdvanced = lane.advancePlayerCards();
+      if (playerAdvanced > 0) {
+        _log(
+          '$laneName: Player advanced $playerAdvanced card(s) from base to middle',
+        );
+      }
+
+      // Opponent cards advance from base to middle
+      final opponentAdvanced = lane.advanceOpponentCards();
+      if (opponentAdvanced > 0) {
+        _log(
+          '$laneName: Opponent advanced $opponentAdvanced card(s) from base to middle',
+        );
+      }
+    }
+    _log('--- END CARD ADVANCEMENT ---');
+
+    // Log board state AFTER advancement (shows combat positions)
+    _log('\n--- BOARD STATE (BEFORE COMBAT) ---');
     _logBoardState();
 
     // Resolve each lane with tick-by-tick animation
@@ -582,29 +645,27 @@ class MatchManager {
             ownerSymbol = '⚪';
         }
 
-        // Map zone to row for card display
-        int zoneToRow(Zone z) {
-          switch (z) {
-            case Zone.playerBase:
-              return 2;
-            case Zone.middle:
-              return 1;
-            case Zone.enemyBase:
-              return 0;
-          }
-        }
-
-        // Get cards at this tile based on zone
-        final currentZoneRow = zoneToRow(lane.currentZone);
+        // Get cards at this tile based on position
         List<String> cardNames = [];
 
-        // Both player and opponent cards show at the current zone position
-        if (row == currentZoneRow) {
-          for (final card in lane.playerStack.aliveCards) {
+        // Row 0 = enemy base, Row 1 = middle, Row 2 = player base
+        if (row == 0) {
+          // Enemy base - show opponent's base cards
+          for (final card in lane.opponentCards.baseCards.aliveCards) {
+            cardNames.add('O:${card.name}(${card.currentHealth}hp)');
+          }
+        } else if (row == 1) {
+          // Middle - show both sides' middle cards
+          for (final card in lane.playerCards.middleCards.aliveCards) {
             cardNames.add('P:${card.name}(${card.currentHealth}hp)');
           }
-          for (final card in lane.opponentStack.aliveCards) {
+          for (final card in lane.opponentCards.middleCards.aliveCards) {
             cardNames.add('O:${card.name}(${card.currentHealth}hp)');
+          }
+        } else if (row == 2) {
+          // Player base - show player's base cards
+          for (final card in lane.playerCards.baseCards.aliveCards) {
+            cardNames.add('P:${card.name}(${card.currentHealth}hp)');
           }
         }
 
@@ -619,7 +680,7 @@ class MatchManager {
     _log('╚════════════════════════════════════╝');
 
     // Add compact visual grid
-    _log('\n     W   C   E     ZONES');
+    _log('\n     W   C   E     POSITIONS');
     _log('   ┌───┬───┬───┐');
     for (int row = 0; row < 3; row++) {
       final rowLabel = ['0', '1', '2'][row];
@@ -628,26 +689,18 @@ class MatchManager {
         final tile = board.getTile(row, col);
         final lane = lanes[col];
 
-        // Get zone marker for this lane
-        int zoneToRow(Zone z) {
-          switch (z) {
-            case Zone.playerBase:
-              return 2;
-            case Zone.middle:
-              return 1;
-            case Zone.enemyBase:
-              return 0;
-          }
-        }
-
-        final currentZoneRow = zoneToRow(lane.currentZone);
-
-        // Cell content
+        // Cell content based on position
         String cell;
-        if (row == currentZoneRow) {
-          // Combat zone - show X if both have cards, P/O if one side
-          final hasPlayer = lane.playerStack.aliveCards.isNotEmpty;
-          final hasOpponent = lane.opponentStack.aliveCards.isNotEmpty;
+        if (row == 0) {
+          // Enemy base
+          final hasOpponent =
+              lane.opponentCards.baseCards.aliveCards.isNotEmpty;
+          cell = hasOpponent ? 'O' : '·';
+        } else if (row == 1) {
+          // Middle - combat zone
+          final hasPlayer = lane.playerCards.middleCards.aliveCards.isNotEmpty;
+          final hasOpponent =
+              lane.opponentCards.middleCards.aliveCards.isNotEmpty;
           if (hasPlayer && hasOpponent) {
             cell = 'X'; // Combat!
           } else if (hasPlayer) {
@@ -658,7 +711,9 @@ class MatchManager {
             cell = '·';
           }
         } else {
-          cell = '·'; // Empty
+          // Player base
+          final hasPlayer = lane.playerCards.baseCards.aliveCards.isNotEmpty;
+          cell = hasPlayer ? 'P' : '·';
         }
 
         // Add owner color indicator
@@ -672,35 +727,14 @@ class MatchManager {
         rowStr += ' $cell$ownerMark│';
       }
 
-      // Add zone labels
-      String zoneLabel = '';
-      for (int col = 0; col < 3; col++) {
-        final lane = lanes[col];
-        int zoneToRow(Zone z) {
-          switch (z) {
-            case Zone.playerBase:
-              return 2;
-            case Zone.middle:
-              return 1;
-            case Zone.enemyBase:
-              return 0;
-          }
-        }
-
-        if (zoneToRow(lane.currentZone) == row) {
-          final zoneName = lane.currentZone.name.substring(0, 1).toUpperCase();
-          zoneLabel += ' $zoneName ';
-        } else {
-          zoneLabel += '   ';
-        }
-      }
-
-      _log('$rowStr $zoneLabel');
+      // Add row labels
+      final rowName = row == 0 ? 'Enemy' : (row == 1 ? 'Mid' : 'You');
+      _log('$rowStr  $rowName');
       if (row < 2) _log('   ├───┼───┼───┤');
     }
     _log('   └───┴───┴───┘');
     _log(
-      'Legend: P=Player, O=Opponent, X=Combat, ▪=PlayerOwned, ▫=OpponentOwned',
+      'Legend: P=Player cards, O=Opponent cards, X=Combat, ▪=PlayerOwned, ▫=OpponentOwned',
     );
   }
 

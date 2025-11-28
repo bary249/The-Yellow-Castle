@@ -192,39 +192,9 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       if (mounted) setState(() {});
     };
 
-    // Convert tile-based staging to lane-based for legacy combat system
-    // Row 2 = player base, cols 0,1,2 = left, center, right lanes
-    final lanePlacements = <LanePosition, List<GameCard>>{
-      LanePosition.west: [],
-      LanePosition.center: [],
-      LanePosition.east: [],
-    };
-
-    // Also place cards on actual tiles for the new system
-    for (final entry in _stagedCards.entries) {
-      final parts = entry.key.split(',');
-      final row = int.parse(parts[0]);
-      final col = int.parse(parts[1]);
-
-      // Add to tiles
-      final tile = match.getTile(row, col);
-      for (final card in entry.value) {
-        tile.addCard(card);
-      }
-
-      // Map to lanes (only base row for now)
-      if (row == 2) {
-        final lanePos = [
-          LanePosition.west,
-          LanePosition.center,
-          LanePosition.east,
-        ][col];
-        lanePlacements[lanePos]!.addAll(entry.value);
-      }
-    }
-
-    // Submit player moves using legacy lane system
-    await _matchManager.submitPlayerMoves(lanePlacements);
+    // Submit player moves using new tile-based system
+    // _stagedCards is already keyed by "row,col"
+    await _matchManager.submitPlayerTileMoves(_stagedCards);
 
     // AI makes its moves
     final aiMoves = _ai.generateMoves(match.opponent);
@@ -679,33 +649,24 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     ][col];
     final lane = match.getLane(lanePos);
 
-    // Map zone to row: playerBase=2, middle=1, enemyBase=0
-    int zoneToRow(Zone z) {
-      switch (z) {
-        case Zone.playerBase:
-          return 2;
-        case Zone.middle:
-          return 1;
-        case Zone.enemyBase:
-          return 0;
-      }
+    // Get cards at this tile based on position (using new positional system)
+    List<GameCard> playerCardsAtTile = [];
+    List<GameCard> opponentCardsAtTile = [];
+
+    if (row == 0) {
+      // Enemy base - show opponent's base cards
+      opponentCardsAtTile = lane.opponentCards.baseCards.aliveCards;
+    } else if (row == 1) {
+      // Middle - show both sides' middle cards
+      playerCardsAtTile = lane.playerCards.middleCards.aliveCards;
+      opponentCardsAtTile = lane.opponentCards.middleCards.aliveCards;
+    } else if (row == 2) {
+      // Player base - show player's base cards
+      playerCardsAtTile = lane.playerCards.baseCards.aliveCards;
     }
 
-    // Get survivor cards from lane based on zone position
-    // Both player and opponent survivors should show at the current combat zone
-    final currentZoneRow = zoneToRow(lane.currentZone);
-
-    List<GameCard> survivorCards = [];
-    List<GameCard> opponentCards = [];
-
-    if (row == currentZoneRow) {
-      // This tile is where the combat zone is - show ALL survivors here
-      survivorCards = lane.playerStack.aliveCards;
-      opponentCards = lane.opponentStack.aliveCards;
-    }
-
-    // Count existing cards for placement check
-    final existingCount = survivorCards.length + opponentCards.length;
+    // Count existing cards for placement check (only player cards count for placement)
+    final existingPlayerCount = playerCardsAtTile.length;
 
     // Can place on player-owned tiles with room, but NOT enemy base (row 0)
     final isPlayerOwned = tile.owner == TileOwner.player;
@@ -716,7 +677,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         isPlayerOwned &&
         isNotEnemyBase &&
         _selectedCard != null &&
-        (existingCount + stagedCount) < 2;
+        (existingPlayerCount + stagedCount) < 2;
 
     // Determine tile color based on owner and terrain
     Color bgColor;
@@ -730,8 +691,8 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
 
     // Get cards to show: opponent first (top/closer to enemy), then player (bottom/closer to you)
     List<GameCard> cardsToShow = [
-      ...opponentCards, // Enemy cards at TOP (row 0 direction)
-      ...survivorCards, // Player survivors
+      ...opponentCardsAtTile, // Enemy cards at TOP (row 0 direction)
+      ...playerCardsAtTile, // Player survivors/cards
       ...stagedCardsOnTile, // Player staged cards at BOTTOM (row 2 direction)
     ];
 
@@ -789,8 +750,8 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 2),
                     children: cardsToShow.map((card) {
                       final isStaged = stagedCardsOnTile.contains(card);
-                      final isOpponent = opponentCards.contains(card);
-                      final isSurvivor = survivorCards.contains(card);
+                      final isOpponent = opponentCardsAtTile.contains(card);
+                      final isPlayerCard = playerCardsAtTile.contains(card);
 
                       // Determine card color
                       Color cardColor;
@@ -798,7 +759,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                         cardColor = Colors.amber[100]!;
                       } else if (isOpponent) {
                         cardColor = Colors.red[200]!;
-                      } else if (isSurvivor) {
+                      } else if (isPlayerCard) {
                         cardColor = Colors.blue[200]!;
                       } else {
                         cardColor = Colors.grey[200]!;
@@ -812,7 +773,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                           borderRadius: BorderRadius.circular(4),
                           border: isStaged
                               ? Border.all(color: Colors.amber, width: 2)
-                              : (isSurvivor
+                              : (isPlayerCard
                                     ? Border.all(color: Colors.blue, width: 1)
                                     : null),
                         ),
