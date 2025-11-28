@@ -27,10 +27,18 @@
 - [x] Update MatchManager to create board with hero terrains
 - [x] Update TestMatchScreen UI to show 3×3 grid
 - [x] Update staging to tile-based (place on any owned tile)
-- [ ] Migrate combat from lanes to tiles
-- [ ] Tile ownership capture after combat victory
-- [ ] Card advancement between tile rows
-- [ ] Remove legacy Lane system
+- [x] Tile ownership rules implemented:
+  - Base tiles (row 0 & 2) NEVER change ownership
+  - Only middle tiles (row 1) can be captured
+- [x] Card advancement logic:
+  - Cards advance 1 tile toward enemy per turn
+  - Stop when meeting enemies → combat
+  - Win → advance, Lose/Draw → stay
+  - Hit crystal → return to middle
+- [x] Renamed lanes: left/right → west/east
+- [x] Added visual grid in battle logs showing board state
+- [ ] Migrate combat from lanes to tiles (still using legacy lane stacks)
+- [ ] Remove legacy Lane system (deferred - working as hybrid)
 
 ---
 
