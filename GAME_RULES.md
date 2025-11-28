@@ -25,7 +25,17 @@
 
 ---
 
-## 2.1 Heroes
+## 2.1 Fog of War
+
+- **Enemy base terrains are hidden** at the start of the match.
+- You see "???" on enemy base tiles until revealed.
+- A lane's enemy base terrain is **revealed when you capture that lane's middle tile**.
+- Once revealed, the terrain **stays visible for the rest of the match**.
+- This adds strategic uncertainty about terrain bonuses the enemy might have.
+
+---
+
+## 2.2 Heroes
 
 - Heroes are **historical figures** with unique abilities.
 - Each hero has:
