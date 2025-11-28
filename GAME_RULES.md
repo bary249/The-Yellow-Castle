@@ -133,15 +133,6 @@ The UI will show these abilities as **keywords** on the card.
 
 ---
 
-### 7.4 Fatigue (Survivor Wear-Down)
-
-- After each combat round (after lanes advance and crystals take damage), all **surviving cards** on both sides take a small **fatigue hit**.
-- Each surviving card loses **2 HP**, but this **cannot kill** the card:
-  - If a card would drop below 1 HP, it stays at **1 HP** instead.
-- This makes long-lived frontlines gradually weaken over multiple rounds, even if they keep winning.
-
----
-
 ## 8. Lane Advancement & Zones
 Each lane tracks how far you’ve pushed toward the enemy crystal.
 

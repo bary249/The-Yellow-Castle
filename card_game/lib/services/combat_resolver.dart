@@ -18,8 +18,7 @@ class BattleLogEntry {
   });
 
   String get formattedMessage {
-    final tickLabel = tick == 6 ? 'Fatigue' : 'Tick $tick';
-    return '[$laneDescription] $tickLabel: $action - $details';
+    return '[$laneDescription] Tick $tick: $action - $details';
   }
 }
 

@@ -1134,19 +1134,12 @@ class _OnlineMatchScreenState extends State<OnlineMatchScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Builder(
-                              builder: (context) {
-                                final tickLabel = entry.tick == 6
-                                    ? 'Fatigue'
-                                    : 'T${entry.tick}';
-                                return Text(
-                                  '[${entry.laneDescription}] $tickLabel',
-                                  style: TextStyle(
-                                    fontSize: 9,
-                                    color: Colors.grey[600],
-                                  ),
-                                );
-                              },
+                            Text(
+                              '[${entry.laneDescription}] T${entry.tick}',
+                              style: TextStyle(
+                                fontSize: 9,
+                                color: Colors.grey[600],
+                              ),
                             ),
                             Text(
                               entry.action,

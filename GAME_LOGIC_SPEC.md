@@ -306,19 +306,6 @@ The animated path then waits briefly before moving to next lane.
 
 ---
 
-### 3.5 Post-Combat Fatigue
-
-After all lanes have resolved, crystal damage has been applied, and zones advanced, a **fatigue pass** is applied:
-
-- For every lane, for both `playerStack` and `opponentStack`:
-  - For each card in `aliveCards`:
-    - Reduce `currentHealth` by 2, but never below 1.
-- Fatigue **cannot kill** a card; it only softens surviving units for future turns.
-
-This makes long-lived units gradually wear down over multiple rounds, even if they are winning consistently.
-
----
-
 ## 4. Zone Advancement & Crystal Damage
 
 `_checkCrystalDamage()` in `MatchManager`:
