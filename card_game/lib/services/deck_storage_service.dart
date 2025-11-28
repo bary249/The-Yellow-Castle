@@ -1,148 +1,185 @@
-import 'dart:convert';
 import 'package:flutter/foundation.dart' show debugPrint;
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../models/card.dart';
 import '../data/card_library.dart';
 
-/// Service for persisting player decks to local storage
+/// Service for persisting player decks to Firebase Firestore
 class DeckStorageService {
-  static const String _deckKey = 'player_deck';
+  static const String _decksCollection = 'user_decks';
+  static const String _defaultDeckId = 'default';
 
   /// Singleton instance
   static final DeckStorageService _instance = DeckStorageService._internal();
   factory DeckStorageService() => _instance;
   DeckStorageService._internal();
 
-  /// In-memory fallback for when SharedPreferences fails (e.g., web without proper setup)
-  static List<GameCard>? _inMemoryDeck;
-  static bool _storageAvailable = true;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  /// Try to get SharedPreferences, return null if unavailable
-  Future<SharedPreferences?> _getPrefs() async {
-    if (!_storageAvailable) return null;
+  /// In-memory cache
+  static List<GameCard>? _cachedDeck;
 
-    try {
-      return await SharedPreferences.getInstance();
-    } catch (e) {
-      debugPrint('SharedPreferences not available: $e');
-      _storageAvailable = false;
-      return null;
-    }
+  /// Get current user ID
+  String? get _userId => _auth.currentUser?.uid;
+
+  /// Get user's decks collection reference
+  CollectionReference<Map<String, dynamic>>? get _userDecksRef {
+    final uid = _userId;
+    if (uid == null) return null;
+    return _firestore.collection('users').doc(uid).collection(_decksCollection);
   }
 
-  /// Save deck to local storage
-  /// Stores card data as JSON for full reconstruction
-  Future<bool> saveDeck(List<GameCard> deck) async {
-    // Always save to memory as backup
-    _inMemoryDeck = List.from(deck);
+  /// Convert card to Firestore-compatible map
+  Map<String, dynamic> _cardToMap(GameCard card) => {
+    'id': card.id,
+    'name': card.name,
+    'damage': card.damage,
+    'health': card.health,
+    'tick': card.tick,
+    'element': card.element,
+    'abilities': card.abilities,
+    'cost': card.cost,
+    'rarity': card.rarity,
+  };
 
-    final prefs = await _getPrefs();
-    if (prefs == null) {
-      debugPrint('Using in-memory storage for deck');
-      return true; // Saved to memory
+  /// Convert Firestore map to GameCard
+  GameCard _mapToCard(Map<String, dynamic> data) => GameCard(
+    id: data['id'] as String,
+    name: data['name'] as String,
+    damage: data['damage'] as int,
+    health: data['health'] as int,
+    tick: data['tick'] as int,
+    element: data['element'] as String?,
+    abilities: List<String>.from(data['abilities'] ?? []),
+    cost: data['cost'] as int? ?? 1,
+    rarity: data['rarity'] as int? ?? 1,
+  );
+
+  /// Save deck to Firebase
+  /// [deckId] - optional deck name, defaults to 'default'
+  Future<bool> saveDeck(
+    List<GameCard> deck, {
+    String deckId = _defaultDeckId,
+  }) async {
+    // Always cache locally
+    _cachedDeck = List.from(deck);
+
+    final decksRef = _userDecksRef;
+    if (decksRef == null) {
+      debugPrint('No user logged in, deck saved to memory only');
+      return true;
     }
 
     try {
-      // Convert cards to JSON-serializable format
-      final cardDataList = deck
-          .map(
-            (card) => {
-              'id': card.id,
-              'name': card.name,
-              'damage': card.damage,
-              'health': card.health,
-              'tick': card.tick,
-              'element': card.element,
-              'abilities': card.abilities,
-              'cost': card.cost,
-              'rarity': card.rarity,
-            },
-          )
-          .toList();
+      final cardDataList = deck.map(_cardToMap).toList();
 
-      final jsonString = jsonEncode(cardDataList);
-      await prefs.setString(_deckKey, jsonString);
+      await decksRef.doc(deckId).set({
+        'cards': cardDataList,
+        'cardCount': deck.length,
+        'updatedAt': FieldValue.serverTimestamp(),
+        'createdAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      debugPrint('Deck saved to Firebase: $deckId (${deck.length} cards)');
       return true;
     } catch (e) {
-      debugPrint('Error saving deck: $e');
-      return true; // Still saved to memory
+      debugPrint('Error saving deck to Firebase: $e');
+      return false;
     }
   }
 
-  /// Load deck from local storage
+  /// Load deck from Firebase
   /// Returns saved deck, or default starter deck if none saved
-  Future<List<GameCard>> loadDeck() async {
-    // Check in-memory first
-    if (_inMemoryDeck != null) {
-      return List.from(_inMemoryDeck!);
+  Future<List<GameCard>> loadDeck({String deckId = _defaultDeckId}) async {
+    // Check cache first for quick load
+    if (_cachedDeck != null) {
+      return List.from(_cachedDeck!);
     }
 
-    final prefs = await _getPrefs();
-    if (prefs == null) {
+    final decksRef = _userDecksRef;
+    if (decksRef == null) {
+      debugPrint('No user logged in, returning default deck');
       return buildStarterCardPool();
     }
 
     try {
-      final jsonString = prefs.getString(_deckKey);
+      final doc = await decksRef.doc(deckId).get();
 
-      if (jsonString == null || jsonString.isEmpty) {
-        // No saved deck, return default
+      if (!doc.exists || doc.data() == null) {
+        debugPrint('No saved deck found, returning default');
         return buildStarterCardPool();
       }
 
-      final cardDataList = jsonDecode(jsonString) as List<dynamic>;
+      final data = doc.data()!;
+      final cardsList = data['cards'] as List<dynamic>?;
 
-      final deck = cardDataList.map((data) {
-        return GameCard(
-          id: data['id'] as String,
-          name: data['name'] as String,
-          damage: data['damage'] as int,
-          health: data['health'] as int,
-          tick: data['tick'] as int,
-          element: data['element'] as String?,
-          abilities: List<String>.from(data['abilities'] ?? []),
-          cost: data['cost'] as int? ?? 1,
-          rarity: data['rarity'] as int? ?? 1,
-        );
-      }).toList();
+      if (cardsList == null || cardsList.isEmpty) {
+        return buildStarterCardPool();
+      }
+
+      final deck = cardsList
+          .map((c) => _mapToCard(c as Map<String, dynamic>))
+          .toList();
 
       // Cache in memory
-      _inMemoryDeck = List.from(deck);
+      _cachedDeck = List.from(deck);
+      debugPrint('Deck loaded from Firebase: $deckId (${deck.length} cards)');
       return deck;
     } catch (e) {
-      debugPrint('Error loading deck: $e');
-      // Return default deck on error
+      debugPrint('Error loading deck from Firebase: $e');
       return buildStarterCardPool();
+    }
+  }
+
+  /// Get all saved deck IDs for current user
+  Future<List<String>> getSavedDeckIds() async {
+    final decksRef = _userDecksRef;
+    if (decksRef == null) return [];
+
+    try {
+      final snapshot = await decksRef.get();
+      return snapshot.docs.map((doc) => doc.id).toList();
+    } catch (e) {
+      debugPrint('Error getting deck IDs: $e');
+      return [];
     }
   }
 
   /// Check if player has a saved deck
-  Future<bool> hasSavedDeck() async {
-    if (_inMemoryDeck != null) return true;
+  Future<bool> hasSavedDeck({String deckId = _defaultDeckId}) async {
+    if (_cachedDeck != null) return true;
 
-    final prefs = await _getPrefs();
-    if (prefs == null) return false;
+    final decksRef = _userDecksRef;
+    if (decksRef == null) return false;
 
     try {
-      return prefs.containsKey(_deckKey);
+      final doc = await decksRef.doc(deckId).get();
+      return doc.exists;
     } catch (e) {
       return false;
     }
   }
 
   /// Clear saved deck (reset to default)
-  Future<bool> clearDeck() async {
-    _inMemoryDeck = null;
+  Future<bool> clearDeck({String deckId = _defaultDeckId}) async {
+    _cachedDeck = null;
 
-    final prefs = await _getPrefs();
-    if (prefs == null) return true;
+    final decksRef = _userDecksRef;
+    if (decksRef == null) return true;
 
     try {
-      await prefs.remove(_deckKey);
+      await decksRef.doc(deckId).delete();
+      debugPrint('Deck deleted from Firebase: $deckId');
       return true;
     } catch (e) {
-      debugPrint('Error clearing deck: $e');
-      return true; // Memory already cleared
+      debugPrint('Error deleting deck: $e');
+      return false;
     }
+  }
+
+  /// Clear local cache (force reload from Firebase next time)
+  void clearCache() {
+    _cachedDeck = null;
   }
 }

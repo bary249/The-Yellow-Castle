@@ -38,9 +38,6 @@ dependencies:
   vector_math: ^2.1.4
   cupertino_icons: ^1.0.8
   
-  # Local storage
-  shared_preferences: ^2.2.2
-  
   # Firebase (updated for web compatibility)
   firebase_core: ^3.3.0
   firebase_auth: ^5.1.4

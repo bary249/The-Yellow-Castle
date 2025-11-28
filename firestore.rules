@@ -18,6 +18,14 @@ service cloud.firestore {
       allow create: if isSignedIn() && isOwner(userId);
       allow update: if isOwner(userId);
       allow delete: if false; // Never allow deletion
+      
+      // User's saved decks - only owner can read/write their decks
+      match /user_decks/{deckId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId);
+        allow update: if isOwner(userId);
+        allow delete: if isOwner(userId);
+      }
     }
     
     // Matchmaking queue - users can manage queue entries
