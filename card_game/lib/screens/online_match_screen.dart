@@ -48,9 +48,9 @@ class _OnlineMatchScreenState extends State<OnlineMatchScreen> {
 
   // Staging area: cards placed in lanes before submitting
   final Map<LanePosition, List<GameCard>> _stagedCards = {
-    LanePosition.left: [],
+    LanePosition.west: [],
     LanePosition.center: [],
-    LanePosition.right: [],
+    LanePosition.east: [],
   };
 
   GameCard? _selectedCard;
@@ -234,9 +234,9 @@ class _OnlineMatchScreenState extends State<OnlineMatchScreen> {
   }
 
   void _clearStaging() {
-    _stagedCards[LanePosition.left]!.clear();
+    _stagedCards[LanePosition.west]!.clear();
     _stagedCards[LanePosition.center]!.clear();
-    _stagedCards[LanePosition.right]!.clear();
+    _stagedCards[LanePosition.east]!.clear();
     _selectedCard = null;
   }
 
@@ -331,9 +331,9 @@ class _OnlineMatchScreenState extends State<OnlineMatchScreen> {
         _matchData?[oppKey]?['moves'] as Map<String, dynamic>? ?? {};
 
     final opponentCards = <LanePosition, List<GameCard>>{
-      LanePosition.left: [],
+      LanePosition.west: [],
       LanePosition.center: [],
-      LanePosition.right: [],
+      LanePosition.east: [],
     };
 
     for (final lane in LanePosition.values) {
@@ -734,13 +734,11 @@ class _OnlineMatchScreenState extends State<OnlineMatchScreen> {
                     Expanded(
                       child: Row(
                         children: [
-                          Expanded(child: _buildLane(match, LanePosition.left)),
+                          Expanded(child: _buildLane(match, LanePosition.west)),
                           Expanded(
                             child: _buildLane(match, LanePosition.center),
                           ),
-                          Expanded(
-                            child: _buildLane(match, LanePosition.right),
-                          ),
+                          Expanded(child: _buildLane(match, LanePosition.east)),
                         ],
                       ),
                     ),

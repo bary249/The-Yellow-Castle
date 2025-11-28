@@ -169,9 +169,9 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     // Convert tile-based staging to lane-based for legacy combat system
     // Row 2 = player base, cols 0,1,2 = left, center, right lanes
     final lanePlacements = <LanePosition, List<GameCard>>{
-      LanePosition.left: [],
+      LanePosition.west: [],
       LanePosition.center: [],
-      LanePosition.right: [],
+      LanePosition.east: [],
     };
 
     // Also place cards on actual tiles for the new system
@@ -189,9 +189,9 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       // Map to lanes (only base row for now)
       if (row == 2) {
         final lanePos = [
-          LanePosition.left,
+          LanePosition.west,
           LanePosition.center,
-          LanePosition.right,
+          LanePosition.east,
         ][col];
         lanePlacements[lanePos]!.addAll(entry.value);
       }
@@ -647,9 +647,9 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
 
     // Get lane for this column to check zone and get survivor cards
     final lanePos = [
-      LanePosition.left,
+      LanePosition.west,
       LanePosition.center,
-      LanePosition.right,
+      LanePosition.east,
     ][col];
     final lane = match.getLane(lanePos);
 

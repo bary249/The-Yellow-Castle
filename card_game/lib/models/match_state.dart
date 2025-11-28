@@ -38,9 +38,9 @@ class MatchState {
     this.currentPhase = MatchPhase.setup,
     this.turnNumber = 0,
   }) : lanes = [
-         Lane(position: LanePosition.left),
+         Lane(position: LanePosition.west),
          Lane(position: LanePosition.center),
-         Lane(position: LanePosition.right),
+         Lane(position: LanePosition.east),
        ];
 
   /// Get a tile from the board.

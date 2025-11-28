@@ -1,7 +1,7 @@
 import 'card.dart';
 
-/// Represents one of the 3 battle lanes (left, center, right)
-enum LanePosition { left, center, right }
+/// Represents one of the 3 battle lanes (west, center, east)
+enum LanePosition { west, center, east }
 
 /// Current zone in the lane (player base, middle, enemy base)
 enum Zone { playerBase, middle, enemyBase }

@@ -15,7 +15,7 @@ class SimpleAI {
     if (aiPlayer.hand.isEmpty) return moves;
 
     // Simple strategy: randomly place 1-2 cards per lane
-    final lanes = [LanePosition.left, LanePosition.center, LanePosition.right];
+    final lanes = [LanePosition.west, LanePosition.center, LanePosition.east];
 
     // Shuffle lanes for variety
     lanes.shuffle(_random);

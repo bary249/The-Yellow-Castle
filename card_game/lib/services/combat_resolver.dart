@@ -92,12 +92,12 @@ class CombatResolver {
 
   String _getLaneName(LanePosition position) {
     switch (position) {
-      case LanePosition.left:
-        return 'LEFT LANE';
+      case LanePosition.west:
+        return 'WEST LANE';
       case LanePosition.center:
         return 'CENTER LANE';
-      case LanePosition.right:
-        return 'RIGHT LANE';
+      case LanePosition.east:
+        return 'EAST LANE';
     }
   }
 

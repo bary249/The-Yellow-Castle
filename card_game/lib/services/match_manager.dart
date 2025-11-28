@@ -557,7 +557,7 @@ class MatchManager {
           }
         }
 
-        final colName = ['L', 'C', 'R'][col];
+        final colName = ['W', 'C', 'E'][col];
         final terrain = tile.terrain ?? '-';
         final cardsStr = cardNames.isEmpty ? 'empty' : cardNames.join(', ');
 
