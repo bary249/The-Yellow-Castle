@@ -31,6 +31,10 @@ class MatchState {
   bool playerSubmitted = false;
   bool opponentSubmitted = false;
 
+  /// Fog of war: tracks which lanes' enemy base terrains are revealed to player.
+  /// A lane is revealed once player captures its middle tile.
+  final Set<LanePosition> revealedEnemyBaseLanes = {};
+
   MatchState({
     required this.player,
     required this.opponent,

@@ -714,25 +714,43 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Terrain tag
+              // Terrain tag (with fog of war for enemy base)
               if (tile.terrain != null)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 4,
-                    vertical: 1,
-                  ),
-                  decoration: BoxDecoration(
-                    color: _getTerrainColor(tile.terrain!),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    tile.terrain!,
-                    style: const TextStyle(
-                      fontSize: 9,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
+                Builder(
+                  builder: (context) {
+                    // Fog of war: check if enemy base terrain is revealed
+                    final isEnemyBase = row == 0;
+                    final lanePos = [
+                      LanePosition.west,
+                      LanePosition.center,
+                      LanePosition.east,
+                    ][col];
+                    final isRevealed = match.revealedEnemyBaseLanes.contains(
+                      lanePos,
+                    );
+                    final showTerrain = !isEnemyBase || isRevealed;
+
+                    return Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 1,
+                      ),
+                      decoration: BoxDecoration(
+                        color: showTerrain
+                            ? _getTerrainColor(tile.terrain!)
+                            : Colors.grey[600],
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        showTerrain ? tile.terrain! : '???',
+                        style: const TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    );
+                  },
                 ),
 
               const SizedBox(height: 2),

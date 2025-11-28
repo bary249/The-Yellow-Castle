@@ -670,7 +670,21 @@ class MatchManager {
         }
 
         final colName = ['W', 'C', 'E'][col];
-        final terrain = tile.terrain ?? '-';
+        final lanePos = [
+          LanePosition.west,
+          LanePosition.center,
+          LanePosition.east,
+        ][col];
+
+        // Fog of war: hide enemy base terrain unless revealed
+        String terrain;
+        if (row == 0 &&
+            !_currentMatch!.revealedEnemyBaseLanes.contains(lanePos)) {
+          terrain = '???'; // Hidden terrain
+        } else {
+          terrain = tile.terrain ?? '-';
+        }
+
         final cardsStr = cardNames.isEmpty ? 'empty' : cardNames.join(', ');
 
         _log('║   [$colName] $ownerSymbol $terrain: $cardsStr');
@@ -754,10 +768,25 @@ class MatchManager {
     // Base tiles NEVER change ownership
     if (newZone == Zone.middle) {
       final tile = board.getTile(1, col);
+      final lanePos = [
+        LanePosition.west,
+        LanePosition.center,
+        LanePosition.east,
+      ][col];
+
       if (isPlayerAdvancing) {
         if (tile.owner != TileOwner.player) {
           tile.owner = TileOwner.player;
           _log('  🏴 Player captured ${tile.displayName}!');
+
+          // Fog of war: reveal enemy base terrain for this lane
+          if (!_currentMatch!.revealedEnemyBaseLanes.contains(lanePos)) {
+            _currentMatch!.revealedEnemyBaseLanes.add(lanePos);
+            final enemyBaseTile = board.getTile(0, col);
+            _log(
+              '  👁️ Enemy base terrain revealed: ${enemyBaseTile.terrain ?? "none"}',
+            );
+          }
         }
       } else {
         if (tile.owner != TileOwner.opponent) {
