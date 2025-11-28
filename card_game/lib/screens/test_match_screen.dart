@@ -128,10 +128,36 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       return;
     }
 
-    // Check if tile already has 2 cards (existing + staged)
-    final existingCount = tile.cards.length;
+    // Get survivor count from lane (survivors are in lane stacks, not tile)
+    final lanePos = [
+      LanePosition.west,
+      LanePosition.center,
+      LanePosition.east,
+    ][col];
+    final lane = match.getLane(lanePos);
+
+    // Map zone to row to check if survivors are on this tile
+    int zoneToRow(Zone z) {
+      switch (z) {
+        case Zone.playerBase:
+          return 2;
+        case Zone.middle:
+          return 1;
+        case Zone.enemyBase:
+          return 0;
+      }
+    }
+
+    final currentZoneRow = zoneToRow(lane.currentZone);
+    int survivorCount = 0;
+    if (row == currentZoneRow) {
+      // Survivors are on this tile - count player's cards only (can't place on opponent's)
+      survivorCount = lane.playerStack.aliveCards.length;
+    }
+
+    // Check if tile already has 2 cards (survivors + staged)
     final stagedCount = _stagedCards[key]!.length;
-    if (existingCount + stagedCount >= 2) {
+    if (survivorCount + stagedCount >= 2) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Tile is full (max 2 cards)!')),
       );

@@ -654,7 +654,8 @@ class MatchManager {
   }
 
   /// Update tile ownership when zone advances.
-  /// Maps zone to tile row: playerBase=row2, middle=row1, enemyBase=row0
+  /// ONLY middle tiles (row 1) can be captured.
+  /// Base tiles (row 0 & row 2) are NEVER captured.
   void _updateTileOwnership(
     int col,
     Zone newZone, {
@@ -664,36 +665,16 @@ class MatchManager {
 
     final board = _currentMatch!.board;
 
-    // When player advances to middle, they capture the middle tile
-    // When player advances to enemy base, they capture enemy base tile
-    // Vice versa for opponent
-    if (isPlayerAdvancing) {
-      if (newZone == Zone.middle) {
-        // Player captures middle tile
-        final tile = board.getTile(1, col);
+    // ONLY middle tiles can be captured
+    // Base tiles NEVER change ownership
+    if (newZone == Zone.middle) {
+      final tile = board.getTile(1, col);
+      if (isPlayerAdvancing) {
         if (tile.owner != TileOwner.player) {
           tile.owner = TileOwner.player;
           _log('  🏴 Player captured ${tile.displayName}!');
         }
-      } else if (newZone == Zone.enemyBase) {
-        // Player captures enemy base tile (temporary - until pushed back)
-        final tile = board.getTile(0, col);
-        if (tile.owner != TileOwner.player) {
-          tile.owner = TileOwner.player;
-          _log('  🏴 Player captured ${tile.displayName}!');
-        }
-      }
-    } else {
-      if (newZone == Zone.middle) {
-        // Opponent captures middle tile
-        final tile = board.getTile(1, col);
-        if (tile.owner != TileOwner.opponent) {
-          tile.owner = TileOwner.opponent;
-          _log('  🚩 Opponent captured ${tile.displayName}!');
-        }
-      } else if (newZone == Zone.playerBase) {
-        // Opponent captures player base tile (temporary - until pushed back)
-        final tile = board.getTile(2, col);
+      } else {
         if (tile.owner != TileOwner.opponent) {
           tile.owner = TileOwner.opponent;
           _log('  🚩 Opponent captured ${tile.displayName}!');
