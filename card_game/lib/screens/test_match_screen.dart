@@ -101,6 +101,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   }
 
   /// Place a card on a specific tile.
+  /// Players can only stage on their base (row 2) or middle (row 1) tiles.
   void _placeCardOnTile(int row, int col) {
     final match = _matchManager.currentMatch;
     if (match == null || _selectedCard == null) return;
@@ -110,6 +111,14 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
 
     // Initialize list if needed
     _stagedCards[key] ??= [];
+
+    // Cannot stage on enemy base row (row 0) even if captured
+    if (row == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Cannot stage cards on enemy base!')),
+      );
+      return;
+    }
 
     // Check tile ownership - must be player-owned
     if (tile.owner != TileOwner.player) {
@@ -636,12 +645,15 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     final tile = match.getTile(row, col);
     final stagedCardsOnTile = _getStagedCards(row, col);
 
-    // Can place on any player-owned tile with room
+    // Can place on player-owned tiles with room, but NOT enemy base (row 0)
     final isPlayerOwned = tile.owner == TileOwner.player;
+    final isNotEnemyBase =
+        row != 0; // Cannot stage on enemy base even if captured
     final existingCount = tile.cards.length;
     final stagedCount = stagedCardsOnTile.length;
     final canPlace =
         isPlayerOwned &&
+        isNotEnemyBase &&
         _selectedCard != null &&
         (existingCount + stagedCount) < 2;
 

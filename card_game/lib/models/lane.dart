@@ -132,6 +132,22 @@ class Lane {
     }
   }
 
+  /// Retreat zone (for uncontested attacks - hit and return)
+  /// Used when attackers reach enemy base with no defenders
+  void retreatZone(bool playerAttacking) {
+    if (playerAttacking) {
+      // Player's survivors return from enemy base to middle
+      if (currentZone == Zone.enemyBase) {
+        currentZone = Zone.middle;
+      }
+    } else {
+      // Opponent's survivors return from player base to middle
+      if (currentZone == Zone.playerBase) {
+        currentZone = Zone.middle;
+      }
+    }
+  }
+
   /// Get zone display string
   String get zoneDisplay {
     switch (currentZone) {
