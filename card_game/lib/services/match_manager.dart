@@ -4,6 +4,7 @@ import '../models/deck.dart';
 import '../models/lane.dart';
 import '../models/card.dart';
 import '../models/hero.dart';
+import '../models/game_board.dart';
 import 'combat_resolver.dart';
 
 /// Coordinates the entire match flow
@@ -53,8 +54,20 @@ class MatchManager {
     player.deck.shuffle();
     opponent.deck.shuffle();
 
+    // Create the 3×3 game board with terrain from hero affinities
+    final playerTerrains = playerHero?.terrainAffinities ?? ['Woods'];
+    final opponentTerrains = opponentHero?.terrainAffinities ?? ['Desert'];
+    final board = GameBoard.create(
+      playerTerrains: playerTerrains,
+      opponentTerrains: opponentTerrains,
+    );
+
     // Create match state
-    _currentMatch = MatchState(player: player, opponent: opponent);
+    _currentMatch = MatchState(
+      player: player,
+      opponent: opponent,
+      board: board,
+    );
 
     // Draw initial hands
     player.drawInitialHand();

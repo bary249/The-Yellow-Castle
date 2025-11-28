@@ -1,5 +1,7 @@
 import 'player.dart';
 import 'lane.dart';
+import 'game_board.dart';
+import 'tile.dart';
 
 /// Current phase of the match
 enum MatchPhase {
@@ -14,7 +16,12 @@ enum MatchPhase {
 class MatchState {
   final Player player;
   final Player opponent;
+
+  /// Legacy lane system (kept for backward compatibility during migration).
   final List<Lane> lanes;
+
+  /// New 3×3 tile-based board.
+  final GameBoard board;
 
   MatchPhase currentPhase;
   int turnNumber;
@@ -27,6 +34,7 @@ class MatchState {
   MatchState({
     required this.player,
     required this.opponent,
+    required this.board,
     this.currentPhase = MatchPhase.setup,
     this.turnNumber = 0,
   }) : lanes = [
@@ -34,6 +42,9 @@ class MatchState {
          Lane(position: LanePosition.center),
          Lane(position: LanePosition.right),
        ];
+
+  /// Get a tile from the board.
+  Tile getTile(int row, int col) => board.getTile(row, col);
 
   /// Get a specific lane by position
   Lane getLane(LanePosition position) {

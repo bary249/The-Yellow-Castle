@@ -5,6 +5,7 @@ import '../models/match_state.dart';
 import '../models/lane.dart';
 import '../models/card.dart';
 import '../models/hero.dart';
+import '../models/tile.dart';
 import '../data/hero_library.dart';
 import '../services/match_manager.dart';
 import '../services/simple_ai.dart';
@@ -363,20 +364,8 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                         ),
                       ),
 
-                    // Lanes
-                    Expanded(
-                      child: Row(
-                        children: [
-                          Expanded(child: _buildLane(match, LanePosition.left)),
-                          Expanded(
-                            child: _buildLane(match, LanePosition.center),
-                          ),
-                          Expanded(
-                            child: _buildLane(match, LanePosition.right),
-                          ),
-                        ],
-                      ),
-                    ),
+                    // 3×3 Board Grid
+                    Expanded(child: _buildBoard(match)),
 
                     // Player info
                     _buildPlayerInfo(match.player, isOpponent: false),
@@ -555,6 +544,204 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         ),
       ),
     );
+  }
+
+  /// Build the 3×3 board grid.
+  Widget _buildBoard(MatchState match) {
+    return Padding(
+      padding: const EdgeInsets.all(4),
+      child: Column(
+        children: [
+          // Row 0: Opponent base
+          Expanded(
+            child: Row(
+              children: [
+                for (int col = 0; col < 3; col++)
+                  Expanded(child: _buildTile(match, 0, col)),
+              ],
+            ),
+          ),
+          // Row 1: Middle
+          Expanded(
+            child: Row(
+              children: [
+                for (int col = 0; col < 3; col++)
+                  Expanded(child: _buildTile(match, 1, col)),
+              ],
+            ),
+          ),
+          // Row 2: Player base
+          Expanded(
+            child: Row(
+              children: [
+                for (int col = 0; col < 3; col++)
+                  Expanded(child: _buildTile(match, 2, col)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Build a single tile widget.
+  Widget _buildTile(MatchState match, int row, int col) {
+    final tile = match.getTile(row, col);
+    final lanePos = [
+      LanePosition.left,
+      LanePosition.center,
+      LanePosition.right,
+    ][col];
+    final lane = match.getLane(lanePos);
+    final stagedCardsInLane = _stagedCards[lanePos]!;
+
+    // Can place on player's base tiles (row 2) only
+    final isPlayerBase = row == 2;
+    final survivingCount = lane.playerStack.aliveCards.length;
+    final totalCards = survivingCount + stagedCardsInLane.length;
+    final canPlace = isPlayerBase && _selectedCard != null && totalCards < 2;
+
+    // Determine tile color based on owner and terrain
+    Color bgColor;
+    if (tile.owner == TileOwner.player) {
+      bgColor = Colors.blue[50]!;
+    } else if (tile.owner == TileOwner.opponent) {
+      bgColor = Colors.red[50]!;
+    } else {
+      bgColor = Colors.grey[100]!;
+    }
+
+    // Get cards to show based on row
+    List<GameCard> cardsToShow = [];
+    if (row == 0) {
+      // Opponent base row - show opponent cards
+      cardsToShow = lane.opponentStack.aliveCards;
+    } else if (row == 2) {
+      // Player base row - show player cards (survivors + staged)
+      cardsToShow = [...lane.playerStack.aliveCards, ...stagedCardsInLane];
+    } else {
+      // Middle row - show current zone combat (if applicable)
+      // For now, show an indicator if zone is in middle
+      if (lane.currentZone == Zone.middle) {
+        // Combat happens here
+      }
+    }
+
+    return GestureDetector(
+      onTap: canPlace ? () => _placeCardInLane(lanePos) : null,
+      child: Container(
+        margin: const EdgeInsets.all(2),
+        decoration: BoxDecoration(
+          color: bgColor,
+          border: Border.all(
+            color: canPlace ? Colors.green : Colors.grey[400]!,
+            width: canPlace ? 3 : 1,
+          ),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Terrain tag
+            if (tile.terrain != null)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                decoration: BoxDecoration(
+                  color: _getTerrainColor(tile.terrain!),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  tile.terrain!,
+                  style: const TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+
+            const SizedBox(height: 2),
+
+            // Cards on this tile
+            if (cardsToShow.isEmpty && row == 1)
+              Text(
+                lane.zoneDisplay,
+                style: TextStyle(fontSize: 10, color: Colors.grey[600]),
+              )
+            else if (cardsToShow.isEmpty)
+              Text(
+                tile.shortName,
+                style: TextStyle(fontSize: 10, color: Colors.grey[500]),
+              )
+            else
+              Expanded(
+                child: ListView(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.symmetric(horizontal: 2),
+                  children: cardsToShow.map((card) {
+                    final isStaged = stagedCardsInLane.contains(card);
+                    return Container(
+                      margin: const EdgeInsets.symmetric(vertical: 1),
+                      padding: const EdgeInsets.all(3),
+                      decoration: BoxDecoration(
+                        color: isStaged
+                            ? Colors.amber[100]
+                            : (row == 0 ? Colors.red[200] : Colors.blue[200]),
+                        borderRadius: BorderRadius.circular(4),
+                        border: isStaged
+                            ? Border.all(color: Colors.amber, width: 2)
+                            : null,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            card.name,
+                            style: const TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                '⚔${card.damage}',
+                                style: const TextStyle(fontSize: 8),
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '❤${card.currentHealth}/${card.health}',
+                                style: const TextStyle(fontSize: 8),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Color _getTerrainColor(String terrain) {
+    switch (terrain.toLowerCase()) {
+      case 'woods':
+        return Colors.green[700]!;
+      case 'lake':
+        return Colors.blue[700]!;
+      case 'desert':
+        return Colors.orange[700]!;
+      case 'marsh':
+        return Colors.teal[700]!;
+      default:
+        return Colors.grey[600]!;
+    }
   }
 
   Widget _buildLane(MatchState match, LanePosition position) {
