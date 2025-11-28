@@ -566,6 +566,91 @@ class MatchManager {
     }
 
     _log('╚════════════════════════════════════╝');
+
+    // Add compact visual grid
+    _log('\n     W   C   E     ZONES');
+    _log('   ┌───┬───┬───┐');
+    for (int row = 0; row < 3; row++) {
+      final rowLabel = ['0', '1', '2'][row];
+      String rowStr = ' $rowLabel │';
+      for (int col = 0; col < 3; col++) {
+        final tile = board.getTile(row, col);
+        final lane = lanes[col];
+
+        // Get zone marker for this lane
+        int zoneToRow(Zone z) {
+          switch (z) {
+            case Zone.playerBase:
+              return 2;
+            case Zone.middle:
+              return 1;
+            case Zone.enemyBase:
+              return 0;
+          }
+        }
+
+        final currentZoneRow = zoneToRow(lane.currentZone);
+
+        // Cell content
+        String cell;
+        if (row == currentZoneRow) {
+          // Combat zone - show X if both have cards, P/O if one side
+          final hasPlayer = lane.playerStack.aliveCards.isNotEmpty;
+          final hasOpponent = lane.opponentStack.aliveCards.isNotEmpty;
+          if (hasPlayer && hasOpponent) {
+            cell = 'X'; // Combat!
+          } else if (hasPlayer) {
+            cell = 'P';
+          } else if (hasOpponent) {
+            cell = 'O';
+          } else {
+            cell = '·';
+          }
+        } else {
+          cell = '·'; // Empty
+        }
+
+        // Add owner color indicator
+        String ownerMark = '';
+        if (tile.owner == TileOwner.player) {
+          ownerMark = '▪'; // Player owned
+        } else if (tile.owner == TileOwner.opponent) {
+          ownerMark = '▫'; // Opponent owned
+        }
+
+        rowStr += ' $cell$ownerMark│';
+      }
+
+      // Add zone labels
+      String zoneLabel = '';
+      for (int col = 0; col < 3; col++) {
+        final lane = lanes[col];
+        int zoneToRow(Zone z) {
+          switch (z) {
+            case Zone.playerBase:
+              return 2;
+            case Zone.middle:
+              return 1;
+            case Zone.enemyBase:
+              return 0;
+          }
+        }
+
+        if (zoneToRow(lane.currentZone) == row) {
+          final zoneName = lane.currentZone.name.substring(0, 1).toUpperCase();
+          zoneLabel += ' $zoneName ';
+        } else {
+          zoneLabel += '   ';
+        }
+      }
+
+      _log('$rowStr $zoneLabel');
+      if (row < 2) _log('   ├───┼───┼───┤');
+    }
+    _log('   └───┴───┴───┘');
+    _log(
+      'Legend: P=Player, O=Opponent, X=Combat, ▪=PlayerOwned, ▫=OpponentOwned',
+    );
   }
 
   /// Update tile ownership when zone advances.

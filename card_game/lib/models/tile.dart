@@ -99,7 +99,7 @@ class Tile {
 
   /// Get a display name for this tile.
   String get displayName {
-    final colName = ['Left', 'Center', 'Right'][column];
+    final colName = ['West', 'Center', 'East'][column];
     final rowName = isPlayerBase
         ? 'Your Base'
         : isOpponentBase
@@ -110,7 +110,7 @@ class Tile {
 
   /// Short display name.
   String get shortName {
-    final col = ['L', 'C', 'R'][column];
+    final col = ['W', 'C', 'E'][column];
     final row = ['E', 'M', 'Y'][2 - this.row]; // E=enemy, M=middle, Y=yours
     return '$col$row';
   }
@@ -121,17 +121,17 @@ class Tile {
 }
 
 /// Column positions (lanes).
-enum LaneColumn { left, center, right }
+enum LaneColumn { west, center, east }
 
 /// Extension to convert LaneColumn to index.
 extension LaneColumnExtension on LaneColumn {
   int get index {
     switch (this) {
-      case LaneColumn.left:
+      case LaneColumn.west:
         return 0;
       case LaneColumn.center:
         return 1;
-      case LaneColumn.right:
+      case LaneColumn.east:
         return 2;
     }
   }
