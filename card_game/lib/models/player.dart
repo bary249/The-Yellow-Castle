@@ -24,7 +24,7 @@ class Player {
 
   // Constants
   static const int maxHandSize = 8;
-  static const int maxCrystalHP = 25;
+  static const int maxCrystalHP = 50;
 
   Player({
     required this.id,

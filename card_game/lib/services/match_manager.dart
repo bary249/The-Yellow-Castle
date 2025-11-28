@@ -270,6 +270,44 @@ class MatchManager {
     }
   }
 
+  /// Opponent (AI) submits tile-based moves (supports middle tiles if captured)
+  /// placements is a Map<String, List<GameCard>> where key is "row,col"
+  Future<void> submitOpponentTileMoves(
+    Map<String, List<GameCard>> tilePlacements,
+  ) async {
+    if (_currentMatch == null) return;
+    if (_currentMatch!.opponentSubmitted) return;
+
+    // Place cards at their tile positions
+    for (final entry in tilePlacements.entries) {
+      final parts = entry.key.split(',');
+      final row = int.parse(parts[0]);
+      final col = int.parse(parts[1]);
+      final cards = entry.value;
+
+      final lane = _currentMatch!.lanes[col];
+
+      for (final card in cards) {
+        if (_currentMatch!.opponent.playCard(card)) {
+          if (row == 0) {
+            // Opponent's base tile - add to baseCards
+            lane.opponentCards.baseCards.addCard(card, asTopCard: false);
+          } else if (row == 1) {
+            // Middle tile - add to middleCards
+            lane.opponentCards.middleCards.addCard(card, asTopCard: false);
+          }
+        }
+      }
+    }
+
+    _currentMatch!.opponentSubmitted = true;
+
+    // Check if both players submitted
+    if (_currentMatch!.bothPlayersSubmitted) {
+      await _resolveCombat();
+    }
+  }
+
   /// Callback for combat animation updates
   Function()? onCombatUpdate;
 

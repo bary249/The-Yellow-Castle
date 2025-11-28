@@ -196,9 +196,14 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     // _stagedCards is already keyed by "row,col"
     await _matchManager.submitPlayerTileMoves(_stagedCards);
 
-    // AI makes its moves
-    final aiMoves = _ai.generateMoves(match.opponent);
-    await _matchManager.submitOpponentMoves(aiMoves);
+    // AI makes its moves (tile-based, can place on captured middle tiles)
+    final aiMoves = _ai.generateTileMoves(
+      match.opponent,
+      match.board,
+      match.lanes,
+      isOpponent: true,
+    );
+    await _matchManager.submitOpponentTileMoves(aiMoves);
 
     // Clear staging AFTER combat completes
     _clearStaging();

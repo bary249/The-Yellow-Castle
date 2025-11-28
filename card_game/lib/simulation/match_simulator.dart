@@ -93,12 +93,22 @@ Future<MatchOutcome> simulateSingleMatch({
       );
     }
 
-    // SimpleAI for both sides
-    final p1Moves = ai1.generateMoves(match.player);
-    final p2Moves = ai2.generateMoves(match.opponent);
+    // SimpleAI for both sides - use tile-based moves to support captured middle tiles
+    final p1Moves = ai1.generateTileMoves(
+      match.player,
+      match.board,
+      match.lanes,
+      isOpponent: false,
+    );
+    final p2Moves = ai2.generateTileMoves(
+      match.opponent,
+      match.board,
+      match.lanes,
+      isOpponent: true,
+    );
 
-    await matchManager.submitPlayerMoves(p1Moves);
-    await matchManager.submitOpponentMoves(p2Moves);
+    await matchManager.submitPlayerTileMoves(p1Moves);
+    await matchManager.submitOpponentTileMoves(p2Moves);
 
     // After both sides submit, MatchManager resolves combat and advances turn.
     // Capture a snapshot at the end of each full round (post-combat, pre-next turn).
