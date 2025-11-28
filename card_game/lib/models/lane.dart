@@ -84,7 +84,7 @@ class Lane {
   final CardStack playerStack;
   final CardStack opponentStack;
 
-  Lane({required this.position, this.currentZone = Zone.middle})
+  Lane({required this.position, this.currentZone = Zone.playerBase})
     : playerStack = CardStack(isPlayerOwned: true),
       opponentStack = CardStack(isPlayerOwned: false);
 
