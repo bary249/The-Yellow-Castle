@@ -195,21 +195,28 @@ class PositionalCards {
   }
 
   /// Advance cards from base to middle (if middle has room)
+  /// Front card (topCard) advances first, back card becomes new front
   /// Returns number of cards advanced
   int advanceFromBase() {
     int advanced = 0;
 
-    // Move top card first (survivor priority)
+    // Move FRONT card (topCard) first
     if (baseCards.topCard != null && !middleCards.isFull) {
       middleCards.addCard(baseCards.topCard!, asTopCard: false);
       baseCards.topCard = null;
       advanced++;
+
+      // Promote back card to front position
+      if (baseCards.bottomCard != null) {
+        baseCards.topCard = baseCards.bottomCard;
+        baseCards.bottomCard = null;
+      }
     }
 
-    // Move bottom card if room
-    if (baseCards.bottomCard != null && !middleCards.isFull) {
-      middleCards.addCard(baseCards.bottomCard!, asTopCard: false);
-      baseCards.bottomCard = null;
+    // Move remaining front card (was back card) if still room
+    if (baseCards.topCard != null && !middleCards.isFull) {
+      middleCards.addCard(baseCards.topCard!, asTopCard: false);
+      baseCards.topCard = null;
       advanced++;
     }
 
