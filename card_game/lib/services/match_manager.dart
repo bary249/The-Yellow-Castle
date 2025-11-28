@@ -443,10 +443,7 @@ class MatchManager {
         );
 
         if (reachedBase) {
-          // Reached enemy base - check if defenders exist
-          final hasDefenders = lane.opponentStack.aliveCards.isNotEmpty;
-
-          // Deal crystal damage
+          // At enemy base - deal crystal damage
           final totalDamage = lane.playerStack.aliveCards.fold<int>(
             0,
             (sum, card) => sum + card.damage,
@@ -454,12 +451,9 @@ class MatchManager {
           _currentMatch!.opponent.takeCrystalDamage(totalDamage);
           _log('$laneName: 💥 $totalDamage crystal damage to AI!');
 
-          if (!hasDefenders) {
-            // Uncontested attack - survivors return to middle
-            lane.retreatZone(true); // Go back to middle
-            _log('$laneName: ↩️ Survivors return to middle (uncontested)');
-          }
-          // If defenders exist, survivors stay at enemy base for next combat
+          // After hitting crystal, survivors return to middle
+          lane.retreatZone(true);
+          _log('$laneName: ↩️ Survivors return to middle after attack');
         }
 
         // Award gold for winning lane
@@ -478,10 +472,7 @@ class MatchManager {
         );
 
         if (reachedBase) {
-          // Reached player base - check if defenders exist
-          final hasDefenders = lane.playerStack.aliveCards.isNotEmpty;
-
-          // Deal crystal damage
+          // At player base - deal crystal damage
           final totalDamage = lane.opponentStack.aliveCards.fold<int>(
             0,
             (sum, card) => sum + card.damage,
@@ -489,12 +480,9 @@ class MatchManager {
           _currentMatch!.player.takeCrystalDamage(totalDamage);
           _log('$laneName: 💥 $totalDamage crystal damage to Player!');
 
-          if (!hasDefenders) {
-            // Uncontested attack - survivors return to middle
-            lane.retreatZone(false); // Go back to middle
-            _log('$laneName: ↩️ AI survivors return to middle (uncontested)');
-          }
-          // If defenders exist, survivors stay at player base for next combat
+          // After hitting crystal, survivors return to middle
+          lane.retreatZone(false);
+          _log('$laneName: ↩️ AI survivors return to middle after attack');
         }
 
         // Award gold for winning lane
@@ -559,16 +547,11 @@ class MatchManager {
         final currentZoneRow = zoneToRow(lane.currentZone);
         List<String> cardNames = [];
 
-        // Player cards show at their zone position
+        // Both player and opponent cards show at the current zone position
         if (row == currentZoneRow) {
           for (final card in lane.playerStack.aliveCards) {
             cardNames.add('P:${card.name}(${card.currentHealth}hp)');
           }
-        }
-
-        // Opponent cards - show at enemy base (row 0) or their advanced position
-        // For simplicity, opponent cards show based on inverse zone
-        if (row == 0) {
           for (final card in lane.opponentStack.aliveCards) {
             cardNames.add('O:${card.name}(${card.currentHealth}hp)');
           }

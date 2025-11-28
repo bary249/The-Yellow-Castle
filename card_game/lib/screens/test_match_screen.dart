@@ -666,16 +666,15 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     }
 
     // Get survivor cards from lane based on zone position
-    List<GameCard> survivorCards = [];
+    // Both player and opponent survivors should show at the current combat zone
     final currentZoneRow = zoneToRow(lane.currentZone);
-    if (row == currentZoneRow) {
-      // This tile is where the combat zone is - show player survivors here
-      survivorCards = lane.playerStack.aliveCards;
-    }
-    // Show opponent cards on opponent-controlled tiles
+
+    List<GameCard> survivorCards = [];
     List<GameCard> opponentCards = [];
-    if (row == 0) {
-      // Enemy base - show opponent cards
+
+    if (row == currentZoneRow) {
+      // This tile is where the combat zone is - show ALL survivors here
+      survivorCards = lane.playerStack.aliveCards;
       opponentCards = lane.opponentStack.aliveCards;
     }
 
