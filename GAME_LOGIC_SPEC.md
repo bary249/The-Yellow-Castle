@@ -91,7 +91,7 @@ This document captures the **implemented and intended logic** of the game, mappe
 ### 1.5 Lanes & CardStacks (`Lane`, `CardStack`)
 
 **Lane**
-- `LanePosition` enum: `left`, `center`, `right`.
+- `LanePosition` enum: `west`, `center`, `east`.
 - `Zone` enum: `playerBase`, `middle`, `enemyBase`.
 - Fields:
   - `position` (lane id).
@@ -332,25 +332,73 @@ The animated path then waits briefly before moving to next lane.
 
 ---
 
-## 4. Zone Advancement & Crystal Damage
+## 4. Tile Ownership & Zone Advancement
 
-`_checkCrystalDamage()` in `MatchManager`:
+### 4.1 Board Layout (3×3 Grid)
+
+```
+Row 0: [W Enemy Base] [C Enemy Base] [E Enemy Base]  ← Opponent's base (ALWAYS opponent-owned)
+Row 1: [W Middle]     [C Middle]     [E Middle]      ← Contested (can be captured)
+Row 2: [W Your Base]  [C Your Base]  [E Your Base]   ← Player's base (ALWAYS player-owned)
+```
+
+**Ownership Rules:**
+- **Base tiles (row 0 & row 2)**: NEVER change ownership. Each player always controls their 3 base tiles.
+- **Middle tiles (row 1)**: Can be captured by winning combat there.
+
+### 4.2 Card Placement Rules
+
+- Max **2 cards per tile** you control
+- **Staging Phase**: Place cards only on tiles you own
+  - Turn 1: Only base tiles available (row 2 for player)
+  - Later turns: Base tiles + any captured middle tiles
+
+### 4.3 Advancement Logic (Per Lane)
+
+**During Battle Phase:**
+1. Cards attempt to advance **1 tile toward enemy** each turn
+   - Player cards: Row 2 → Row 1 → Row 0
+   - Opponent cards: Row 0 → Row 1 → Row 2
+2. Cards **STOP when they meet enemies** on a tile
+3. Combat resolves at that tile
+4. Must **destroy ALL enemy cards** on a tile to "clear the way"
+
+**After Combat:**
+| Combat Result | What Happens |
+|---------------|--------------|
+| Did NOT clear enemies | Stay at current tile |
+| Cleared enemies at middle | Advance to enemy base (row 0/2) |
+| Cleared enemies at enemy base | **Hit crystal**, then return to middle |
+| At middle, enemy base is EMPTY | **Hit crystal** (uncontested), stay at middle |
+
+### 4.4 Crystal Damage
+
+Crystal damage occurs when:
+- Your cards are at the **middle tile** AND
+- Enemy has **no defenders** at their base tile in that lane
+
+This represents your cards "hitting" the enemy base. After dealing damage, cards remain at middle (they don't occupy enemy base).
+
+**Why cards return to middle after crystal hit:**
+- Enemy base tiles are NEVER captured
+- Enemy must always have their base tiles available for staging
+- Your cards "raid" the base, deal damage, and fall back
+
+### 4.5 Implementation (`_checkCrystalDamage()`)
 
 For each lane:
 1. Read `playerWon = lane.playerWon`.
-2. If `playerWon == true` (player side wins lane):
-   - Log.
+2. If `playerWon == true` (player wins):
    - `reachedBase = lane.advanceZone(true)`.
-   - Log new `zoneDisplay`.
+   - Update middle tile ownership if applicable.
    - If `reachedBase`:
-     - Compute `totalDamage` = sum of `damage` on `lane.playerStack.aliveCards`.
+     - Compute `totalDamage` = sum of `damage` on surviving cards.
      - Call `opponent.takeCrystalDamage(totalDamage)`.
-     - Log crystal damage.
-   - Award gold → `player.earnGold(400)` (tier capture reward).
-3. If `playerWon == false` (opponent wins lane):
-   - Mirror logic, using `lane.advanceZone(false)` and `player.takeCrystalDamage(totalDamage)`.
-   - Award gold to opponent.
-4. If `playerWon == null`: no advancement, log draw.
+     - `lane.retreatZone(true)` → survivors return to middle.
+   - Award gold (400).
+3. If `playerWon == false` (opponent wins):
+   - Mirror logic toward player base.
+4. If `playerWon == null`: no advancement (draw).
 
 This function is called **after** combat logs and per-lane tick resolution.
 
@@ -379,7 +427,7 @@ Result: match progresses turn by turn with **persistent board state** and moving
 
 `generateMoves(Player aiPlayer)`:
 - If hand empty → return empty placements.
-- Start with a list of lanes: `[left, center, right]`, shuffle.
+- Start with a list of lanes: `[west, center, east]`, shuffle.
 - For each lane:
   - Randomly pick `cardsToPlay` in `0..2`.
   - For each card to play:
