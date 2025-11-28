@@ -3,6 +3,7 @@ import '../models/player.dart';
 import '../models/deck.dart';
 import '../models/lane.dart';
 import '../models/card.dart';
+import '../models/hero.dart';
 import 'combat_resolver.dart';
 
 /// Coordinates the entire match flow
@@ -11,6 +12,9 @@ class MatchManager {
   final CombatResolver _combatResolver = CombatResolver();
 
   MatchState? get currentMatch => _currentMatch;
+
+  /// Tracks if player has a damage boost active for this turn (from hero ability).
+  bool _playerDamageBoostActive = false;
 
   /// Start a new match
   void startMatch({
@@ -23,14 +27,17 @@ class MatchManager {
     bool opponentIsAI = true,
     String? playerAttunedElement,
     String? opponentAttunedElement,
+    GameHero? playerHero,
+    GameHero? opponentHero,
   }) {
-    // Create players
+    // Create players with heroes (copy heroes to reset ability state)
     final player = Player(
       id: playerId,
       name: playerName,
       deck: playerDeck,
       isHuman: true,
       attunedElement: playerAttunedElement,
+      hero: playerHero?.copy(),
     );
 
     final opponent = Player(
@@ -39,6 +46,7 @@ class MatchManager {
       deck: opponentDeck,
       isHuman: !opponentIsAI,
       attunedElement: opponentAttunedElement,
+      hero: opponentHero?.copy(),
     );
 
     // Shuffle decks
@@ -52,10 +60,80 @@ class MatchManager {
     player.drawInitialHand();
     opponent.drawInitialHand();
 
+    // Reset temporary buffs
+    _playerDamageBoostActive = false;
+
     // Start first turn
     _currentMatch!.currentPhase = MatchPhase.turnPhase;
     _currentMatch!.turnNumber = 1;
+
+    _log('Match started!');
+    if (playerHero != null) {
+      _log(
+        'Player hero: ${playerHero.name} (${playerHero.abilityDescription})',
+      );
+    }
+    if (opponentHero != null) {
+      _log('Opponent hero: ${opponentHero.name}');
+    }
   }
+
+  /// Check if player can use their hero ability.
+  bool get canUsePlayerHeroAbility {
+    final hero = _currentMatch?.player.hero;
+    if (hero == null) return false;
+    if (hero.abilityUsed) return false;
+    // Can only use during staging phase (before submission)
+    if (_currentMatch?.playerSubmitted == true) return false;
+    if (_currentMatch?.currentPhase != MatchPhase.turnPhase) return false;
+    return true;
+  }
+
+  /// Activate the player's hero ability.
+  /// Returns true if ability was activated successfully.
+  bool activatePlayerHeroAbility() {
+    if (!canUsePlayerHeroAbility) return false;
+
+    final hero = _currentMatch!.player.hero!;
+    hero.useAbility();
+
+    _log('\n🦸 HERO ABILITY ACTIVATED: ${hero.name}');
+    _log('   ${hero.abilityDescription}');
+
+    switch (hero.abilityType) {
+      case HeroAbilityType.drawCards:
+        // Draw 2 extra cards
+        _currentMatch!.player.drawCards(count: 2);
+        _log(
+          '   Drew 2 extra cards. Hand size: ${_currentMatch!.player.hand.length}',
+        );
+        break;
+
+      case HeroAbilityType.damageBoost:
+        // Flag for +1 damage boost this turn (applied during combat)
+        _playerDamageBoostActive = true;
+        _log('   All units will deal +1 damage this turn.');
+        break;
+
+      case HeroAbilityType.healUnits:
+        // Heal all surviving units by 3 HP
+        int healed = 0;
+        for (final lane in _currentMatch!.lanes) {
+          for (final card in lane.playerStack.aliveCards) {
+            final before = card.currentHealth;
+            card.currentHealth = (card.currentHealth + 3).clamp(0, card.health);
+            if (card.currentHealth > before) healed++;
+          }
+        }
+        _log('   Healed $healed surviving units by up to 3 HP.');
+        break;
+    }
+
+    return true;
+  }
+
+  /// Get the damage boost amount for player cards this turn.
+  int get playerDamageBoost => _playerDamageBoostActive ? 1 : 0;
 
   /// Player submits their card placements for the turn
   Future<void> submitPlayerMoves(
@@ -234,12 +312,13 @@ class MatchManager {
         '⚔️ ${lane.position.name.toUpperCase()} - Combat Starting...';
 
     // Provide lane/attunement context to the combat resolver so it can
-    // apply base-zone buffs for matching elements.
+    // apply base-zone buffs for matching elements and hero damage boosts.
     if (_currentMatch != null) {
       _combatResolver.setLaneContext(
         zone: lane.currentZone,
         playerBaseElement: _currentMatch!.player.attunedElement,
         opponentBaseElement: _currentMatch!.opponent.attunedElement,
+        playerDamageBoost: playerDamageBoost,
       );
     }
 
@@ -396,6 +475,9 @@ class MatchManager {
 
     // Reset submissions for next turn
     _currentMatch!.resetSubmissions();
+
+    // Reset temporary buffs from hero abilities
+    _playerDamageBoostActive = false;
 
     // Increment turn
     _currentMatch!.turnNumber++;

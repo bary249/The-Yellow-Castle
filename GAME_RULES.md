@@ -21,6 +21,32 @@
 - Each lane has 3 zones:
   - **Your Base** → **Middle** → **Enemy Base**.
 - Each **base** (yours and your opponent's) can have a **terrain attunement** (e.g. Marsh, Woods, Lake, Desert).
+- Each player selects a **Hero** before the match begins.
+
+---
+
+## 2.1 Heroes
+
+- Heroes are **historical figures** with unique abilities.
+- Each hero has:
+  - **Terrain Affinities** (1–2 terrains they're associated with, e.g., Napoleon → Woods, Lake).
+  - **One special ability** that can be used **once per match**.
+- The hero's terrain affinity determines your **base terrain** for the match.
+
+### Available Heroes
+
+| Hero | Terrain | Ability |
+|------|---------|---------|
+| **Napoleon Bonaparte** | Woods, Lake | Draw 2 extra cards this turn |
+| **Saladin** | Desert | Give all your units +1 damage this turn |
+| **Admiral Nelson** | Lake | Heal all surviving units by 3 HP |
+
+### Using Your Hero Ability
+
+- Click the **ABILITY** button next to your player info.
+- Ability can only be used **during the staging phase** (before you submit your moves).
+- Once used, the ability cannot be used again for the rest of the match.
+- The button turns grey after use.
 
 ---
 

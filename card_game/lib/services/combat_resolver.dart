@@ -31,6 +31,8 @@ class CombatResolver {
   String? _playerBaseElement; // Treated as terrain tag for the player's base
   String?
   _opponentBaseElement; // Treated as terrain tag for the opponent's base
+  int _playerDamageBoost =
+      0; // Bonus damage for player cards (from hero ability)
 
   /// Set contextual data for the current lane before processing ticks.
   /// This allows us to apply small buffs when fighting in an attuned base zone.
@@ -38,10 +40,12 @@ class CombatResolver {
     required Zone zone,
     String? playerBaseElement,
     String? opponentBaseElement,
+    int playerDamageBoost = 0,
   }) {
     _currentZone = zone;
     _playerBaseElement = playerBaseElement;
     _opponentBaseElement = opponentBaseElement;
+    _playerDamageBoost = playerDamageBoost;
   }
 
   /// Base damage calculator.
@@ -241,7 +245,13 @@ class CombatResolver {
       _append(' (+1 terrain buff @ enemy base)');
     }
 
-    // 2) Fury: flat +2 damage for this attacker.
+    // 2) Hero ability damage boost (player only).
+    if (isPlayerAttacking && _playerDamageBoost > 0) {
+      damage += _playerDamageBoost;
+      _append(' (+$_playerDamageBoost hero boost)');
+    }
+
+    // 3) Fury: flat +2 damage for this attacker.
     if (attacker.abilities.contains('fury_2')) {
       damage += 2;
       _append(' (+2 fury)');

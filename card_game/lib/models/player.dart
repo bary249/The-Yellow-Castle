@@ -1,5 +1,6 @@
 import 'card.dart';
 import 'deck.dart';
+import 'hero.dart';
 
 /// Represents a player's state during a match
 class Player {
@@ -13,8 +14,12 @@ class Player {
   int crystalHP;
   int gold;
 
+  /// The hero selected for this match (optional for backward compatibility).
+  final GameHero? hero;
+
   /// Optional elemental attunement for this player's base/crystal.
   /// When set, matching-element cards can receive buffs in that player's base zone.
+  /// If a hero is set, this may be derived from the hero's terrain affinities.
   final String? attunedElement;
 
   // Constants
@@ -29,6 +34,7 @@ class Player {
     this.crystalHP = maxCrystalHP,
     this.gold = 0,
     this.attunedElement,
+    this.hero,
   }) : hand = [];
 
   /// Check if crystal is destroyed

@@ -4,6 +4,8 @@ import '../models/deck.dart';
 import '../models/match_state.dart';
 import '../models/lane.dart';
 import '../models/card.dart';
+import '../models/hero.dart';
+import '../data/hero_library.dart';
 import '../services/match_manager.dart';
 import '../services/simple_ai.dart';
 import '../services/auth_service.dart';
@@ -62,6 +64,12 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   void _startNewMatch() {
     final id = _playerId ?? 'player1';
     final name = _playerName ?? 'You';
+
+    // For now, use Napoleon as the default player hero
+    // TODO: Add hero selection screen
+    final playerHero = HeroLibrary.napoleon();
+    final aiHero = HeroLibrary.saladin(); // AI uses Saladin
+
     _matchManager.startMatch(
       playerId: id,
       playerName: name,
@@ -70,8 +78,10 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       opponentName: 'AI Opponent',
       opponentDeck: Deck.starter(playerId: 'ai'),
       opponentIsAI: true,
-      playerAttunedElement: 'Lake',
-      opponentAttunedElement: 'Desert',
+      playerAttunedElement: playerHero.terrainAffinities.first,
+      opponentAttunedElement: aiHero.terrainAffinities.first,
+      playerHero: playerHero,
+      opponentHero: aiHero,
     );
     _clearStaging();
     setState(() {});
@@ -457,10 +467,26 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                   color: isOpponent ? Colors.red[700] : Colors.blue[700],
                 ),
               ),
+              // Show hero info
+              if (player.hero != null) ...[
+                const SizedBox(width: 8),
+                Text(
+                  '(${player.hero!.name})',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: isOpponent ? Colors.red[400] : Colors.blue[400],
+                  ),
+                ),
+              ],
             ],
           ),
           Row(
             children: [
+              // Hero ability button (player only)
+              if (!isOpponent && player.hero != null) ...[
+                _buildHeroAbilityButton(player.hero!),
+                const SizedBox(width: 12),
+              ],
               const Icon(Icons.favorite, color: Colors.pink, size: 18),
               const SizedBox(width: 4),
               Text(
@@ -483,6 +509,48 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildHeroAbilityButton(GameHero hero) {
+    final canUse = _matchManager.canUsePlayerHeroAbility;
+
+    return Tooltip(
+      message: hero.abilityDescription,
+      child: ElevatedButton.icon(
+        onPressed: canUse
+            ? () {
+                final success = _matchManager.activatePlayerHeroAbility();
+                if (success) {
+                  setState(() {});
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        '🦸 ${hero.name}: ${hero.abilityDescription}',
+                      ),
+                      duration: const Duration(seconds: 2),
+                    ),
+                  );
+                }
+              }
+            : null,
+        icon: Icon(
+          hero.abilityUsed ? Icons.check_circle : Icons.flash_on,
+          size: 16,
+        ),
+        label: Text(
+          hero.abilityUsed ? 'USED' : 'ABILITY',
+          style: const TextStyle(fontSize: 10),
+        ),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: hero.abilityUsed
+              ? Colors.grey
+              : (canUse ? Colors.amber : Colors.grey[400]),
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          minimumSize: const Size(0, 28),
+        ),
       ),
     );
   }

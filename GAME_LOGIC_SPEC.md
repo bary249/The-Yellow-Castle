@@ -50,6 +50,7 @@ This document captures the **implemented and intended logic** of the game, mappe
 - `crystalHP` (int, default e.g. 100).
 - `gold` (int; match currency, partially used / TBD).
 - `attunedElement` (optional element for base/crystal attunement).
+- `hero` (optional `GameHero`).
 
 **Important flags/methods:**
 - `isDefeated` → `crystalHP <= 0`.
@@ -58,11 +59,36 @@ This document captures the **implemented and intended logic** of the game, mappe
 - `drawCards({count = 2})` per new turn.
 - `playCard(GameCard)` → removes card from hand if present.
 - `takeCrystalDamage(int)` → reduces `crystalHP` (floor at 0).
-- `earnGold(int)` → adds to `gold` (economy hooks).
 
 ---
 
-### 1.4 Lanes & CardStacks (`Lane`, `CardStack`)
+### 1.4 Hero (`GameHero`)
+
+**Fields:**
+- `id`, `name`, `description`.
+- `terrainAffinities` (list of 1–2 terrain types, e.g., `['Woods', 'Lake']`).
+- `abilityType` (enum: `drawCards`, `damageBoost`, `healUnits`).
+- `abilityDescription` (player-facing text).
+- `abilityUsed` (bool, tracks if ability has been used this match).
+
+**Ability Types:**
+- `drawCards`: Draw 2 extra cards this turn.
+- `damageBoost`: Give all your units +1 damage this turn (applied during combat).
+- `healUnits`: Heal all surviving units by 3 HP.
+
+**Usage rules:**
+- Hero ability can only be used **once per match**.
+- Must be activated **during staging phase** (before submission).
+- After submission, ability cannot be used that turn.
+- After ability is used, `abilityUsed` is set to `true` and button is disabled.
+
+**Hero ↔ Base Terrain:**
+- The hero's `terrainAffinities` can determine the player's base terrain(s).
+- Currently, the first affinity is used as the player's `attunedElement`.
+
+---
+
+### 1.5 Lanes & CardStacks (`Lane`, `CardStack`)
 
 **Lane**
 - `LanePosition` enum: `left`, `center`, `right`.
