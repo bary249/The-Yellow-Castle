@@ -685,12 +685,25 @@ class MatchManager {
 
         // Get cards at this tile based on position
         List<String> cardNames = [];
+        final lanePos = [
+          LanePosition.west,
+          LanePosition.center,
+          LanePosition.east,
+        ][col];
 
         // Row 0 = enemy base, Row 1 = middle, Row 2 = player base
         if (row == 0) {
-          // Enemy base - show opponent's base cards
-          for (final card in lane.opponentCards.baseCards.aliveCards) {
-            cardNames.add('O:${card.name}(${card.currentHealth}hp)');
+          // Enemy base - fog of war: hide cards unless lane is revealed
+          if (_currentMatch!.revealedEnemyBaseLanes.contains(lanePos)) {
+            for (final card in lane.opponentCards.baseCards.aliveCards) {
+              cardNames.add('O:${card.name}(${card.currentHealth}hp)');
+            }
+          } else {
+            // Hidden - show count only if cards present
+            final hiddenCount = lane.opponentCards.baseCards.aliveCards.length;
+            if (hiddenCount > 0) {
+              cardNames.add('??? ($hiddenCount hidden)');
+            }
           }
         } else if (row == 1) {
           // Middle - show both sides' middle cards
@@ -708,11 +721,6 @@ class MatchManager {
         }
 
         final colName = ['W', 'C', 'E'][col];
-        final lanePos = [
-          LanePosition.west,
-          LanePosition.center,
-          LanePosition.east,
-        ][col];
 
         // Fog of war: hide enemy base terrain unless revealed
         String terrain;

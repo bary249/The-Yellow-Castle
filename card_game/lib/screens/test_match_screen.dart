@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 import '../models/deck.dart';
 import '../models/match_state.dart';
 import '../models/lane.dart';
@@ -10,6 +11,7 @@ import '../data/hero_library.dart';
 import '../services/match_manager.dart';
 import '../services/simple_ai.dart';
 import '../services/auth_service.dart';
+import '../services/deck_storage_service.dart';
 
 /// Simple test screen to verify game logic with drag-and-drop card placement
 class TestMatchScreen extends StatefulWidget {
@@ -26,10 +28,12 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   final MatchManager _matchManager = MatchManager();
   final SimpleAI _ai = SimpleAI();
   final AuthService _authService = AuthService();
+  final DeckStorageService _deckStorage = DeckStorageService();
 
   String? _playerId;
   String? _playerName;
   int? _playerElo;
+  List<GameCard>? _savedDeck;
 
   // Staging area: cards placed on tiles before submitting
   // Key is "row,col" string (e.g., "2,0" for player base left)
@@ -65,6 +69,10 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       _playerElo = 1000;
     }
 
+    // Load saved deck from Firebase
+    _savedDeck = await _deckStorage.loadDeck();
+    debugPrint('Loaded saved deck: ${_savedDeck?.length ?? 0} cards');
+
     if (mounted) {
       _startNewMatch();
     }
@@ -78,10 +86,15 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     final playerHero = widget.selectedHero ?? HeroLibrary.napoleon();
     final aiHero = HeroLibrary.saladin(); // AI uses Saladin
 
+    // Use saved deck if available, otherwise use starter deck
+    final playerDeck = _savedDeck != null && _savedDeck!.isNotEmpty
+        ? Deck.fromCards(playerId: id, cards: _savedDeck!)
+        : Deck.starter(playerId: id);
+
     _matchManager.startMatch(
       playerId: id,
       playerName: name,
-      playerDeck: Deck.starter(playerId: id),
+      playerDeck: playerDeck,
       opponentId: 'ai',
       opponentName: 'AI Opponent',
       opponentDeck: Deck.starter(playerId: 'ai'),
@@ -658,9 +671,20 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     List<GameCard> playerCardsAtTile = [];
     List<GameCard> opponentCardsAtTile = [];
 
+    // Fog of war: check if this lane's enemy base is revealed
+    final isEnemyBaseRevealed = match.revealedEnemyBaseLanes.contains(lanePos);
+
+    // Track if cards are hidden by fog of war
+    int hiddenCardCount = 0;
+
     if (row == 0) {
-      // Enemy base - show opponent's base cards
-      opponentCardsAtTile = lane.opponentCards.baseCards.aliveCards;
+      // Enemy base - fog of war: only show cards if lane is revealed
+      if (isEnemyBaseRevealed) {
+        opponentCardsAtTile = lane.opponentCards.baseCards.aliveCards;
+      } else {
+        // Cards hidden by fog of war
+        hiddenCardCount = lane.opponentCards.baseCards.aliveCards.length;
+      }
     } else if (row == 1) {
       // Middle - show both sides' middle cards
       playerCardsAtTile = lane.playerCards.middleCards.aliveCards;

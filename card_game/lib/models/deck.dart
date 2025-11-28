@@ -58,4 +58,33 @@ class Deck {
       cards: cards,
     );
   }
+
+  /// Create a deck from saved cards (must have 15-25 cards)
+  /// Will pad with starter cards if under 25
+  factory Deck.fromCards({
+    required String playerId,
+    required List<GameCard> cards,
+    String name = 'Custom Deck',
+  }) {
+    // Ensure we have at least 15 cards
+    if (cards.length < 15) {
+      throw ArgumentError('Deck must have at least 15 cards');
+    }
+
+    // Pad to 25 cards if needed using starter pool
+    final deckCards = List<GameCard>.from(cards);
+    if (deckCards.length < 25) {
+      final starterCards = buildStarterCardPool();
+      starterCards.shuffle(Random());
+      while (deckCards.length < 25) {
+        deckCards.add(starterCards.removeAt(0).copy());
+      }
+    }
+
+    return Deck(
+      id: 'custom_$playerId',
+      name: name,
+      cards: deckCards.take(25).toList(),
+    );
+  }
 }
