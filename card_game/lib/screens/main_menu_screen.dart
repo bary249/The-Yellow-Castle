@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import 'hero_selection_screen.dart';
 import 'matchmaking_screen.dart';
+import 'deck_editor_screen.dart';
 
 /// Main menu screen with Play vs AI and Play Online options
 class MainMenuScreen extends StatefulWidget {
@@ -54,6 +55,12 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
     Navigator.of(
       context,
     ).push(MaterialPageRoute(builder: (_) => const MatchmakingScreen()));
+  }
+
+  void _editDeck() {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const DeckEditorScreen()));
   }
 
   @override
@@ -123,6 +130,17 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                         color: Colors.blue,
                         onTap: _playOnline,
                         enabled: true,
+                      ),
+
+                      const SizedBox(height: 20),
+
+                      // Deck Editor button
+                      _buildMenuButton(
+                        icon: Icons.style,
+                        label: 'EDIT DECK',
+                        sublabel: 'Customize your cards',
+                        color: Colors.amber,
+                        onTap: _editDeck,
                       ),
 
                       const SizedBox(height: 40),
