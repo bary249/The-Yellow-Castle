@@ -5,6 +5,7 @@ import '../models/lane.dart';
 import '../models/card.dart';
 import '../models/hero.dart';
 import '../models/game_board.dart';
+import '../models/tile.dart';
 import 'combat_resolver.dart';
 
 /// Coordinates the entire match flow
@@ -423,12 +424,20 @@ class MatchManager {
     for (final lane in _currentMatch!.lanes) {
       final playerWon = lane.playerWon;
       final laneName = lane.position.name.toUpperCase();
+      final colIndex = lane.position.index; // 0=left, 1=center, 2=right
 
       if (playerWon == true) {
         // Player won lane - advance toward enemy base
         _log('$laneName: Player victory! ${lane.zoneDisplay}');
         final reachedBase = lane.advanceZone(true);
         _log('$laneName: Advanced to ${lane.zoneDisplay}');
+
+        // Update tile ownership based on new zone
+        _updateTileOwnership(
+          colIndex,
+          lane.currentZone,
+          isPlayerAdvancing: true,
+        );
 
         if (reachedBase) {
           // Reached enemy base - deal crystal damage
@@ -449,6 +458,13 @@ class MatchManager {
         _log('$laneName: AI victory! ${lane.zoneDisplay}');
         final reachedBase = lane.advanceZone(false);
         _log('$laneName: Advanced to ${lane.zoneDisplay}');
+
+        // Update tile ownership based on new zone
+        _updateTileOwnership(
+          colIndex,
+          lane.currentZone,
+          isPlayerAdvancing: false,
+        );
 
         if (reachedBase) {
           // Reached player base - deal crystal damage
@@ -471,6 +487,55 @@ class MatchManager {
     }
 
     _log('--- END ZONE ADVANCEMENT ---');
+  }
+
+  /// Update tile ownership when zone advances.
+  /// Maps zone to tile row: playerBase=row2, middle=row1, enemyBase=row0
+  void _updateTileOwnership(
+    int col,
+    Zone newZone, {
+    required bool isPlayerAdvancing,
+  }) {
+    if (_currentMatch == null) return;
+
+    final board = _currentMatch!.board;
+
+    // When player advances to middle, they capture the middle tile
+    // When player advances to enemy base, they capture enemy base tile
+    // Vice versa for opponent
+    if (isPlayerAdvancing) {
+      if (newZone == Zone.middle) {
+        // Player captures middle tile
+        final tile = board.getTile(1, col);
+        if (tile.owner != TileOwner.player) {
+          tile.owner = TileOwner.player;
+          _log('  🏴 Player captured ${tile.displayName}!');
+        }
+      } else if (newZone == Zone.enemyBase) {
+        // Player captures enemy base tile (temporary - until pushed back)
+        final tile = board.getTile(0, col);
+        if (tile.owner != TileOwner.player) {
+          tile.owner = TileOwner.player;
+          _log('  🏴 Player captured ${tile.displayName}!');
+        }
+      }
+    } else {
+      if (newZone == Zone.middle) {
+        // Opponent captures middle tile
+        final tile = board.getTile(1, col);
+        if (tile.owner != TileOwner.opponent) {
+          tile.owner = TileOwner.opponent;
+          _log('  🚩 Opponent captured ${tile.displayName}!');
+        }
+      } else if (newZone == Zone.playerBase) {
+        // Opponent captures player base tile (temporary - until pushed back)
+        final tile = board.getTile(2, col);
+        if (tile.owner != TileOwner.opponent) {
+          tile.owner = TileOwner.opponent;
+          _log('  🚩 Opponent captured ${tile.displayName}!');
+        }
+      }
+    }
   }
 
   /// Advance to next turn (used after combat resolves when game not over)
