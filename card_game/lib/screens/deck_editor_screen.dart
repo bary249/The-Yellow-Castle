@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/card.dart';
 import '../data/card_library.dart';
+import '../services/deck_storage_service.dart';
 
 /// Screen for editing the player's deck
 class DeckEditorScreen extends StatefulWidget {
@@ -14,27 +15,37 @@ class _DeckEditorScreenState extends State<DeckEditorScreen> {
   static const int maxDeckSize = 25;
   static const int minDeckSize = 15;
 
+  final DeckStorageService _storageService = DeckStorageService();
+
   // Current deck cards
-  late List<GameCard> _deckCards;
+  List<GameCard> _deckCards = [];
 
   // All available cards (card pool)
-  late List<GameCard> _availableCards;
+  List<GameCard> _availableCards = [];
 
   // Selected card for details view
   GameCard? _selectedCard;
 
+  // Loading state
+  bool _isLoading = true;
+
   @override
   void initState() {
     super.initState();
-    _initializeCards();
+    _loadDeck();
   }
 
-  void _initializeCards() {
-    // Start with default deck
-    _deckCards = List.from(buildStarterCardPool());
+  Future<void> _loadDeck() async {
+    // Load saved deck from storage
+    final savedDeck = await _storageService.loadDeck();
 
-    // Available cards pool (all card types, multiple copies)
-    _availableCards = _buildCardPool();
+    if (mounted) {
+      setState(() {
+        _deckCards = savedDeck;
+        _availableCards = _buildCardPool();
+        _isLoading = false;
+      });
+    }
   }
 
   List<GameCard> _buildCardPool() {
@@ -109,7 +120,7 @@ class _DeckEditorScreenState extends State<DeckEditorScreen> {
     });
   }
 
-  void _saveDeck() {
+  Future<void> _saveDeck() async {
     if (_deckCards.length < minDeckSize) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -120,17 +131,33 @@ class _DeckEditorScreenState extends State<DeckEditorScreen> {
       return;
     }
 
-    // TODO: Save to persistent storage
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Deck saved!'),
-        backgroundColor: Colors.green,
-      ),
-    );
-    Navigator.of(context).pop(_deckCards);
+    // Save to persistent storage
+    final success = await _storageService.saveDeck(_deckCards);
+
+    if (mounted) {
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Deck saved!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.of(context).pop(_deckCards);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to save deck'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
-  void _resetDeck() {
+  Future<void> _resetDeck() async {
+    // Clear saved deck and reset to default
+    await _storageService.clearDeck();
+
     setState(() {
       _deckCards = List.from(buildStarterCardPool());
       _selectedCard = null;
@@ -166,27 +193,50 @@ class _DeckEditorScreenState extends State<DeckEditorScreen> {
           const SizedBox(width: 16),
         ],
       ),
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Colors.indigo[900]!, Colors.grey[900]!],
-          ),
-        ),
-        child: Row(
-          children: [
-            // Left: Current Deck
-            Expanded(flex: 1, child: _buildDeckPanel()),
+      body: _isLoading
+          ? Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Colors.indigo[900]!, Colors.grey[900]!],
+                ),
+              ),
+              child: const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    CircularProgressIndicator(color: Colors.amber),
+                    SizedBox(height: 16),
+                    Text(
+                      'Loading deck...',
+                      style: TextStyle(color: Colors.white70),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          : Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Colors.indigo[900]!, Colors.grey[900]!],
+                ),
+              ),
+              child: Row(
+                children: [
+                  // Left: Current Deck
+                  Expanded(flex: 1, child: _buildDeckPanel()),
 
-            // Divider
-            Container(width: 2, color: Colors.white24),
+                  // Divider
+                  Container(width: 2, color: Colors.white24),
 
-            // Right: Available Cards
-            Expanded(flex: 1, child: _buildCardPoolPanel()),
-          ],
-        ),
-      ),
+                  // Right: Available Cards
+                  Expanded(flex: 1, child: _buildCardPoolPanel()),
+                ],
+              ),
+            ),
     );
   }
 
