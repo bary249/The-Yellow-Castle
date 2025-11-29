@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/deck.dart';
 import '../models/match_state.dart';
 import '../models/lane.dart';
@@ -29,6 +31,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   final SimpleAI _ai = SimpleAI();
   final AuthService _authService = AuthService();
   final DeckStorageService _deckStorage = DeckStorageService();
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   String? _playerId;
   String? _playerName;
@@ -44,6 +47,16 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   // UI state: battle log drawer visibility
   bool _showBattleLog = false;
 
+  // Online multiplayer state
+  StreamSubscription? _matchListener;
+  bool _isOnlineMode = false;
+  bool _amPlayer1 = true;
+  String? _opponentId;
+  String? _opponentName;
+  bool _mySubmitted = false;
+  bool _opponentSubmitted = false;
+  bool _waitingForOpponent = false;
+
   /// Get the staging key for a tile.
   String _tileKey(int row, int col) => '$row,$col';
 
@@ -58,30 +71,13 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     _initPlayerAndMatch();
   }
 
+  @override
+  void dispose() {
+    _matchListener?.cancel();
+    super.dispose();
+  }
+
   Future<void> _initPlayerAndMatch() async {
-    // TODO: Online multiplayer implementation
-    // When widget.onlineMatchId is provided:
-    // - Listen to Firebase match document
-    // - Sync player actions to Firestore
-    // - Read opponent actions from Firestore
-    // - Use same MatchManager logic
-
-    if (widget.onlineMatchId != null) {
-      // Online mode - not yet fully implemented
-      // For now, showing placeholder
-      if (mounted) {
-        setState(() {});
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Online multiplayer coming soon! Playing vs AI for now.',
-          ),
-          duration: Duration(seconds: 3),
-        ),
-      );
-    }
-
     // Use Firebase user if available
     final user = _authService.currentUser;
     if (user != null) {
@@ -99,9 +95,99 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     _savedDeck = await _deckStorage.loadDeck();
     debugPrint('Loaded saved deck: ${_savedDeck?.length ?? 0} cards');
 
-    if (mounted) {
-      _startNewMatch();
+    // Check if online mode
+    if (widget.onlineMatchId != null && _playerId != null) {
+      _isOnlineMode = true;
+      await _initOnlineMatch();
+    } else {
+      // VS AI mode
+      if (mounted) {
+        _startNewMatch();
+      }
     }
+  }
+
+  /// Initialize online multiplayer match
+  Future<void> _initOnlineMatch() async {
+    if (widget.onlineMatchId == null || _playerId == null) return;
+
+    try {
+      // Get match data to determine which player we are
+      final matchDoc = await _firestore
+          .collection('matches')
+          .doc(widget.onlineMatchId)
+          .get();
+
+      if (!matchDoc.exists) {
+        _showError('Match not found');
+        return;
+      }
+
+      final matchData = matchDoc.data()!;
+      _amPlayer1 = matchData['player1']?['userId'] == _playerId;
+
+      // Get opponent info
+      final opponentData = _amPlayer1
+          ? matchData['player2']
+          : matchData['player1'];
+      _opponentId = opponentData?['userId'] as String?;
+      _opponentName = opponentData?['displayName'] as String? ?? 'Opponent';
+
+      // Start the local match
+      _startNewMatch();
+
+      // Listen to Firebase match updates
+      _listenToMatchUpdates();
+
+      if (mounted) {
+        setState(() {});
+      }
+    } catch (e) {
+      debugPrint('Error initializing online match: $e');
+      _showError('Failed to join match');
+    }
+  }
+
+  /// Listen to Firebase match document updates
+  void _listenToMatchUpdates() {
+    if (widget.onlineMatchId == null) return;
+
+    _matchListener = _firestore
+        .collection('matches')
+        .doc(widget.onlineMatchId)
+        .snapshots()
+        .listen((snapshot) {
+          if (!mounted || !snapshot.exists) return;
+
+          final data = snapshot.data()!;
+          _handleMatchUpdate(data);
+        });
+  }
+
+  /// Handle match state updates from Firebase
+  void _handleMatchUpdate(Map<String, dynamic> data) {
+    final myKey = _amPlayer1 ? 'player1' : 'player2';
+    final oppKey = _amPlayer1 ? 'player2' : 'player1';
+
+    final myData = data[myKey] as Map<String, dynamic>?;
+    final oppData = data[oppKey] as Map<String, dynamic>?;
+
+    setState(() {
+      _mySubmitted = myData?['submitted'] == true;
+      _opponentSubmitted = oppData?['submitted'] == true;
+    });
+
+    // If both submitted, trigger combat resolution
+    if (_mySubmitted && _opponentSubmitted && !_waitingForOpponent) {
+      _loadOpponentCardsAndResolveCombat(data);
+    }
+  }
+
+  void _showError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.red),
+    );
   }
 
   void _startNewMatch() {
@@ -117,14 +203,20 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         ? Deck.fromCards(playerId: id, cards: _savedDeck!)
         : Deck.starter(playerId: id);
 
+    // Determine opponent name and deck
+    final opponentNameFinal = _isOnlineMode
+        ? (_opponentName ?? 'Opponent')
+        : 'AI Opponent';
+    final opponentIdFinal = _isOnlineMode ? (_opponentId ?? 'opponent') : 'ai';
+
     _matchManager.startMatch(
       playerId: id,
       playerName: name,
       playerDeck: playerDeck,
-      opponentId: 'ai',
-      opponentName: 'AI Opponent',
-      opponentDeck: Deck.starter(playerId: 'ai'),
-      opponentIsAI: true,
+      opponentId: opponentIdFinal,
+      opponentName: opponentNameFinal,
+      opponentDeck: Deck.starter(playerId: opponentIdFinal),
+      opponentIsAI: !_isOnlineMode,
       playerAttunedElement: playerHero.terrainAffinities.first,
       opponentAttunedElement: aiHero.terrainAffinities.first,
       playerHero: playerHero,
@@ -220,19 +312,72 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     final match = _matchManager.currentMatch;
     if (match == null) return;
 
-    // Check if any cards were placed
-    final totalPlaced = _stagedCards.values.fold<int>(
-      0,
-      (sum, list) => sum + list.length,
-    );
-
     // Set up animation callback
     _matchManager.onCombatUpdate = () {
       if (mounted) setState(() {});
     };
 
+    if (_isOnlineMode) {
+      // Online mode: sync to Firebase
+      await _submitOnlineTurn();
+    } else {
+      // VS AI mode: resolve immediately
+      await _submitVsAITurn();
+    }
+
+    // Clear staging AFTER combat completes
+    _clearStaging();
+    if (mounted) setState(() {});
+  }
+
+  /// Submit turn in online multiplayer mode
+  Future<void> _submitOnlineTurn() async {
+    if (widget.onlineMatchId == null || _playerId == null) return;
+
+    try {
+      // Convert staged cards to serializable format
+      final stagedCardsData = <String, List<Map<String, dynamic>>>{};
+      for (final entry in _stagedCards.entries) {
+        stagedCardsData[entry.key] = entry.value.map((card) {
+          return {
+            'id': card.id,
+            'name': card.name,
+            'damage': card.damage,
+            'health': card.health,
+            'tick': card.tick,
+            'element': card.element,
+            'abilities': card.abilities,
+            'cost': card.cost,
+            'rarity': card.rarity,
+          };
+        }).toList();
+      }
+
+      // Upload my placements to Firebase
+      final myKey = _amPlayer1 ? 'player1' : 'player2';
+      await _firestore.collection('matches').doc(widget.onlineMatchId).update({
+        '$myKey.submitted': true,
+        '$myKey.stagedCards': stagedCardsData,
+      });
+
+      setState(() {
+        _mySubmitted = true;
+        _waitingForOpponent = true;
+      });
+
+      debugPrint('Submitted turn to Firebase');
+    } catch (e) {
+      debugPrint('Error submitting online turn: $e');
+      _showError('Failed to submit turn');
+    }
+  }
+
+  /// Submit turn in vs AI mode
+  Future<void> _submitVsAITurn() async {
+    final match = _matchManager.currentMatch;
+    if (match == null) return;
+
     // Submit player moves using new tile-based system
-    // _stagedCards is already keyed by "row,col"
     await _matchManager.submitPlayerTileMoves(_stagedCards);
 
     // AI makes its moves (tile-based, can place on captured middle tiles)
@@ -243,10 +388,74 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       isOpponent: true,
     );
     await _matchManager.submitOpponentTileMoves(aiMoves);
+  }
 
-    // Clear staging AFTER combat completes
-    _clearStaging();
-    if (mounted) setState(() {});
+  /// Load opponent cards from Firebase and resolve combat
+  Future<void> _loadOpponentCardsAndResolveCombat(
+    Map<String, dynamic> matchData,
+  ) async {
+    setState(() {
+      _waitingForOpponent = false;
+    });
+
+    try {
+      // Get opponent's staged cards
+      final oppKey = _amPlayer1 ? 'player2' : 'player1';
+      final oppData = matchData[oppKey] as Map<String, dynamic>?;
+      final oppStagedData = oppData?['stagedCards'] as Map<String, dynamic>?;
+
+      if (oppStagedData == null) {
+        debugPrint('No opponent staged cards found');
+        return;
+      }
+
+      // Convert opponent's cards from Firebase format
+      final opponentMoves = <String, List<GameCard>>{};
+      for (final entry in oppStagedData.entries) {
+        final cardsList = entry.value as List<dynamic>;
+        opponentMoves[entry.key] = cardsList.map((cardData) {
+          final data = cardData as Map<String, dynamic>;
+          return GameCard(
+            id: data['id'] as String,
+            name: data['name'] as String,
+            damage: data['damage'] as int,
+            health: data['health'] as int,
+            tick: data['tick'] as int,
+            element: data['element'] as String?,
+            abilities: (data['abilities'] as List<dynamic>?)
+                ?.map((e) => e as String)
+                .toList(),
+            cost: data['cost'] as int? ?? 0,
+            rarity: data['rarity'] as int? ?? 1,
+          );
+        }).toList();
+      }
+
+      // Submit player's staged cards
+      await _matchManager.submitPlayerTileMoves(_stagedCards);
+
+      // Submit opponent's cards
+      await _matchManager.submitOpponentTileMoves(opponentMoves);
+
+      // Reset submitted flags for next turn
+      final myKey = _amPlayer1 ? 'player1' : 'player2';
+      await _firestore.collection('matches').doc(widget.onlineMatchId).update({
+        '$myKey.submitted': false,
+        '$oppKey.submitted': false,
+        '$myKey.stagedCards': {},
+        '$oppKey.stagedCards': {},
+      });
+
+      setState(() {
+        _mySubmitted = false;
+        _opponentSubmitted = false;
+      });
+
+      debugPrint('Combat resolved for online match');
+    } catch (e) {
+      debugPrint('Error loading opponent cards: $e');
+      _showError('Failed to load opponent moves');
+    }
   }
 
   @override
@@ -302,15 +511,50 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                 backgroundColor: Colors.red[700],
                 heroTag: 'skip',
               )
-            : (match.isGameOver || match.playerSubmitted
-                  ? null
-                  : FloatingActionButton.extended(
-                      onPressed: _submitTurn,
-                      label: const Text('Submit Turn'),
-                      icon: const Icon(Icons.send),
-                    )),
+            : _buildSubmitButton(match),
       ),
     );
+  }
+
+  Widget? _buildSubmitButton(MatchState match) {
+    if (match.isGameOver) return null;
+
+    // Online mode: show waiting state
+    if (_isOnlineMode) {
+      if (_waitingForOpponent) {
+        return FloatingActionButton.extended(
+          onPressed: null,
+          label: const Text('Waiting for opponent...'),
+          icon: const SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+            ),
+          ),
+          backgroundColor: Colors.grey,
+        );
+      } else if (_mySubmitted) {
+        return FloatingActionButton.extended(
+          onPressed: null,
+          label: const Text('Turn Submitted'),
+          icon: const Icon(Icons.check),
+          backgroundColor: Colors.green[700],
+        );
+      }
+    }
+
+    // Show submit button if not yet submitted
+    if (!match.playerSubmitted) {
+      return FloatingActionButton.extended(
+        onPressed: _submitTurn,
+        label: Text(_isOnlineMode ? 'Submit Turn' : 'Submit Turn'),
+        icon: const Icon(Icons.send),
+      );
+    }
+
+    return null;
   }
 
   Widget _buildGameOver(MatchState match) {
