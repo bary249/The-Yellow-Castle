@@ -21,8 +21,15 @@ This document captures the **implemented and intended logic** of the game, mappe
 - `maxHealth` / `currentHealth`.
 - `tick` (1–5): timing profile.
 - `element` (nullable string, treated as a **terrain tag** such as `Marsh`, `Woods`, `Lake`, `Desert`, etc.).
+- `rarity` (int 1-4): determines deck copy limits.
+  - 1 = Common (unlimited)
+  - 2 = Rare (max 3 copies)
+  - 3 = Epic (max 2 copies)
+  - 4 = Legendary (max 1 copy)
 - `abilities` (list of string tags):
-  - Examples: `fury_2`, `shield_2`, `stack_buff_damage_2`, `stack_debuff_enemy_damage_2`.
+  - Offensive: `fury_X`, `cleave`, `thorns_X`
+  - Defensive: `shield_X`, `regen_X`, `regenerate`
+  - Support: `heal_ally_X`, `stack_buff_damage_X`, `stack_debuff_enemy_damage_X`
 - `isAlive` (derived from `currentHealth > 0`).
 
 **Important behavior:**
@@ -32,12 +39,21 @@ This document captures the **implemented and intended logic** of the game, mappe
 
 ### 1.2 Deck (`Deck`)
 
-- Holds a fixed list of `GameCard` instances (design target: **25 cards**).
+- Holds a fixed list of `GameCard` instances (design target: **25 cards**, min **15 cards**).
+- **Rarity scarcity limits enforced:**
+  - Common: unlimited copies
+  - Rare: max 3 copies of each card
+  - Epic: max 2 copies of each card
+  - Legendary: max 1 copy of each card
+- Factory constructors:
+  - `Deck.starter(playerId)` - creates default 25-card deck
+  - `Deck.fromCards(playerId, cards)` - creates deck from saved cards (pads to 25 if needed)
 - Provides:
   - `shuffle()` at match start.
   - `drawCards(count)` to draw a batch of cards.
   - `remainingCards` for UI.
 - No **mid-match reshuffle**: once deck is empty, no more draws.
+- **Firebase persistence:** decks saved to `users/{userId}/user_decks/{deckId}`.
 
 ---
 
@@ -471,12 +487,12 @@ This section is meant as a **bridge** between `GAME_TODO.md` and the current cod
     - Win streak bonuses.
     - 25% carryover to post-match shop.
 
-- **Hero system:**
-  - Heroes per deck, with single-use or limited-use abilities.
-  - Not yet integrated into `MatchManager` or `CombatResolver`.
-  - Likely entry points:
-    - Additional modifiers in damage calculation.
-    - Temporary buffs/debuffs on lanes or cards.
+- **Abilities not yet fully implemented in combat:**
+  - `cleave` - hits all enemies (not implemented)
+  - `thorns_X` - reflect damage (not implemented)
+  - `regen_X` - heal per tick (not implemented)
+  - `heal_ally_X` - heal allies (not implemented)
+  - `regenerate` - continuous heal (not implemented)
 
 - **Character families & ultimates:**
   - Planned: tracking variations per family, triggering “Ultimate” when 3 variations are played.

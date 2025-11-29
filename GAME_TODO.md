@@ -962,10 +962,13 @@
 - ⏸️ **Offline mode support** (deferred)
 
 ### **Phase 3: Content & Online Foundation** (Weeks 9-12)
-- Hero abilities
-- Character ultimates
-- Full card database (25+ cards)
-- Deck builder UI with cloud sync
+- ✅ Hero abilities (3 heroes implemented)
+- [ ] Character ultimates
+- ✅ Full card database (30+ cards with rarity system)
+- ✅ Deck builder UI with Firebase sync
+- ✅ Deck persistence to Firebase
+- ✅ Card rarity system (Common/Rare/Epic/Legendary)
+- ✅ Fog of war for enemy base cards
 - **Matchmaking system (ELO-based)**
 - **Real-time match synchronization**
 - **Basic online PvP (MVP)**
@@ -1022,36 +1025,89 @@
 
 ---
 
-## 🎯 16. Planned Card Abilities
+## 📦 16. Card Library Status
 
-### 16.1 Implemented Abilities
-- [x] `fury_2` - +2 damage for attacker
-- [x] `shield_2` - Reduce incoming damage by 2 (min 1)
-- [x] `stack_buff_damage_2` - +2 damage to stack partner
-- [x] `stack_debuff_enemy_damage_2` - -2 damage to enemy attacker
+### 16.1 Current Card Count: 30+ cards
 
-### 16.2 Non-Damage Support Card Abilities (Planned)
+**Common Cards (Rarity 1 - Unlimited):**
+| Card | Element | Dmg | HP | Tick | Abilities |
+|------|---------|-----|-----|------|-----------|
+| Desert Quick Strike | Desert | 4 | 4 | 1 | - |
+| Lake Quick Strike | Lake | 3 | 6 | 1 | - |
+| Woods Quick Strike | Woods | 3 | 5 | 1 | - |
+| Desert Warrior | Desert | 6 | 9 | 3 | - |
+| Lake Warrior | Lake | 5 | 11 | 3 | - |
+| Woods Warrior | Woods | 5 | 10 | 3 | - |
+| Desert Tank | Desert | 9 | 14 | 5 | - |
+| Lake Tank | Lake | 8 | 16 | 5 | - |
+| Woods Tank | Woods | 8 | 15 | 5 | - |
+
+**Rare Cards (Rarity 2 - Max 3 copies):**
+| Card | Element | Dmg | HP | Tick | Abilities |
+|------|---------|-----|-----|------|-----------|
+| Desert Elite Striker | Desert | 5 | 5 | 1 | - |
+| Lake Elite Striker | Lake | 4 | 7 | 1 | - |
+| Woods Elite Striker | Woods | 4 | 6 | 1 | - |
+| Desert Veteran | Desert | 8 | 11 | 3 | - |
+| Lake Veteran | Lake | 7 | 13 | 3 | - |
+| Woods Veteran | Woods | 7 | 12 | 3 | - |
+
+**Epic Cards (Rarity 3 - Max 2 copies):**
+| Card | Element | Dmg | HP | Tick | Abilities |
+|------|---------|-----|-----|------|-----------|
+| Lake Shield Totem | Lake | 0 | 1 | 3 | shield_2, stack_debuff_enemy_damage_2 |
+| Desert War Banner | Desert | 0 | 1 | 3 | fury_2, stack_buff_damage_2 |
+| Woods Healing Tree | Woods | 0 | 3 | 4 | heal_ally_2, regen_1 |
+| Desert Berserker | Desert | 12 | 10 | 4 | fury_1 |
+| Lake Guardian | Lake | 6 | 20 | 5 | shield_1 |
+| Woods Sentinel | Woods | 8 | 14 | 4 | regen_1 |
+
+**Legendary Cards (Rarity 4 - Max 1 copy):**
+| Card | Element | Dmg | HP | Tick | Abilities |
+|------|---------|-----|-----|------|-----------|
+| Sunfire Warlord | Desert | 15 | 18 | 5 | fury_2, cleave |
+| Tidal Leviathan | Lake | 10 | 28 | 6 | shield_3, regenerate |
+| Ancient Treant | Woods | 12 | 22 | 5 | regen_2, thorns_3 |
+
+---
+
+## 🎯 17. Planned Card Abilities
+
+### 17.1 Implemented Abilities
+- [x] `fury_X` - +X damage for attacker
+- [x] `shield_X` - Reduce incoming damage by X (min 1)
+- [x] `stack_buff_damage_X` - +X damage to stack partner
+- [x] `stack_debuff_enemy_damage_X` - -X damage to enemy attacker
+
+### 17.2 Defined but Not Combat-Implemented
+- [ ] `regen_X` - Heal X HP each tick
+- [ ] `thorns_X` - Reflect X damage back to attackers
+- [ ] `cleave` - Attacks hit all enemy cards in lane
+- [ ] `regenerate` - Slowly regenerates health over time
+- [ ] `heal_ally_X` - Heals friendly cards by X HP per tick
+
+### 17.3 Non-Damage Support Card Abilities (Planned)
 - [ ] Attune cards in same stack to a different element
 - [ ] Add HP to stacking card
 - [ ] Add damage to stacking card
 - [ ] Apply debuff to opponent cards
 
-### 16.3 Medium Complexity Abilities (Planned)
+### 17.4 Medium Complexity Abilities (Planned)
 - [ ] **Absorb Damage** - Card absorbs X damage before taking HP loss
 - [ ] **Crystal Strike** - Special ability to attack crystal directly (bypass cards)
 - [ ] **Zone Jump** - Ability to jump above 1 zone (skip advancement)
 
 ---
 
-## 📜 17. Big Additions (Future)
+## 📜 18. Big Additions (Future)
 
-### 17.1 Lore & Theme
+### 18.1 Lore & Theme
 - [ ] History-based lore system
   - [ ] Card flavor text
   - [ ] Character backstories
   - [ ] World-building elements
 
-### 17.2 Major Mechanics
+### 18.2 Major Mechanics (Planned)
 - [ ] **3 Ages System** - 3 decks that progress with number of turns
   - [ ] Age 1 deck (early game, turns 1-X)
   - [ ] Age 2 deck (mid game)

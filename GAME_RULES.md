@@ -27,11 +27,13 @@
 
 ## 2.1 Fog of War
 
-- **Enemy base terrains are hidden** at the start of the match.
+- **Enemy base terrains AND cards are hidden** at the start of the match.
 - You see "???" on enemy base tiles until revealed.
-- A lane's enemy base terrain is **revealed when you capture that lane's middle tile**.
-- Once revealed, the terrain **stays visible for the rest of the match**.
-- This adds strategic uncertainty about terrain bonuses the enemy might have.
+- A lane's enemy base is **revealed when you capture that lane's middle tile**.
+- Once revealed, both terrain AND cards **stay visible for the rest of the match**.
+- This adds strategic uncertainty:
+  - You don't know enemy terrain bonuses
+  - You don't know what cards they've deployed to their base
 
 ---
 
@@ -65,8 +67,43 @@
   - **Damage** (how hard they hit).
   - **Health** (how much damage they can take).
   - **Tick** (1–5) = when/how often they act during combat.
+  - **Rarity** (Common, Rare, Epic, Legendary) - determines deck limits.
   - Optional **Terrain tag** (Marsh, Woods, Lake, Desert, etc.).
-  - Optional **Abilities** (keywords like Fury, Shield, Stack buffs/debuffs, etc.).
+  - Optional **Abilities** (keywords like Fury, Shield, Regen, etc.).
+
+### 3.1 Card Rarity System
+
+| Rarity | Color | Max Copies in Deck | Description |
+|--------|-------|-------------------|-------------|
+| **Common** | Grey | Unlimited | Basic troops - Quick Strikes, Warriors, Tanks |
+| **Rare** | Blue | 3 copies | Elite versions with +25% stats |
+| **Epic** | Purple | 2 copies | Specialists with powerful abilities |
+| **Legendary** | Gold | 1 copy | Champions with unique powers |
+
+### 3.2 Card Types
+
+**Common Cards:**
+- Quick Strike (tick 1, fast attacker)
+- Warrior (tick 3, balanced)
+- Tank (tick 5, high damage/health)
+
+**Rare Cards:**
+- Elite Striker (better Quick Strike)
+- Veteran (better Warrior)
+
+**Epic Cards:**
+- Shield Totem (defensive support)
+- War Banner (offensive support)
+- Healing Tree (heal/regen support)
+- Berserker (glass cannon)
+- Guardian (super tank)
+- Sentinel (regen tank)
+
+**Legendary Cards:**
+- Sunfire Warlord (Desert champion - fury + cleave)
+- Tidal Leviathan (Lake champion - massive tank)
+- Ancient Treant (Woods champion - regen + thorns)
+
 - Hand rules:
   - You start with **6 cards**.
   - At the start of each new round you draw **2 cards**.
@@ -158,14 +195,21 @@ For each **tick** in each lane:
 - Terrain only matters via **zone attunement**:
   - When combat happens in a **base zone** (either your base or the enemy base), if your card’s terrain matches that base’s terrain, that attack gets a **small bonus** to its damage.
 
-### 7.3 Example Abilities
-(Exact numbers may vary; this is the intent.)
-- **Fury**: flat bonus damage on each attack.
-- **Shield**: reduces incoming damage.
-- **Stack Buff**: your card gains extra damage while stacked with a specific ally.
-- **Stack Debuff**: enemy attacks into this stack are slightly weaker.
+### 7.3 Abilities Reference
 
-The UI will show these abilities as **keywords** on the card.
+| Ability | Effect |
+|---------|--------|
+| **fury_X** | +X damage when attacking |
+| **shield_X** | Reduces incoming damage by X |
+| **regen_X** | Heals X HP each tick |
+| **thorns_X** | Reflects X damage back to attackers |
+| **cleave** | Attacks hit all enemy cards in the lane |
+| **regenerate** | Slowly regenerates health over time |
+| **heal_ally_X** | Heals friendly cards by X HP per tick |
+| **stack_buff_damage_X** | +X damage to all friendly cards in stack |
+| **stack_debuff_enemy_damage_X** | -X damage to all enemy cards in lane |
+
+The UI will show these abilities as **keywords** on the card with full descriptions in the deck editor.
 
 ---
 
