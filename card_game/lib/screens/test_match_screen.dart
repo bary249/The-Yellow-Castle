@@ -128,6 +128,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
 
       final matchData = matchDoc.data()!;
       _amPlayer1 = matchData['player1']?['userId'] == _playerId;
+      debugPrint('Online init: playerId=$_playerId, amPlayer1=$_amPlayer1');
 
       // Get opponent info
       final opponentData = _amPlayer1
@@ -189,8 +190,9 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       });
     }
 
-    // If both submitted and we are not already processing, resolve combat
-    if (newMySubmitted && newOppSubmitted && !_waitingForOpponent) {
+    // If both submitted, trigger combat resolution.
+    // Re-entry is guarded inside _loadOpponentCardsAndResolveCombat.
+    if (newMySubmitted && newOppSubmitted) {
       _loadOpponentCardsAndResolveCombat(data);
     }
   }
@@ -248,6 +250,16 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   void _placeCardOnTile(int row, int col) {
     final match = _matchManager.currentMatch;
     if (match == null || _selectedCard == null) return;
+
+    // In online mode, once you've submitted, you can't place more cards this turn
+    if (_isOnlineMode && _mySubmitted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You already submitted this turn. Wait for combat.'),
+        ),
+      );
+      return;
+    }
 
     final tile = match.getTile(row, col);
     final key = _tileKey(row, col);
@@ -316,6 +328,10 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   /// Remove a card from a tile's staging area.
   void _removeCardFromTile(int row, int col, GameCard card) {
     final key = _tileKey(row, col);
+    // In online mode, don't allow changing staging after submit
+    if (_isOnlineMode && _mySubmitted) {
+      return;
+    }
     _stagedCards[key]?.remove(card);
     setState(() {});
   }
@@ -372,9 +388,11 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         '$myKey.stagedCards': stagedCardsData,
       });
 
+      // Mark that we submitted locally.
+      // Do NOT touch _waitingForOpponent here – that flag is only for
+      // "currently resolving combat" inside _loadOpponentCardsAndResolveCombat.
       setState(() {
         _mySubmitted = true;
-        _waitingForOpponent = true;
       });
 
       debugPrint('Submitted turn to Firebase');
@@ -426,41 +444,55 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       final oppData = matchData[oppKey] as Map<String, dynamic>?;
       final oppStagedData = oppData?['stagedCards'] as Map<String, dynamic>?;
 
-      if (oppStagedData == null || oppStagedData.isEmpty) {
-        debugPrint('No opponent staged cards found');
-        setState(() {
-          _waitingForOpponent = false;
-        });
-        return;
+      debugPrint('DEBUG: oppKey=$oppKey');
+      debugPrint('DEBUG: oppData=$oppData');
+      debugPrint('DEBUG: oppStagedData=$oppStagedData');
+
+      // Convert opponent's cards from Firebase format (may be empty)
+      // IMPORTANT: Mirror the row coordinate! Opponent's row 2 (their base) = our row 0 (enemy base)
+      final opponentMoves = <String, List<GameCard>>{};
+      if (oppStagedData != null && oppStagedData.isNotEmpty) {
+        for (final entry in oppStagedData.entries) {
+          // Mirror the tile key: "2,0" -> "0,0", "2,1" -> "0,1", etc.
+          final parts = entry.key.split(',');
+          final row = int.parse(parts[0]);
+          final col = int.parse(parts[1]);
+          final mirroredRow = 2 - row; // 2->0, 1->1, 0->2
+          final mirroredKey = '$mirroredRow,$col';
+
+          final cardsList = entry.value as List<dynamic>;
+          opponentMoves[mirroredKey] = cardsList.map((cardData) {
+            final data = cardData as Map<String, dynamic>;
+            return GameCard(
+              id: data['id'] as String,
+              name: data['name'] as String,
+              damage: data['damage'] as int,
+              health: data['health'] as int,
+              tick: data['tick'] as int,
+              element: data['element'] as String?,
+              abilities: (data['abilities'] as List<dynamic>?)
+                  ?.map((e) => e as String)
+                  .toList(),
+              cost: data['cost'] as int? ?? 0,
+              rarity: data['rarity'] as int? ?? 1,
+            );
+          }).toList();
+        }
       }
 
-      // Convert opponent's cards from Firebase format
-      final opponentMoves = <String, List<GameCard>>{};
-      for (final entry in oppStagedData.entries) {
-        final cardsList = entry.value as List<dynamic>;
-        opponentMoves[entry.key] = cardsList.map((cardData) {
-          final data = cardData as Map<String, dynamic>;
-          return GameCard(
-            id: data['id'] as String,
-            name: data['name'] as String,
-            damage: data['damage'] as int,
-            health: data['health'] as int,
-            tick: data['tick'] as int,
-            element: data['element'] as String?,
-            abilities: (data['abilities'] as List<dynamic>?)
-                ?.map((e) => e as String)
-                .toList(),
-            cost: data['cost'] as int? ?? 0,
-            rarity: data['rarity'] as int? ?? 1,
-          );
-        }).toList();
-      }
+      debugPrint(
+        'DEBUG: opponentMoves keys (mirrored)=${opponentMoves.keys.toList()}',
+      );
+      debugPrint('DEBUG: my _stagedCards keys=${_stagedCards.keys.toList()}');
 
       // Submit player's staged cards
       await _matchManager.submitPlayerTileMoves(_stagedCards);
 
-      // Submit opponent's cards
-      await _matchManager.submitOpponentTileMoves(opponentMoves);
+      // Submit opponent's cards (skip hand check since cards come from Firebase)
+      await _matchManager.submitOpponentTileMoves(
+        opponentMoves,
+        skipHandCheck: true,
+      );
 
       // Reset submitted flags and staged cards for next turn
       await _firestore.collection('matches').doc(widget.onlineMatchId).update({

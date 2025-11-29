@@ -270,11 +270,13 @@ class MatchManager {
     }
   }
 
-  /// Opponent (AI) submits tile-based moves (supports middle tiles if captured)
+  /// Opponent (AI or online) submits tile-based moves (supports middle tiles if captured)
   /// placements is a Map<String, List<GameCard>> where key is "row,col"
+  /// skipHandCheck: set to true for online mode where cards come from Firebase (not in hand)
   Future<void> submitOpponentTileMoves(
-    Map<String, List<GameCard>> tilePlacements,
-  ) async {
+    Map<String, List<GameCard>> tilePlacements, {
+    bool skipHandCheck = false,
+  }) async {
     if (_currentMatch == null) return;
     if (_currentMatch!.opponentSubmitted) return;
 
@@ -288,7 +290,9 @@ class MatchManager {
       final lane = _currentMatch!.lanes[col];
 
       for (final card in cards) {
-        if (_currentMatch!.opponent.playCard(card)) {
+        // For online mode, skip the hand check since cards come from Firebase
+        final canPlay = skipHandCheck || _currentMatch!.opponent.playCard(card);
+        if (canPlay) {
           if (row == 0) {
             // Opponent's base tile - add to baseCards
             lane.opponentCards.baseCards.addCard(card, asTopCard: false);
