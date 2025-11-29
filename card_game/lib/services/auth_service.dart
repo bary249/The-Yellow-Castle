@@ -34,21 +34,49 @@ class AuthService {
   }
 
   /// Sign in with email and password
-  Future<User?> signInWithEmail(String email, String password) async {
+  /// Returns (User?, errorMessage)
+  Future<(User?, String?)> signInWithEmail(
+    String email,
+    String password,
+  ) async {
     try {
       final credential = await _auth.signInWithEmailAndPassword(
         email: email,
         password: password,
       );
-      return credential.user;
+      return (credential.user, null);
+    } on FirebaseAuthException catch (e) {
+      String message;
+      switch (e.code) {
+        case 'user-not-found':
+          message = 'No account found with this email.';
+          break;
+        case 'wrong-password':
+          message = 'Incorrect password.';
+          break;
+        case 'invalid-email':
+          message = 'Invalid email address.';
+          break;
+        case 'user-disabled':
+          message = 'This account has been disabled.';
+          break;
+        case 'invalid-credential':
+          message = 'Invalid email or password.';
+          break;
+        default:
+          message = 'Login failed: ${e.message}';
+      }
+      print('Error signing in with email: $e');
+      return (null, message);
     } catch (e) {
       print('Error signing in with email: $e');
-      return null;
+      return (null, 'An unexpected error occurred.');
     }
   }
 
   /// Create account with email and password
-  Future<User?> createAccountWithEmail(
+  /// Returns (User?, errorMessage)
+  Future<(User?, String?)> createAccountWithEmail(
     String email,
     String password,
     String displayName,
@@ -65,10 +93,30 @@ class AuthService {
         await _createUserProfile(user, displayName: displayName);
       }
 
-      return user;
+      return (user, null);
+    } on FirebaseAuthException catch (e) {
+      String message;
+      switch (e.code) {
+        case 'email-already-in-use':
+          message = 'An account already exists with this email.';
+          break;
+        case 'invalid-email':
+          message = 'Invalid email address.';
+          break;
+        case 'weak-password':
+          message = 'Password is too weak. Use at least 6 characters.';
+          break;
+        case 'operation-not-allowed':
+          message = 'Email/password accounts are not enabled.';
+          break;
+        default:
+          message = 'Sign up failed: ${e.message}';
+      }
+      print('Error creating account: $e');
+      return (null, message);
     } catch (e) {
       print('Error creating account: $e');
-      return null;
+      return (null, 'An unexpected error occurred.');
     }
   }
 

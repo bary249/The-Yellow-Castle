@@ -229,14 +229,50 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
             ),
           ),
 
-          // Settings button (placeholder)
-          IconButton(
-            icon: const Icon(Icons.settings, color: Colors.white70),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Settings coming soon!')),
-              );
+          // Account menu
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert, color: Colors.white70),
+            color: Colors.grey[900],
+            onSelected: (value) async {
+              if (value == 'logout') {
+                await _authService.signOut();
+                // Auth wrapper will automatically show login screen
+              }
             },
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: 'account',
+                enabled: false,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _authService.currentUser?.email ?? 'Guest Account',
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                      ),
+                    ),
+                    if (_authService.currentUser?.isAnonymous == true)
+                      const Text(
+                        '(Guest - Sign up to save progress)',
+                        style: TextStyle(color: Colors.amber, fontSize: 10),
+                      ),
+                  ],
+                ),
+              ),
+              const PopupMenuDivider(),
+              const PopupMenuItem(
+                value: 'logout',
+                child: Row(
+                  children: [
+                    Icon(Icons.logout, color: Colors.red, size: 20),
+                    SizedBox(width: 8),
+                    Text('Logout', style: TextStyle(color: Colors.red)),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),
