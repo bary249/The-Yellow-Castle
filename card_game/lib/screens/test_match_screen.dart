@@ -886,11 +886,21 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       }
     }
 
-    // Get cards to show: opponent first (top/closer to enemy), then player (bottom/closer to you)
+    // Build card display list with position labels
+    // Visual order (top to bottom on screen):
+    // - Opponent BACK (if exists) - furthest from player
+    // - Opponent FRONT - advancing toward player
+    // - Player FRONT - advancing toward enemy
+    // - Player BACK (if exists) - behind player front
+    // - Staged cards - new placements
+
+    // Reverse opponent cards so FRONT is closer to player (bottom of opponent section)
+    final opponentCardsReversed = opponentCardsAtTile.reversed.toList();
+
     List<GameCard> cardsToShow = [
-      ...opponentCardsAtTile, // Enemy cards at TOP (row 0 direction)
-      ...playerCardsAtTile, // Player survivors/cards
-      ...stagedCardsOnTile, // Player staged cards at BOTTOM (row 2 direction)
+      ...opponentCardsReversed, // Enemy BACK first (top), then FRONT (toward player)
+      ...playerCardsAtTile, // Player FRONT first, then BACK
+      ...stagedCardsOnTile, // Player staged cards at BOTTOM
     ];
 
     return GestureDetector(
@@ -968,6 +978,32 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                       final isOpponent = opponentCardsAtTile.contains(card);
                       final isPlayerCard = playerCardsAtTile.contains(card);
 
+                      // Determine position label (FRONT/BACK)
+                      String? positionLabel;
+                      bool isFrontCard = false;
+
+                      if (isOpponent && opponentCardsAtTile.isNotEmpty) {
+                        // For opponent: index 0 in original list is FRONT
+                        final originalIndex = opponentCardsAtTile.indexOf(card);
+                        isFrontCard = originalIndex == 0;
+                        if (opponentCardsAtTile.length > 1) {
+                          positionLabel = isFrontCard ? '▼ FRONT' : '▲ BACK';
+                        } else {
+                          positionLabel = '▼ FRONT';
+                        }
+                      } else if (isPlayerCard && playerCardsAtTile.isNotEmpty) {
+                        // For player: index 0 in list is FRONT
+                        final idx = playerCardsAtTile.indexOf(card);
+                        isFrontCard = idx == 0;
+                        if (playerCardsAtTile.length > 1) {
+                          positionLabel = isFrontCard ? '▲ FRONT' : '▼ BACK';
+                        } else {
+                          positionLabel = '▲ FRONT';
+                        }
+                      } else if (isStaged) {
+                        positionLabel = '📦 STAGED';
+                      }
+
                       // Check if this is the opponent's back card and it's concealed
                       final isOpponentBackCard =
                           isOpponent &&
@@ -978,16 +1014,21 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
 
                       // Determine card color
                       Color cardColor;
+                      Color labelColor;
                       if (isStaged) {
                         cardColor = Colors.amber[100]!;
+                        labelColor = Colors.orange[800]!;
                       } else if (isOpponent) {
                         cardColor = isConcealed
                             ? Colors.grey[400]!
                             : Colors.red[200]!;
+                        labelColor = Colors.red[800]!;
                       } else if (isPlayerCard) {
                         cardColor = Colors.blue[200]!;
+                        labelColor = Colors.blue[800]!;
                       } else {
                         cardColor = Colors.grey[200]!;
+                        labelColor = Colors.grey[600]!;
                       }
 
                       return Container(
@@ -998,42 +1039,75 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                           borderRadius: BorderRadius.circular(4),
                           border: isStaged
                               ? Border.all(color: Colors.amber, width: 2)
-                              : (isPlayerCard
-                                    ? Border.all(color: Colors.blue, width: 1)
+                              : (isFrontCard
+                                    ? Border.all(
+                                        color: isOpponent
+                                            ? Colors.red
+                                            : Colors.blue,
+                                        width: 2,
+                                      )
                                     : (isConcealed
                                           ? Border.all(
                                               color: Colors.grey[600]!,
                                               width: 1,
                                             )
-                                          : null)),
+                                          : Border.all(
+                                              color: isOpponent
+                                                  ? Colors.red[300]!
+                                                  : Colors.blue[300]!,
+                                              width: 1,
+                                            ))),
                         ),
                         child: isConcealed
                             // Show hidden card placeholder
                             ? Column(
                                 crossAxisAlignment: CrossAxisAlignment.center,
                                 children: [
+                                  Text(
+                                    positionLabel ?? '',
+                                    style: TextStyle(
+                                      fontSize: 7,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.grey[600],
+                                    ),
+                                  ),
                                   const Text(
-                                    '🔮 Hidden Card',
+                                    '🔮 Hidden',
                                     style: TextStyle(
                                       fontSize: 9,
                                       fontWeight: FontWeight.bold,
                                       color: Colors.white,
                                     ),
                                   ),
-                                  Text(
-                                    '(concealed)',
-                                    style: TextStyle(
-                                      fontSize: 7,
-                                      color: Colors.grey[300],
-                                      fontStyle: FontStyle.italic,
-                                    ),
-                                  ),
                                 ],
                               )
-                            // Show normal card info
+                            // Show normal card info with position label
                             : Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
+                                  // Position label row
+                                  if (positionLabel != null)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 3,
+                                        vertical: 1,
+                                      ),
+                                      margin: const EdgeInsets.only(bottom: 2),
+                                      decoration: BoxDecoration(
+                                        color: labelColor.withValues(
+                                          alpha: 0.2,
+                                        ),
+                                        borderRadius: BorderRadius.circular(3),
+                                      ),
+                                      child: Text(
+                                        positionLabel,
+                                        style: TextStyle(
+                                          fontSize: 7,
+                                          fontWeight: FontWeight.bold,
+                                          color: labelColor,
+                                        ),
+                                      ),
+                                    ),
                                   Text(
                                     card.name,
                                     style: const TextStyle(
