@@ -41,6 +41,9 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
 
   GameCard? _selectedCard;
 
+  // UI state: battle log drawer visibility
+  bool _showBattleLog = false;
+
   /// Get the staging key for a tile.
   String _tileKey(int row, int col) => '$row,$col';
 
@@ -237,17 +240,12 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     return Focus(
       autofocus: true,
       onKeyEvent: (node, event) {
-        if (event is KeyDownEvent && _matchManager.waitingForNextTick) {
-          // SPACE: Advance one tick at a time
-          if (event.logicalKey == LogicalKeyboardKey.space) {
-            _matchManager.advanceToNextTick();
-            return KeyEventResult.handled;
-          }
-          // ENTER: Skip all remaining ticks instantly
-          if (event.logicalKey == LogicalKeyboardKey.enter) {
-            _matchManager.skipToEnd();
-            return KeyEventResult.handled;
-          }
+        // ENTER: Skip all remaining ticks instantly (combat auto-advances otherwise)
+        if (event is KeyDownEvent &&
+            match.currentPhase == MatchPhase.combatPhase &&
+            event.logicalKey == LogicalKeyboardKey.enter) {
+          _matchManager.skipToEnd();
+          return KeyEventResult.handled;
         }
         return KeyEventResult.ignored;
       },
@@ -272,26 +270,14 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
           ],
         ),
         body: match.isGameOver ? _buildGameOver(match) : _buildMatchView(match),
-        floatingActionButton: _matchManager.waitingForNextTick
-            ? Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  FloatingActionButton.extended(
-                    onPressed: () => _matchManager.skipToEnd(),
-                    label: const Text('Skip All (ENTER)'),
-                    icon: const Icon(Icons.fast_forward),
-                    backgroundColor: Colors.red,
-                    heroTag: 'skip',
-                  ),
-                  const SizedBox(height: 8),
-                  FloatingActionButton.extended(
-                    onPressed: () => _matchManager.advanceToNextTick(),
-                    label: const Text('Next Tick (SPACE)'),
-                    icon: const Icon(Icons.skip_next),
-                    backgroundColor: Colors.orange,
-                    heroTag: 'next',
-                  ),
-                ],
+        floatingActionButton: match.currentPhase == MatchPhase.combatPhase
+            // During combat: show skip button (combat auto-advances, but ENTER skips all)
+            ? FloatingActionButton.extended(
+                onPressed: () => _matchManager.skipToEnd(),
+                label: const Text('Skip Combat (ENTER)'),
+                icon: const Icon(Icons.fast_forward),
+                backgroundColor: Colors.red[700],
+                heroTag: 'skip',
               )
             : (match.isGameOver || match.playerSubmitted
                   ? null
@@ -333,124 +319,296 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   }
 
   Widget _buildMatchView(MatchState match) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+    return Stack(
       children: [
-        // Account header (Firebase player info)
-        _buildAccountHeader(),
-        const SizedBox(height: 8),
+        // Main content
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Account header (Firebase player info)
+            _buildAccountHeader(),
+            const SizedBox(height: 8),
 
-        Expanded(
-          child: Row(
-            children: [
-              // Main game area
-              Expanded(
-                flex: 2,
-                child: Column(
-                  children: [
-                    // Opponent info
-                    _buildPlayerInfo(match.opponent, isOpponent: true),
+            Expanded(
+              child: Column(
+                children: [
+                  // Opponent info
+                  _buildPlayerInfo(match.opponent, isOpponent: true),
 
-                    const SizedBox(height: 8),
+                  const SizedBox(height: 4),
 
-                    // Combat phase indicator
-                    if (match.currentPhase == MatchPhase.combatPhase)
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [Colors.red[700]!, Colors.orange[600]!],
-                          ),
-                        ),
-                        child: Column(
-                          children: [
-                            const Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.flash_on,
-                                  color: Colors.white,
-                                  size: 24,
-                                ),
-                                SizedBox(width: 8),
-                                Text(
-                                  '⚔️ COMBAT IN PROGRESS ⚔️',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 2,
-                                  ),
-                                ),
-                                SizedBox(width: 8),
-                                Icon(
-                                  Icons.flash_on,
-                                  color: Colors.white,
-                                  size: 24,
-                                ),
-                              ],
-                            ),
-                            if (_matchManager.currentTickInfo != null) ...[
-                              const SizedBox(height: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 6,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.black26,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Text(
-                                  _matchManager.currentTickInfo!,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                  textAlign: TextAlign.center,
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
+                  // Combat phase indicator with enhanced details
+                  if (match.currentPhase == MatchPhase.combatPhase)
+                    _buildCombatBanner(),
+
+                  // Lane tick clocks (show during combat)
+                  if (match.currentPhase == MatchPhase.combatPhase)
+                    _buildLaneTickClocks(),
+
+                  // Instructions
+                  if (_selectedCard != null)
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      color: Colors.amber[100],
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.touch_app, size: 16),
+                          const SizedBox(width: 8),
+                          Text('Click a lane to place ${_selectedCard!.name}'),
+                        ],
                       ),
+                    ),
 
-                    // Instructions
-                    if (_selectedCard != null)
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        color: Colors.amber[100],
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.touch_app, size: 16),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Click a lane to place ${_selectedCard!.name}',
-                            ),
-                          ],
-                        ),
-                      ),
+                  // 3×3 Board Grid
+                  Expanded(child: _buildBoard(match)),
 
-                    // 3×3 Board Grid
-                    Expanded(child: _buildBoard(match)),
+                  // Player info
+                  _buildPlayerInfo(match.player, isOpponent: false),
 
-                    // Player info
-                    _buildPlayerInfo(match.player, isOpponent: false),
+                  // Hand
+                  _buildHand(match.player),
+                ],
+              ),
+            ),
+          ],
+        ),
 
-                    // Hand
-                    _buildHand(match.player),
-                  ],
+        // Battle log toggle button
+        Positioned(
+          right: 0,
+          top: 100,
+          child: GestureDetector(
+            onTap: () => setState(() => _showBattleLog = !_showBattleLog),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
+              decoration: BoxDecoration(
+                color: Colors.grey[800],
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(8),
+                  bottomLeft: Radius.circular(8),
                 ),
               ),
-
-              // Battle Log sidebar
-              _buildBattleLog(),
-            ],
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    _showBattleLog ? Icons.chevron_right : Icons.chevron_left,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                  const RotatedBox(
+                    quarterTurns: 3,
+                    child: Text(
+                      'Battle Log',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
+
+        // Sliding battle log drawer
+        AnimatedPositioned(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+          right: _showBattleLog ? 0 : -250,
+          top: 0,
+          bottom: 0,
+          child: _buildBattleLogDrawer(),
+        ),
+      ],
+    );
+  }
+
+  /// Build the combat banner with detailed tick info
+  Widget _buildCombatBanner() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Colors.red[700]!, Colors.orange[600]!],
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Combat header
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.flash_on, color: Colors.white, size: 20),
+              const SizedBox(width: 6),
+              Text(
+                _matchManager.currentCombatLane != null
+                    ? '⚔️ ${_matchManager.currentCombatLane!.name.toUpperCase()} LANE ⚔️'
+                    : '⚔️ COMBAT IN PROGRESS ⚔️',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1,
+                ),
+              ),
+              const SizedBox(width: 6),
+              const Icon(Icons.flash_on, color: Colors.white, size: 20),
+            ],
+          ),
+
+          // Tick info
+          if (_matchManager.currentTickInfo != null) ...[
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.black38,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                _matchManager.currentTickInfo!,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ],
+
+          // Detailed combat results
+          if (_matchManager.currentTickDetails.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 8,
+              runSpacing: 4,
+              children: _matchManager.currentTickDetails.map((detail) {
+                final isDestroyed = detail.contains('DESTROYED');
+                return Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isDestroyed ? Colors.red[900] : Colors.black26,
+                    borderRadius: BorderRadius.circular(6),
+                    border: isDestroyed
+                        ? Border.all(color: Colors.red[300]!, width: 1)
+                        : null,
+                  ),
+                  child: Text(
+                    detail,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: isDestroyed
+                          ? FontWeight.bold
+                          : FontWeight.normal,
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// Build the lane tick clocks showing 1-5 ticks per lane
+  Widget _buildLaneTickClocks() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
+      color: Colors.grey[850],
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          _buildSingleLaneTickClock('WEST', LanePosition.west),
+          _buildSingleLaneTickClock('CENTER', LanePosition.center),
+          _buildSingleLaneTickClock('EAST', LanePosition.east),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSingleLaneTickClock(String label, LanePosition lane) {
+    final currentTick = _matchManager.laneTickProgress[lane] ?? 0;
+    final isActive = _matchManager.currentCombatLane == lane;
+    final isComplete = currentTick >= 6;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            color: isActive ? Colors.orange : Colors.grey[400],
+            fontSize: 10,
+            fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: List.generate(5, (index) {
+            final tickNum = index + 1;
+            final isPast = tickNum < currentTick;
+            final isCurrent = tickNum == currentTick;
+
+            Color tickColor;
+            if (isComplete) {
+              tickColor = Colors.green;
+            } else if (isCurrent && isActive) {
+              tickColor = Colors.orange;
+            } else if (isPast) {
+              tickColor = Colors.green[700]!;
+            } else {
+              tickColor = Colors.grey[600]!;
+            }
+
+            return AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              margin: const EdgeInsets.symmetric(horizontal: 2),
+              width: isCurrent && isActive ? 20 : 14,
+              height: isCurrent && isActive ? 20 : 14,
+              decoration: BoxDecoration(
+                color: tickColor,
+                shape: BoxShape.circle,
+                border: isCurrent && isActive
+                    ? Border.all(color: Colors.white, width: 2)
+                    : null,
+                boxShadow: isCurrent && isActive
+                    ? [
+                        BoxShadow(
+                          color: Colors.orange.withAlpha(153),
+                          blurRadius: 6,
+                        ),
+                      ]
+                    : null,
+              ),
+              child: Center(
+                child: Text(
+                  '$tickNum',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: isCurrent && isActive ? 10 : 8,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            );
+          }),
+        ),
+        if (isComplete)
+          const Text('✓', style: TextStyle(color: Colors.green, fontSize: 12)),
       ],
     );
   }
@@ -926,187 +1084,171 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     }
   }
 
-  Widget _buildBattleLog() {
+  Widget _buildBattleLogDrawer() {
     final log = _matchManager.getCombatLog();
 
     return Container(
-      width: 200,
-      color: Colors.grey[100],
+      width: 250,
+      decoration: BoxDecoration(
+        color: Colors.grey[900],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.5),
+            blurRadius: 10,
+            offset: const Offset(-3, 0),
+          ),
+        ],
+      ),
       child: Column(
         children: [
+          // Header with close button
           Container(
-            padding: const EdgeInsets.all(8),
-            color: Colors.grey[300],
-            width: double.infinity,
-            child: const Text(
-              '📜 Battle Log',
-              style: TextStyle(fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            color: Colors.grey[800],
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  '📜 Battle Log',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    fontSize: 14,
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () => setState(() => _showBattleLog = false),
+                  child: const Icon(
+                    Icons.close,
+                    color: Colors.white70,
+                    size: 20,
+                  ),
+                ),
+              ],
             ),
           ),
+
+          // Log entries
           Expanded(
             child: log.isEmpty
-                ? const Center(child: Text('No combat yet'))
+                ? Center(
+                    child: Text(
+                      'No combat yet',
+                      style: TextStyle(color: Colors.grey[500]),
+                    ),
+                  )
                 : ListView.builder(
                     itemCount: log.length,
+                    reverse: false,
                     itemBuilder: (context, index) {
                       final entry = log[index];
+                      final hasDetails = entry.damageDealt != null;
+
                       return Container(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
+                          horizontal: 10,
+                          vertical: 6,
                         ),
                         decoration: BoxDecoration(
                           border: Border(
-                            bottom: BorderSide(color: Colors.grey[300]!),
+                            bottom: BorderSide(
+                              color: Colors.grey[800]!,
+                              width: 0.5,
+                            ),
                           ),
                           color: entry.isImportant
-                              ? Colors.amber[50]
-                              : Colors.white,
+                              ? Colors.red[900]!.withValues(alpha: 0.3)
+                              : Colors.transparent,
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              '[${entry.laneDescription}] T${entry.tick}',
-                              style: TextStyle(
-                                fontSize: 9,
-                                color: Colors.grey[600],
-                              ),
+                            // Header row: lane + tick
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 4,
+                                    vertical: 1,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey[700],
+                                    borderRadius: BorderRadius.circular(3),
+                                  ),
+                                  child: Text(
+                                    entry.laneDescription,
+                                    style: const TextStyle(
+                                      fontSize: 8,
+                                      color: Colors.white70,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'T${entry.tick}',
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    color: Colors.orange[300],
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
                             ),
+                            const SizedBox(height: 2),
+
+                            // Action (shortened version)
                             Text(
                               entry.action,
-                              style: const TextStyle(
-                                fontSize: 10,
+                              style: TextStyle(
+                                fontSize: 11,
                                 fontWeight: FontWeight.bold,
+                                color: entry.isImportant
+                                    ? Colors.red[300]
+                                    : Colors.white,
                               ),
                             ),
-                            if (entry.details.isNotEmpty)
+
+                            // Combat details if available
+                            if (hasDetails) ...[
+                              const SizedBox(height: 2),
+                              Row(
+                                children: [
+                                  Text(
+                                    '${entry.damageDealt} dmg',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: Colors.orange[200],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    '${entry.targetHpBefore} → ${entry.targetHpAfter} HP',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: entry.targetDied == true
+                                          ? Colors.red[300]
+                                          : Colors.green[300],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ] else if (entry.details.isNotEmpty) ...[
                               Text(
                                 entry.details,
-                                style: const TextStyle(fontSize: 9),
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  color: Colors.grey[400],
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
                               ),
+                            ],
                           ],
                         ),
                       );
                     },
                   ),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCardStack(stack, Color color) {
-    if (stack.isEmpty) {
-      return const SizedBox(height: 80);
-    }
-
-    final hasMultiple = stack.topCard != null && stack.bottomCard != null;
-
-    return Column(
-      children: [
-        if (stack.topCard != null)
-          _buildCardWidgetWithPosition(
-            stack.topCard!,
-            color,
-            position: hasMultiple ? '🔼 FRONT' : 'FRONT',
-          ),
-        if (stack.bottomCard != null)
-          _buildCardWidgetWithPosition(
-            stack.bottomCard!,
-            color,
-            position: hasMultiple ? '🔽 BACK' : 'BACK',
-          ),
-      ],
-    );
-  }
-
-  Widget _buildCardWidgetWithPosition(
-    GameCard card,
-    Color color, {
-    String? position,
-    bool isAttacking = false,
-  }) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (position != null)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            decoration: BoxDecoration(
-              color: Colors.black87,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              position,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 8,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        _buildCardWidget(card, color, isAttacking: isAttacking),
-      ],
-    );
-  }
-
-  Widget _buildCardWidget(
-    GameCard card,
-    Color color, {
-    bool isAttacking = false,
-  }) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      margin: const EdgeInsets.all(2),
-      padding: const EdgeInsets.all(3),
-      decoration: BoxDecoration(
-        color: card.isAlive ? color : Colors.grey,
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(
-          color: isAttacking ? Colors.orange : Colors.black26,
-          width: isAttacking ? 3 : 1,
-        ),
-        boxShadow: isAttacking
-            ? [
-                BoxShadow(
-                  color: Colors.orange.withValues(alpha: 0.6),
-                  blurRadius: 8,
-                  spreadRadius: 2,
-                ),
-              ]
-            : null,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            card.name,
-            style: const TextStyle(fontSize: 8, fontWeight: FontWeight.bold),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          Text(
-            'HP:${card.currentHealth}/${card.health}',
-            style: const TextStyle(fontSize: 7),
-          ),
-          Text(
-            'DMG:${card.damage} T:${card.tick}',
-            style: const TextStyle(fontSize: 7),
-          ),
-          if (card.element != null)
-            Text(
-              'Terrain:${card.element}',
-              style: const TextStyle(fontSize: 7),
-            ),
-          if (card.abilities.isNotEmpty)
-            Text(
-              card.abilities.join(', '),
-              style: const TextStyle(fontSize: 6),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
         ],
       ),
     );

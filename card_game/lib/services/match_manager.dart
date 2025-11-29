@@ -316,6 +316,17 @@ class MatchManager {
   LanePosition? currentCombatLane;
   int? currentCombatTick;
 
+  /// Per-lane tick tracking for UI tick clocks
+  /// Maps lane position to current tick (1-5, or 0 if not in combat, 6 if complete)
+  Map<LanePosition, int> laneTickProgress = {
+    LanePosition.west: 0,
+    LanePosition.center: 0,
+    LanePosition.east: 0,
+  };
+
+  /// Detailed combat info for current tick (for enhanced UI display)
+  List<String> currentTickDetails = [];
+
   /// Optional log sink used by simulations to capture full battle logs.
   /// When set, all combat-related print output is also written here.
   StringBuffer? logSink;
@@ -323,9 +334,12 @@ class MatchManager {
   /// Manual tick progression control
   bool waitingForNextTick = false;
   bool skipAllTicks = false;
-  bool autoProgress = false; // Auto-progress with delays (for online mode)
+  bool autoProgress = true; // Auto-progress with delays (enabled by default)
   bool fastMode = false; // When true, skip delays (for simulations)
   Function()? onWaitingForTick;
+
+  /// Auto-progress tick delay in milliseconds
+  int autoProgressDelayMs = 1200;
 
   /// Advance to next tick (called by user action)
   void advanceToNextTick() {
@@ -348,6 +362,14 @@ class MatchManager {
 
     // Reset skip flag for new combat
     skipAllTicks = false;
+
+    // Reset lane tick progress
+    laneTickProgress = {
+      LanePosition.west: 0,
+      LanePosition.center: 0,
+      LanePosition.east: 0,
+    };
+    currentTickDetails = [];
 
     // Clear previous combat log
     _combatResolver.clearLog();
@@ -429,6 +451,7 @@ class MatchManager {
     currentCombatLane = lane.position;
     currentTickInfo =
         '⚔️ ${lane.position.name.toUpperCase()} - Combat Starting...';
+    laneTickProgress[lane.position] = 0; // Mark lane as starting
 
     // Provide lane/attunement context to the combat resolver so it can
     // apply base-zone buffs for matching elements and hero damage boosts.
@@ -456,6 +479,7 @@ class MatchManager {
       if (playerCard == null && opponentCard == null) break;
 
       currentCombatTick = tick;
+      laneTickProgress[lane.position] = tick; // Update lane tick clock
       currentTickInfo = 'Tick $tick: Processing...';
 
       // Count log entries before this tick
@@ -468,6 +492,13 @@ class MatchManager {
       final newEntries = _combatResolver.logEntries
           .skip(logCountBefore)
           .toList();
+
+      // Build detailed tick info with combat summaries
+      currentTickDetails = newEntries
+          .where((e) => e.tick == tick && e.damageDealt != null)
+          .map((e) => e.combatSummary)
+          .toList();
+
       final tickActions = newEntries
           .where((e) => e.tick == tick && e.action.contains('→'))
           .map((e) => e.action)
@@ -477,14 +508,14 @@ class MatchManager {
           ? 'Tick $tick: $tickActions'
           : 'Tick $tick: No actions';
 
-      // Wait for user to advance tick (unless skipping all or auto-progressing)
-      if (autoProgress) {
-        // Auto-progress: show tick, then continue (optionally with delay)
+      // Auto-progress with configurable delay (default behavior)
+      if (autoProgress && !skipAllTicks) {
         onCombatUpdate?.call();
         if (!fastMode) {
-          await Future.delayed(const Duration(seconds: 2));
+          await Future.delayed(Duration(milliseconds: autoProgressDelayMs));
         }
       } else if (!skipAllTicks) {
+        // Manual progression (waiting for user input)
         waitingForNextTick = true;
         onCombatUpdate?.call();
 
@@ -499,24 +530,31 @@ class MatchManager {
       lane.opponentStack.cleanup();
 
       // Update UI after cleanup
-      if (autoProgress || !skipAllTicks) {
+      if (!skipAllTicks) {
         onCombatUpdate?.call();
       }
 
       // Check if combat is over
       if (lane.playerStack.isEmpty || lane.opponentStack.isEmpty) {
         currentTickInfo = '🏁 Combat Complete!';
+        laneTickProgress[lane.position] = 6; // Mark as complete
         break;
       }
     }
 
+    // Mark lane as complete if we finished all 5 ticks
+    if (laneTickProgress[lane.position] != 6) {
+      laneTickProgress[lane.position] = 6;
+    }
+
     // Final delay after lane completes (skip in fast/sim mode)
-    if (!fastMode) {
-      await Future.delayed(const Duration(milliseconds: 500));
+    if (!fastMode && !skipAllTicks) {
+      await Future.delayed(const Duration(milliseconds: 400));
     }
     currentTickInfo = null;
     currentCombatLane = null;
     currentCombatTick = null;
+    currentTickDetails = [];
     onCombatUpdate?.call();
   }
 

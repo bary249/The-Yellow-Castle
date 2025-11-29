@@ -9,16 +9,40 @@ class BattleLogEntry {
   final String details;
   final bool isImportant;
 
+  // Combat details for enhanced UI display
+  final int? damageDealt;
+  final String? attackerName;
+  final String? targetName;
+  final int? targetHpBefore;
+  final int? targetHpAfter;
+  final bool? targetDied;
+
   BattleLogEntry({
     required this.tick,
     required this.laneDescription,
     required this.action,
     required this.details,
     this.isImportant = false,
+    this.damageDealt,
+    this.attackerName,
+    this.targetName,
+    this.targetHpBefore,
+    this.targetHpAfter,
+    this.targetDied,
   });
 
   String get formattedMessage {
     return '[$laneDescription] Tick $tick: $action - $details';
+  }
+
+  /// Get a detailed combat summary for UI display
+  String get combatSummary {
+    if (damageDealt != null && attackerName != null && targetName != null) {
+      final hpInfo = targetHpAfter != null ? ' (${targetHpAfter} HP left)' : '';
+      final deathInfo = targetDied == true ? ' ☠️ DESTROYED!' : '';
+      return '$attackerName → $targetName: $damageDealt dmg$hpInfo$deathInfo';
+    }
+    return action;
   }
 }
 
@@ -317,7 +341,7 @@ class CombatResolver {
     final targetDied = target.takeDamage(damage);
     final hpAfter = target.currentHealth;
 
-    // Log the attack
+    // Log the attack with detailed combat info
     final result = targetDied ? '💀 DESTROYED' : '✓ Hit';
     combatLog.add(
       BattleLogEntry(
@@ -327,6 +351,13 @@ class CombatResolver {
         details:
             '$damage damage dealt | HP: $hpBefore → $hpAfter | $result$note',
         isImportant: targetDied,
+        // Enhanced combat details for UI
+        damageDealt: damage,
+        attackerName: attacker.name,
+        targetName: target.name,
+        targetHpBefore: hpBefore,
+        targetHpAfter: hpAfter,
+        targetDied: targetDied,
       ),
     );
 
