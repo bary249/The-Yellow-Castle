@@ -338,8 +338,9 @@ class MatchManager {
   bool fastMode = false; // When true, skip delays (for simulations)
   Function()? onWaitingForTick;
 
-  /// Auto-progress tick delay in milliseconds
-  int autoProgressDelayMs = 1200;
+  /// Auto-progress tick delays in milliseconds
+  int tickDelayWithCombat = 2500; // Longer delay when cards fight (2.5s)
+  int tickDelayNoCombat = 800; // Shorter when no action (0.8s)
 
   /// Advance to next tick (called by user action)
   void advanceToNextTick() {
@@ -508,11 +509,15 @@ class MatchManager {
           ? 'Tick $tick: $tickActions'
           : 'Tick $tick: No actions';
 
-      // Auto-progress with configurable delay (default behavior)
+      // Determine if there was combat action this tick
+      final hadCombat = currentTickDetails.isNotEmpty || tickActions.isNotEmpty;
+      final tickDelay = hadCombat ? tickDelayWithCombat : tickDelayNoCombat;
+
+      // Auto-progress with variable delay based on combat activity
       if (autoProgress && !skipAllTicks) {
         onCombatUpdate?.call();
         if (!fastMode) {
-          await Future.delayed(Duration(milliseconds: autoProgressDelayMs));
+          await Future.delayed(Duration(milliseconds: tickDelay));
         }
       } else if (!skipAllTicks) {
         // Manual progression (waiting for user input)
