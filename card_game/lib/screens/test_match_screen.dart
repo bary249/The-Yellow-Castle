@@ -718,6 +718,16 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       bgColor = Colors.grey[100]!;
     }
 
+    // Check if opponent's front card has conceal_back ability
+    // If so, we'll hide the back card's identity from the player
+    bool opponentBackCardConcealed = false;
+    if (opponentCardsAtTile.length >= 2) {
+      final frontCard = opponentCardsAtTile[0]; // First card is front (topCard)
+      if (frontCard.abilities.contains('conceal_back')) {
+        opponentBackCardConcealed = true;
+      }
+    }
+
     // Get cards to show: opponent first (top/closer to enemy), then player (bottom/closer to you)
     List<GameCard> cardsToShow = [
       ...opponentCardsAtTile, // Enemy cards at TOP (row 0 direction)
@@ -800,12 +810,22 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                       final isOpponent = opponentCardsAtTile.contains(card);
                       final isPlayerCard = playerCardsAtTile.contains(card);
 
+                      // Check if this is the opponent's back card and it's concealed
+                      final isOpponentBackCard =
+                          isOpponent &&
+                          opponentCardsAtTile.length >= 2 &&
+                          opponentCardsAtTile.indexOf(card) == 1;
+                      final isConcealed =
+                          isOpponentBackCard && opponentBackCardConcealed;
+
                       // Determine card color
                       Color cardColor;
                       if (isStaged) {
                         cardColor = Colors.amber[100]!;
                       } else if (isOpponent) {
-                        cardColor = Colors.red[200]!;
+                        cardColor = isConcealed
+                            ? Colors.grey[400]!
+                            : Colors.red[200]!;
                       } else if (isPlayerCard) {
                         cardColor = Colors.blue[200]!;
                       } else {
@@ -822,35 +842,64 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                               ? Border.all(color: Colors.amber, width: 2)
                               : (isPlayerCard
                                     ? Border.all(color: Colors.blue, width: 1)
-                                    : null),
+                                    : (isConcealed
+                                          ? Border.all(
+                                              color: Colors.grey[600]!,
+                                              width: 1,
+                                            )
+                                          : null)),
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              card.name,
-                              style: const TextStyle(
-                                fontSize: 9,
-                                fontWeight: FontWeight.bold,
+                        child: isConcealed
+                            // Show hidden card placeholder
+                            ? Column(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  const Text(
+                                    '🔮 Hidden Card',
+                                    style: TextStyle(
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                  Text(
+                                    '(concealed)',
+                                    style: TextStyle(
+                                      fontSize: 7,
+                                      color: Colors.grey[300],
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                  ),
+                                ],
+                              )
+                            // Show normal card info
+                            : Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    card.name,
+                                    style: const TextStyle(
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        '⚔${card.damage}',
+                                        style: const TextStyle(fontSize: 8),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        '❤${card.currentHealth}/${card.health}',
+                                        style: const TextStyle(fontSize: 8),
+                                      ),
+                                    ],
+                                  ),
+                                ],
                               ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  '⚔${card.damage}',
-                                  style: const TextStyle(fontSize: 8),
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  '❤${card.currentHealth}/${card.health}',
-                                  style: const TextStyle(fontSize: 8),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
                       );
                     }).toList(),
                   ),

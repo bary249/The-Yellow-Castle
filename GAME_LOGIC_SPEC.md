@@ -30,6 +30,7 @@ This document captures the **implemented and intended logic** of the game, mappe
   - Offensive: `fury_X`, `cleave`, `thorns_X`
   - Defensive: `shield_X`, `regen_X`, `regenerate`
   - Support: `heal_ally_X`, `stack_buff_damage_X`, `stack_debuff_enemy_damage_X`
+  - Tactical: `conceal_back` (when front + has back card, hides back card identity from enemy)
 - `isAlive` (derived from `currentHealth > 0`).
 
 **Important behavior:**

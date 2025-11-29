@@ -281,6 +281,48 @@ GameCard woodsSentinel(int index) => GameCard(
   rarity: 3, // Epic
 );
 
+/// Tactical support - Desert Shadow Scout
+/// When in front with a back card, hides the back card's identity from enemy
+GameCard desertShadowScout(int index) => GameCard(
+  id: 'desert_shadow_$index',
+  name: 'Desert Shadow Scout',
+  damage: 5,
+  health: 6,
+  tick: 2,
+  element: 'Desert',
+  abilities: const ['conceal_back'], // Hides back card from enemy view
+  cost: 3,
+  rarity: 3, // Epic
+);
+
+/// Tactical support - Lake Mist Weaver
+/// When in front with a back card, hides the back card's identity from enemy
+GameCard lakeMistWeaver(int index) => GameCard(
+  id: 'lake_mist_$index',
+  name: 'Lake Mist Weaver',
+  damage: 4,
+  health: 8,
+  tick: 2,
+  element: 'Lake',
+  abilities: const ['conceal_back', 'shield_1'], // Conceals and has light armor
+  cost: 3,
+  rarity: 3, // Epic
+);
+
+/// Tactical support - Woods Shroud Walker
+/// When in front with a back card, hides the back card's identity from enemy
+GameCard woodsShroudWalker(int index) => GameCard(
+  id: 'woods_shroud_$index',
+  name: 'Woods Shroud Walker',
+  damage: 4,
+  health: 7,
+  tick: 2,
+  element: 'Woods',
+  abilities: const ['conceal_back', 'regen_1'], // Conceals and regenerates
+  cost: 3,
+  rarity: 3, // Epic
+);
+
 // ============================================================================
 // LEGENDARY CARDS (Rarity 4) - Max 1 copy each - Champions
 // ============================================================================
@@ -445,6 +487,10 @@ List<GameCard> buildFullCardPool() {
     cards.add(desertBerserker(i));
     cards.add(lakeGuardian(i));
     cards.add(woodsSentinel(i));
+    // Conceal cards - hide back card from enemy
+    cards.add(desertShadowScout(i));
+    cards.add(lakeMistWeaver(i));
+    cards.add(woodsShroudWalker(i));
   }
 
   // ===== LEGENDARY CARDS (max 1 copy each) =====

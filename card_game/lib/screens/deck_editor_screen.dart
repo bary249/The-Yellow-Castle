@@ -827,6 +827,13 @@ class _DeckEditorScreenState extends State<DeckEditorScreen> {
       case 'heal_ally':
         return 'Heals friendly cards by $value HP per tick';
 
+      // Tactical abilities
+      case 'conceal':
+        if (ability == 'conceal_back') {
+          return 'When front, hides back card identity from enemy';
+        }
+        return 'Conceals information from enemy';
+
       default:
         // Try to make unknown abilities readable
         return ability.replaceAll('_', ' ').toUpperCase();

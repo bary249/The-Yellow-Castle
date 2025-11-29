@@ -208,6 +208,7 @@ For each **tick** in each lane:
 | **heal_ally_X** | Heals friendly cards by X HP per tick |
 | **stack_buff_damage_X** | +X damage to all friendly cards in stack |
 | **stack_debuff_enemy_damage_X** | -X damage to all enemy cards in lane |
+| **conceal_back** | When front card with a back card, hides back card identity from enemy |
 
 The UI will show these abilities as **keywords** on the card with full descriptions in the deck editor.
 

@@ -1061,6 +1061,9 @@
 | Desert Berserker | Desert | 12 | 10 | 4 | fury_1 |
 | Lake Guardian | Lake | 6 | 20 | 5 | shield_1 |
 | Woods Sentinel | Woods | 8 | 14 | 4 | regen_1 |
+| Desert Shadow Scout | Desert | 5 | 6 | 2 | conceal_back |
+| Lake Mist Weaver | Lake | 4 | 8 | 2 | conceal_back, shield_1 |
+| Woods Shroud Walker | Woods | 4 | 7 | 2 | conceal_back, regen_1 |
 
 **Legendary Cards (Rarity 4 - Max 1 copy):**
 | Card | Element | Dmg | HP | Tick | Abilities |
@@ -1078,6 +1081,7 @@
 - [x] `shield_X` - Reduce incoming damage by X (min 1)
 - [x] `stack_buff_damage_X` - +X damage to stack partner
 - [x] `stack_debuff_enemy_damage_X` - -X damage to enemy attacker
+- [x] `conceal_back` - When front card with back card, hides back card identity from enemy
 
 ### 17.2 Defined but Not Combat-Implemented
 - [ ] `regen_X` - Heal X HP each tick
