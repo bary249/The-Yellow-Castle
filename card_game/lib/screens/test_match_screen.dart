@@ -167,6 +167,8 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
 
   /// Handle match state updates from Firebase
   void _handleMatchUpdate(Map<String, dynamic> data) {
+    if (!mounted) return;
+
     final myKey = _amPlayer1 ? 'player1' : 'player2';
     final oppKey = _amPlayer1 ? 'player2' : 'player1';
 
@@ -174,14 +176,21 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     final oppData = data[oppKey] as Map<String, dynamic>?;
     final currentTurn = data['turnNumber'] as int? ?? 1;
 
-    setState(() {
-      _mySubmitted = myData?['submitted'] == true;
-      _opponentSubmitted = oppData?['submitted'] == true;
-    });
+    final newMySubmitted = myData?['submitted'] == true;
+    final newOppSubmitted = oppData?['submitted'] == true;
+
+    // Only update state if something actually changed
+    if (_mySubmitted != newMySubmitted ||
+        _opponentSubmitted != newOppSubmitted) {
+      setState(() {
+        _mySubmitted = newMySubmitted;
+        _opponentSubmitted = newOppSubmitted;
+      });
+    }
 
     // If both submitted and we haven't processed this turn yet
-    if (_mySubmitted &&
-        _opponentSubmitted &&
+    if (newMySubmitted &&
+        newOppSubmitted &&
         !_waitingForOpponent &&
         currentTurn > _lastProcessedTurn) {
       _lastProcessedTurn = currentTurn;
@@ -326,14 +335,14 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     if (_isOnlineMode) {
       // Online mode: sync to Firebase
       await _submitOnlineTurn();
+      // Don't clear staging yet - wait for combat to complete
     } else {
       // VS AI mode: resolve immediately
       await _submitVsAITurn();
+      // Clear staging AFTER combat completes
+      _clearStaging();
+      if (mounted) setState(() {});
     }
-
-    // Clear staging AFTER combat completes
-    _clearStaging();
-    if (mounted) setState(() {});
   }
 
   /// Submit turn in online multiplayer mode
@@ -400,18 +409,31 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   Future<void> _loadOpponentCardsAndResolveCombat(
     Map<String, dynamic> matchData,
   ) async {
+    if (!mounted) return;
+
+    // Prevent re-entry
+    if (_waitingForOpponent) {
+      debugPrint('Already processing combat, skipping');
+      return;
+    }
+
     setState(() {
-      _waitingForOpponent = false;
+      _waitingForOpponent = true;
     });
 
     try {
+      debugPrint('Processing combat for turn ${matchData['turnNumber']}');
+
       // Get opponent's staged cards
       final oppKey = _amPlayer1 ? 'player2' : 'player1';
       final oppData = matchData[oppKey] as Map<String, dynamic>?;
       final oppStagedData = oppData?['stagedCards'] as Map<String, dynamic>?;
 
-      if (oppStagedData == null) {
+      if (oppStagedData == null || oppStagedData.isEmpty) {
         debugPrint('No opponent staged cards found');
+        setState(() {
+          _waitingForOpponent = false;
+        });
         return;
       }
 
@@ -460,15 +482,26 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
             });
       }
 
-      setState(() {
-        _mySubmitted = false;
-        _opponentSubmitted = false;
-      });
+      // Clear local staging
+      _clearStaging();
+
+      if (mounted) {
+        setState(() {
+          _mySubmitted = false;
+          _opponentSubmitted = false;
+          _waitingForOpponent = false;
+        });
+      }
 
       debugPrint('Combat resolved for online match');
     } catch (e) {
       debugPrint('Error loading opponent cards: $e');
       _showError('Failed to load opponent moves');
+      if (mounted) {
+        setState(() {
+          _waitingForOpponent = false;
+        });
+      }
     }
   }
 
