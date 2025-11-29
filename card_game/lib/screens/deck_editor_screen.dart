@@ -674,18 +674,50 @@ class _DeckEditorScreenState extends State<DeckEditorScreen> {
             ],
           ),
           if (card.abilities.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 4,
-              children: card.abilities
-                  .map(
-                    (a) => Chip(
-                      label: Text(a, style: const TextStyle(fontSize: 10)),
-                      backgroundColor: Colors.purple[800],
-                      labelStyle: const TextStyle(color: Colors.white),
+            const SizedBox(height: 12),
+            const Text(
+              'ABILITIES',
+              style: TextStyle(
+                color: Colors.purple,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 4),
+            ...card.abilities.map(
+              (a) => Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.purple[800],
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        a,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
-                  )
-                  .toList(),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _getAbilityDescription(a),
+                        style: TextStyle(color: Colors.grey[300], fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ],
         ],
@@ -749,6 +781,55 @@ class _DeckEditorScreenState extends State<DeckEditorScreen> {
         return Colors.amber[900]!; // Legendary
       default:
         return Colors.grey[800]!;
+    }
+  }
+
+  /// Get human-readable description for abilities
+  String _getAbilityDescription(String ability) {
+    // Parse ability format: name_value (e.g., "fury_2", "shield_1")
+    final parts = ability.split('_');
+    final baseName = parts[0];
+    final value = parts.length > 1 ? parts.sublist(1).join('_') : '';
+
+    switch (baseName) {
+      // Offensive abilities
+      case 'fury':
+        return '+$value damage when attacking';
+      case 'cleave':
+        return 'Attacks hit all enemy cards in the lane';
+      case 'thorns':
+        return 'Reflects $value damage back to attackers';
+
+      // Defensive abilities
+      case 'shield':
+        return 'Reduces incoming damage by $value';
+      case 'regen':
+        return 'Heals $value HP each tick';
+      case 'regenerate':
+        return 'Slowly regenerates health over time';
+
+      // Support abilities
+      case 'heal':
+        return 'Heals friendly cards for $value HP';
+      case 'stack':
+        if (ability.contains('buff')) {
+          return 'Buffs all friendly cards in stack';
+        } else if (ability.contains('debuff')) {
+          return 'Debuffs all enemy cards in lane';
+        }
+        return 'Affects card stack';
+
+      // Combined abilities
+      case 'stack_buff_damage':
+        return '+$value damage to all friendly cards in stack';
+      case 'stack_debuff_enemy_damage':
+        return '-$value damage to all enemy cards in lane';
+      case 'heal_ally':
+        return 'Heals friendly cards by $value HP per tick';
+
+      default:
+        // Try to make unknown abilities readable
+        return ability.replaceAll('_', ' ').toUpperCase();
     }
   }
 }
