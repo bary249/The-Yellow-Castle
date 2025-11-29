@@ -13,12 +13,12 @@ import '../services/simple_ai.dart';
 import '../services/auth_service.dart';
 import '../services/deck_storage_service.dart';
 
-/// Simple test screen to verify game logic with drag-and-drop card placement
+/// Test screen for playing a match vs AI opponent or online multiplayer
 class TestMatchScreen extends StatefulWidget {
-  /// Optional hero selected before the match. If null, uses default (Napoleon).
   final GameHero? selectedHero;
+  final String? onlineMatchId; // If provided, plays online multiplayer
 
-  const TestMatchScreen({super.key, this.selectedHero});
+  const TestMatchScreen({super.key, this.selectedHero, this.onlineMatchId});
 
   @override
   State<TestMatchScreen> createState() => _TestMatchScreenState();
@@ -59,6 +59,29 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   }
 
   Future<void> _initPlayerAndMatch() async {
+    // TODO: Online multiplayer implementation
+    // When widget.onlineMatchId is provided:
+    // - Listen to Firebase match document
+    // - Sync player actions to Firestore
+    // - Read opponent actions from Firestore
+    // - Use same MatchManager logic
+
+    if (widget.onlineMatchId != null) {
+      // Online mode - not yet fully implemented
+      // For now, showing placeholder
+      if (mounted) {
+        setState(() {});
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Online multiplayer coming soon! Playing vs AI for now.',
+          ),
+          duration: Duration(seconds: 3),
+        ),
+      );
+    }
+
     // Use Firebase user if available
     final user = _authService.currentUser;
     if (user != null) {

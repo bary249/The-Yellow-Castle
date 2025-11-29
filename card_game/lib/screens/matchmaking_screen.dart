@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/auth_service.dart';
-import 'online_match_screen.dart';
+import 'test_match_screen.dart';
 
 /// Screen that handles matchmaking queue
 class MatchmakingScreen extends StatefulWidget {
@@ -188,7 +188,9 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> {
 
     if (mounted) {
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => OnlineMatchScreen(matchId: matchId)),
+        MaterialPageRoute(
+          builder: (_) => TestMatchScreen(onlineMatchId: matchId),
+        ),
       );
     }
   }
