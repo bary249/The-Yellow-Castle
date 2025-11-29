@@ -56,7 +56,6 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   bool _mySubmitted = false;
   bool _opponentSubmitted = false;
   bool _waitingForOpponent = false;
-  int _lastProcessedTurn = 0; // Track which turn we last processed
 
   /// Get the staging key for a tile.
   String _tileKey(int row, int col) => '$row,$col';
@@ -99,6 +98,9 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     // Check if online mode
     if (widget.onlineMatchId != null && _playerId != null) {
       _isOnlineMode = true;
+      _mySubmitted = false;
+      _opponentSubmitted = false;
+      _waitingForOpponent = false;
       await _initOnlineMatch();
     } else {
       // VS AI mode
@@ -174,7 +176,6 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
 
     final myData = data[myKey] as Map<String, dynamic>?;
     final oppData = data[oppKey] as Map<String, dynamic>?;
-    final currentTurn = data['turnNumber'] as int? ?? 1;
 
     final newMySubmitted = myData?['submitted'] == true;
     final newOppSubmitted = oppData?['submitted'] == true;
@@ -188,12 +189,8 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       });
     }
 
-    // If both submitted and we haven't processed this turn yet
-    if (newMySubmitted &&
-        newOppSubmitted &&
-        !_waitingForOpponent &&
-        currentTurn > _lastProcessedTurn) {
-      _lastProcessedTurn = currentTurn;
+    // If both submitted and we are not already processing, resolve combat
+    if (newMySubmitted && newOppSubmitted && !_waitingForOpponent) {
       _loadOpponentCardsAndResolveCombat(data);
     }
   }
@@ -465,22 +462,13 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       // Submit opponent's cards
       await _matchManager.submitOpponentTileMoves(opponentMoves);
 
-      // Only player1 updates Firebase to avoid conflicts
-      if (_amPlayer1) {
-        final myKey = 'player1';
-        final newTurnNumber = (matchData['turnNumber'] as int? ?? 1) + 1;
-
-        await _firestore
-            .collection('matches')
-            .doc(widget.onlineMatchId)
-            .update({
-              'turnNumber': newTurnNumber,
-              '$myKey.submitted': false,
-              '$oppKey.submitted': false,
-              '$myKey.stagedCards': {},
-              '$oppKey.stagedCards': {},
-            });
-      }
+      // Reset submitted flags and staged cards for next turn
+      await _firestore.collection('matches').doc(widget.onlineMatchId).update({
+        'player1.submitted': false,
+        'player2.submitted': false,
+        'player1.stagedCards': {},
+        'player2.stagedCards': {},
+      });
 
       // Clear local staging
       _clearStaging();
