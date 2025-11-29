@@ -49,28 +49,20 @@ class _DeckEditorScreenState extends State<DeckEditorScreen> {
   }
 
   List<GameCard> _buildCardPool() {
-    final pool = <GameCard>[];
+    // Use the full card pool with all rarities
+    return buildFullCardPool();
+  }
 
-    // Add multiple copies of each card type
-    for (int i = 0; i < 5; i++) {
-      pool.add(desertQuickStrike(100 + i));
-      pool.add(lakeQuickStrike(100 + i));
-      pool.add(woodsQuickStrike(100 + i));
-      pool.add(desertWarrior(100 + i));
-      pool.add(lakeWarrior(100 + i));
-      pool.add(woodsWarrior(100 + i));
-      pool.add(desertTank(100 + i));
-      pool.add(lakeTank(100 + i));
-      pool.add(woodsTank(100 + i));
-    }
+  /// Count how many copies of a card (by name) are in the deck
+  int _countInDeck(String cardName) {
+    return _deckCards.where((c) => c.name == cardName).length;
+  }
 
-    // Add support cards
-    for (int i = 0; i < 3; i++) {
-      pool.add(lakeShieldTotem(100 + i));
-      pool.add(desertWarBanner(100 + i));
-    }
-
-    return pool;
+  /// Check if we can add more copies of this card based on rarity limits
+  bool _canAddCard(GameCard card) {
+    final currentCount = _countInDeck(card.name);
+    final maxAllowed = maxCopiesByRarity(card.rarity);
+    return currentCount < maxAllowed;
   }
 
   void _addCardToDeck(GameCard card) {
@@ -79,6 +71,19 @@ class _DeckEditorScreenState extends State<DeckEditorScreen> {
         SnackBar(
           content: Text('Deck is full! Max $maxDeckSize cards.'),
           backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // Check rarity scarcity limit
+    if (!_canAddCard(card)) {
+      final maxAllowed = maxCopiesByRarity(card.rarity);
+      final rarityLabel = rarityName(card.rarity);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$rarityLabel cards limited to $maxAllowed copies!'),
+          backgroundColor: Colors.orange,
         ),
       );
       return;
@@ -309,6 +314,8 @@ class _DeckEditorScreenState extends State<DeckEditorScreen> {
 
   Widget _buildDeckCardTile(GameCard card, int count) {
     final isSelected = _selectedCard?.name == card.name;
+    final rarityColor = _getRarityColor(card.rarity);
+    final maxCopies = maxCopiesByRarity(card.rarity);
 
     return GestureDetector(
       onTap: () => setState(() => _selectedCard = card),
@@ -318,23 +325,28 @@ class _DeckEditorScreenState extends State<DeckEditorScreen> {
         decoration: BoxDecoration(
           color: isSelected
               ? Colors.amber.withValues(alpha: 0.3)
-              : Colors.white10,
+              : _getRarityBgColor(card.rarity).withValues(alpha: 0.3),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: isSelected
-                ? Colors.amber
-                : _getElementColor(card.element ?? 'neutral'),
+            color: isSelected ? Colors.amber : rarityColor,
             width: isSelected ? 2 : 1,
           ),
         ),
         child: Row(
           children: [
-            // Element indicator
+            // Rarity + Element indicator
             Container(
               width: 8,
               height: 40,
               decoration: BoxDecoration(
-                color: _getElementColor(card.element ?? 'neutral'),
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    rarityColor,
+                    _getElementColor(card.element ?? 'neutral'),
+                  ],
+                ),
                 borderRadius: BorderRadius.circular(4),
               ),
             ),
@@ -345,16 +357,29 @@ class _DeckEditorScreenState extends State<DeckEditorScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    card.name,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  Row(
+                    children: [
+                      Text(
+                        card.name,
+                        style: TextStyle(
+                          color: rarityColor,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      // Rarity indicator
+                      if (card.rarity > 1)
+                        Text(
+                          card.rarity == 4
+                              ? '★'
+                              : (card.rarity == 3 ? '◆' : '●'),
+                          style: TextStyle(color: rarityColor, fontSize: 10),
+                        ),
+                    ],
                   ),
                   Text(
-                    '⚔️${card.damage} ❤️${card.health} ⏱️${card.tick}',
-                    style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                    '⚔️${card.damage} ❤️${card.health} ⏱️${card.tick}  (max $maxCopies)',
+                    style: TextStyle(color: Colors.grey[400], fontSize: 11),
                   ),
                 ],
               ),
@@ -459,6 +484,9 @@ class _DeckEditorScreenState extends State<DeckEditorScreen> {
 
   Widget _buildPoolCardTile(GameCard card) {
     final inDeckCount = _deckCards.where((c) => c.name == card.name).length;
+    final maxCopies = maxCopiesByRarity(card.rarity);
+    final canAdd = inDeckCount < maxCopies;
+    final rarityColor = _getRarityColor(card.rarity);
 
     return GestureDetector(
       onTap: () => _addCardToDeck(card),
@@ -470,56 +498,80 @@ class _DeckEditorScreenState extends State<DeckEditorScreen> {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              _getElementColor(card.element ?? 'neutral').withAlpha(60),
+              rarityColor.withAlpha(40),
+              _getElementColor(card.element ?? 'neutral').withAlpha(40),
               Colors.black45,
             ],
           ),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: _getElementColor(card.element ?? 'neutral'),
-            width: 1,
+            color: canAdd ? rarityColor : Colors.grey,
+            width: card.rarity > 1 ? 2 : 1,
           ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header with name and count in deck
+            // Rarity indicator row
             Row(
               children: [
-                Expanded(
+                // Rarity badge
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 1,
+                  ),
+                  decoration: BoxDecoration(
+                    color: rarityColor,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
                   child: Text(
-                    card.name,
+                    rarityName(card.rarity).substring(0, 1), // C/R/E/L
                     style: const TextStyle(
                       color: Colors.white,
+                      fontSize: 8,
                       fontWeight: FontWeight.bold,
-                      fontSize: 12,
                     ),
-                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                if (inDeckCount > 0)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.green,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      '$inDeckCount',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                      ),
+                const Spacer(),
+                // Count in deck / max
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 1,
+                  ),
+                  decoration: BoxDecoration(
+                    color: inDeckCount >= maxCopies ? Colors.red : Colors.green,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    '$inDeckCount/$maxCopies',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 8,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
+                ),
               ],
             ),
 
-            const Spacer(),
+            const SizedBox(height: 4),
+
+            // Header with name
+            Expanded(
+              child: Text(
+                card.name,
+                style: TextStyle(
+                  color: rarityColor,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 11,
+                ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 2,
+              ),
+            ),
 
             // Stats
             Row(
@@ -667,6 +719,36 @@ class _DeckEditorScreenState extends State<DeckEditorScreen> {
         return Colors.green;
       default:
         return Colors.grey;
+    }
+  }
+
+  Color _getRarityColor(int rarity) {
+    switch (rarity) {
+      case 1:
+        return Colors.grey; // Common - grey
+      case 2:
+        return Colors.blue; // Rare - blue
+      case 3:
+        return Colors.purple; // Epic - purple
+      case 4:
+        return Colors.amber; // Legendary - gold
+      default:
+        return Colors.grey;
+    }
+  }
+
+  Color _getRarityBgColor(int rarity) {
+    switch (rarity) {
+      case 1:
+        return Colors.grey[800]!; // Common
+      case 2:
+        return Colors.blue[900]!; // Rare
+      case 3:
+        return Colors.purple[900]!; // Epic
+      case 4:
+        return Colors.amber[900]!; // Legendary
+      default:
+        return Colors.grey[800]!;
     }
   }
 }
