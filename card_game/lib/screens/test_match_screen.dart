@@ -57,6 +57,11 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   bool _opponentSubmitted = false;
   bool _waitingForOpponent = false;
 
+  // Hero selection for online mode
+  GameHero? _selectedHero;
+  GameHero? _opponentHero;
+  bool _heroSelectionComplete = false;
+
   /// Get the staging key for a tile.
   String _tileKey(int row, int col) => '$row,$col';
 
@@ -137,10 +142,12 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       _opponentId = opponentData?['userId'] as String?;
       _opponentName = opponentData?['displayName'] as String? ?? 'Opponent';
 
-      // Start the local match
-      _startNewMatch();
+      // Show hero selection dialog
+      if (mounted) {
+        await _showHeroSelectionDialog();
+      }
 
-      // Listen to Firebase match updates
+      // Listen to Firebase match updates (including hero selection)
       _listenToMatchUpdates();
 
       if (mounted) {
@@ -149,6 +156,99 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     } catch (e) {
       debugPrint('Error initializing online match: $e');
       _showError('Failed to join match');
+    }
+  }
+
+  /// Show hero selection dialog for online mode
+  Future<void> _showHeroSelectionDialog() async {
+    final heroes = HeroLibrary.allHeroes;
+
+    final selected = await showDialog<GameHero>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Select Your Hero'),
+        content: SizedBox(
+          width: 300,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: heroes
+                .map(
+                  (hero) => Card(
+                    child: ListTile(
+                      leading: Icon(
+                        _getHeroIcon(hero.abilityType),
+                        color: _getHeroColor(hero.terrainAffinities.first),
+                        size: 32,
+                      ),
+                      title: Text(
+                        hero.name,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            hero.abilityDescription,
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Terrain: ${hero.terrainAffinities.join(", ")}',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                      onTap: () => Navigator.of(context).pop(hero),
+                    ),
+                  ),
+                )
+                .toList(),
+          ),
+        ),
+      ),
+    );
+
+    if (selected != null) {
+      _selectedHero = selected;
+
+      // Store hero selection in Firebase
+      final myKey = _amPlayer1 ? 'player1' : 'player2';
+      await _firestore.collection('matches').doc(widget.onlineMatchId).update({
+        '$myKey.heroId': selected.id,
+      });
+
+      debugPrint('Selected hero: ${selected.name}');
+    } else {
+      // Default to Napoleon if dialog dismissed somehow
+      _selectedHero = HeroLibrary.napoleon();
+    }
+  }
+
+  IconData _getHeroIcon(HeroAbilityType type) {
+    switch (type) {
+      case HeroAbilityType.drawCards:
+        return Icons.style;
+      case HeroAbilityType.damageBoost:
+        return Icons.flash_on;
+      case HeroAbilityType.healUnits:
+        return Icons.healing;
+    }
+  }
+
+  Color _getHeroColor(String terrain) {
+    switch (terrain) {
+      case 'Woods':
+        return Colors.green;
+      case 'Desert':
+        return Colors.orange;
+      case 'Lake':
+        return Colors.blue;
+      default:
+        return Colors.grey;
     }
   }
 
@@ -177,6 +277,21 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
 
     final myData = data[myKey] as Map<String, dynamic>?;
     final oppData = data[oppKey] as Map<String, dynamic>?;
+
+    // Check for hero selection (for starting match)
+    final oppHeroId = oppData?['heroId'] as String?;
+    if (oppHeroId != null && _opponentHero == null) {
+      _opponentHero = HeroLibrary.getHeroById(oppHeroId);
+      debugPrint('Opponent selected hero: ${_opponentHero?.name}');
+    }
+
+    // Start match when both players have selected heroes
+    if (_selectedHero != null &&
+        _opponentHero != null &&
+        !_heroSelectionComplete) {
+      _heroSelectionComplete = true;
+      _startNewMatch();
+    }
 
     final newMySubmitted = myData?['submitted'] == true;
     final newOppSubmitted = oppData?['submitted'] == true;
@@ -208,9 +323,19 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     final id = _playerId ?? 'player1';
     final name = _playerName ?? 'You';
 
-    // Use selected hero or default to Napoleon
-    final playerHero = widget.selectedHero ?? HeroLibrary.napoleon();
-    final aiHero = HeroLibrary.saladin(); // AI uses Saladin
+    // Use selected hero based on mode
+    final GameHero playerHero;
+    final GameHero opponentHero;
+
+    if (_isOnlineMode) {
+      // Online mode: use heroes selected via dialog
+      playerHero = _selectedHero ?? HeroLibrary.napoleon();
+      opponentHero = _opponentHero ?? HeroLibrary.saladin();
+    } else {
+      // AI mode: use widget hero or default
+      playerHero = widget.selectedHero ?? HeroLibrary.napoleon();
+      opponentHero = HeroLibrary.saladin();
+    }
 
     // Use saved deck if available, otherwise use starter deck
     final playerDeck = _savedDeck != null && _savedDeck!.isNotEmpty
@@ -223,6 +348,12 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         : 'AI Opponent';
     final opponentIdFinal = _isOnlineMode ? (_opponentId ?? 'opponent') : 'ai';
 
+    debugPrint('Match started!');
+    debugPrint(
+      'Player hero: ${playerHero.name} (${playerHero.abilityDescription})',
+    );
+    debugPrint('Opponent hero: ${opponentHero.name}');
+
     _matchManager.startMatch(
       playerId: id,
       playerName: name,
@@ -232,9 +363,9 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       opponentDeck: Deck.starter(playerId: opponentIdFinal),
       opponentIsAI: !_isOnlineMode,
       playerAttunedElement: playerHero.terrainAffinities.first,
-      opponentAttunedElement: aiHero.terrainAffinities.first,
+      opponentAttunedElement: opponentHero.terrainAffinities.first,
       playerHero: playerHero,
-      opponentHero: aiHero,
+      opponentHero: opponentHero,
     );
     _clearStaging();
     setState(() {});
@@ -444,10 +575,6 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       final oppData = matchData[oppKey] as Map<String, dynamic>?;
       final oppStagedData = oppData?['stagedCards'] as Map<String, dynamic>?;
 
-      debugPrint('DEBUG: oppKey=$oppKey');
-      debugPrint('DEBUG: oppData=$oppData');
-      debugPrint('DEBUG: oppStagedData=$oppStagedData');
-
       // Convert opponent's cards from Firebase format (may be empty)
       // IMPORTANT: Mirror the row coordinate! Opponent's row 2 (their base) = our row 0 (enemy base)
       final opponentMoves = <String, List<GameCard>>{};
@@ -479,11 +606,6 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
           }).toList();
         }
       }
-
-      debugPrint(
-        'DEBUG: opponentMoves keys (mirrored)=${opponentMoves.keys.toList()}',
-      );
-      debugPrint('DEBUG: my _stagedCards keys=${_stagedCards.keys.toList()}');
 
       // Submit player's staged cards
       await _matchManager.submitPlayerTileMoves(_stagedCards);
@@ -529,7 +651,34 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   Widget build(BuildContext context) {
     final match = _matchManager.currentMatch;
 
+    // Show waiting screen for online mode while waiting for opponent's hero
     if (match == null) {
+      if (_isOnlineMode && _selectedHero != null && !_heroSelectionComplete) {
+        return Scaffold(
+          appBar: AppBar(title: const Text('Online Match')),
+          body: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const CircularProgressIndicator(),
+                const SizedBox(height: 24),
+                Text(
+                  'You selected: ${_selectedHero!.name}',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Waiting for opponent to select their hero...',
+                  style: TextStyle(fontSize: 16, color: Colors.grey),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
       return Scaffold(
         appBar: AppBar(title: const Text('Test Match')),
         body: const Center(child: Text('No match in progress')),
@@ -659,10 +808,6 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Account header (Firebase player info)
-            _buildAccountHeader(),
-            const SizedBox(height: 8),
-
             Expanded(
               child: Column(
                 children: [
@@ -947,58 +1092,6 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     );
   }
 
-  Widget _buildAccountHeader() {
-    final name = _playerName ?? 'Player';
-    final elo = _playerElo ?? 1000;
-    final id = _playerId ?? 'local';
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.blueGrey[900],
-        boxShadow: const [
-          BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2)),
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.account_circle, color: Colors.white, size: 22),
-              const SizedBox(width: 8),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    name,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  Text(
-                    'ELO $elo',
-                    style: const TextStyle(color: Colors.white70, fontSize: 11),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          Flexible(
-            child: Text(
-              'UID: ${id.length > 8 ? id.substring(0, 8) : id}',
-              style: const TextStyle(color: Colors.white60, fontSize: 10),
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.right,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildPlayerInfo(player, {required bool isOpponent}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -1231,10 +1324,14 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     // Reverse opponent cards so FRONT is closer to player (bottom of opponent section)
     final opponentCardsReversed = opponentCardsAtTile.reversed.toList();
 
+    // Only show staged cards during placement phase, not during combat
+    final showStaged = match.currentPhase != MatchPhase.combatPhase;
+
     List<GameCard> cardsToShow = [
       ...opponentCardsReversed, // Enemy BACK first (top), then FRONT (toward player)
       ...playerCardsAtTile, // Player FRONT first, then BACK
-      ...stagedCardsOnTile, // Player staged cards at BOTTOM
+      if (showStaged)
+        ...stagedCardsOnTile, // Player staged cards at BOTTOM (only during placement)
     ];
 
     return GestureDetector(
