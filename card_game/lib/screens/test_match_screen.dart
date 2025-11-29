@@ -56,6 +56,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   bool _mySubmitted = false;
   bool _opponentSubmitted = false;
   bool _waitingForOpponent = false;
+  int _lastProcessedTurn = 0; // Track which turn we last processed
 
   /// Get the staging key for a tile.
   String _tileKey(int row, int col) => '$row,$col';
@@ -171,14 +172,19 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
 
     final myData = data[myKey] as Map<String, dynamic>?;
     final oppData = data[oppKey] as Map<String, dynamic>?;
+    final currentTurn = data['turnNumber'] as int? ?? 1;
 
     setState(() {
       _mySubmitted = myData?['submitted'] == true;
       _opponentSubmitted = oppData?['submitted'] == true;
     });
 
-    // If both submitted, trigger combat resolution
-    if (_mySubmitted && _opponentSubmitted && !_waitingForOpponent) {
+    // If both submitted and we haven't processed this turn yet
+    if (_mySubmitted &&
+        _opponentSubmitted &&
+        !_waitingForOpponent &&
+        currentTurn > _lastProcessedTurn) {
+      _lastProcessedTurn = currentTurn;
       _loadOpponentCardsAndResolveCombat(data);
     }
   }
@@ -437,14 +443,22 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       // Submit opponent's cards
       await _matchManager.submitOpponentTileMoves(opponentMoves);
 
-      // Reset submitted flags for next turn
-      final myKey = _amPlayer1 ? 'player1' : 'player2';
-      await _firestore.collection('matches').doc(widget.onlineMatchId).update({
-        '$myKey.submitted': false,
-        '$oppKey.submitted': false,
-        '$myKey.stagedCards': {},
-        '$oppKey.stagedCards': {},
-      });
+      // Only player1 updates Firebase to avoid conflicts
+      if (_amPlayer1) {
+        final myKey = 'player1';
+        final newTurnNumber = (matchData['turnNumber'] as int? ?? 1) + 1;
+
+        await _firestore
+            .collection('matches')
+            .doc(widget.onlineMatchId)
+            .update({
+              'turnNumber': newTurnNumber,
+              '$myKey.submitted': false,
+              '$oppKey.submitted': false,
+              '$myKey.stagedCards': {},
+              '$oppKey.stagedCards': {},
+            });
+      }
 
       setState(() {
         _mySubmitted = false;
@@ -1665,35 +1679,37 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                                 card.name,
                                 textAlign: TextAlign.center,
                                 style: const TextStyle(
-                                  fontSize: 10,
+                                  fontSize: 9,
                                   fontWeight: FontWeight.bold,
                                 ),
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                               ),
-                              const SizedBox(height: 2),
+                              const SizedBox(height: 1),
                               Text(
                                 'HP: ${card.health}',
-                                style: const TextStyle(fontSize: 9),
+                                style: const TextStyle(fontSize: 8),
                               ),
                               Text(
                                 'DMG: ${card.damage}',
-                                style: const TextStyle(fontSize: 9),
+                                style: const TextStyle(fontSize: 8),
                               ),
                               Text(
                                 'Tick: ${card.tick}',
-                                style: const TextStyle(fontSize: 9),
+                                style: const TextStyle(fontSize: 8),
                               ),
                               if (card.element != null)
                                 Text(
                                   'Elem: ${card.element}',
-                                  style: const TextStyle(fontSize: 8),
+                                  style: const TextStyle(fontSize: 7),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               if (card.abilities.isNotEmpty)
                                 Text(
                                   card.abilities.join(', '),
-                                  style: const TextStyle(fontSize: 7),
-                                  maxLines: 2,
+                                  style: const TextStyle(fontSize: 6),
+                                  maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               if (isSelected)
