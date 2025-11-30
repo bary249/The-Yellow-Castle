@@ -398,15 +398,31 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     // Initialize list if needed
     _stagedCards[key] ??= [];
 
-    // Cannot stage on enemy base row (row 0) even if captured
+    // Cards can only be staged at player base (row 2)
+    // Exception: cards with 'paratrooper' ability can stage at middle (row 1)
+    final hasParatrooper = _selectedCard!.abilities.contains('paratrooper');
+
     if (row == 0) {
+      // Cannot stage on enemy base
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Cannot stage cards on enemy base!')),
       );
       return;
     }
 
-    // Check tile ownership - must be player-owned
+    if (row == 1 && !hasParatrooper) {
+      // Cannot stage on middle unless paratrooper
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Cards can only be staged at your base! (Paratrooper ability allows middle)',
+          ),
+        ),
+      );
+      return;
+    }
+
+    // Check tile ownership - must be player-owned (only relevant for middle with paratrooper)
     if (tile.owner != TileOwner.player) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('You don\'t own this tile!')),
@@ -434,14 +450,28 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       }
     }
 
+    // Check 1 card per lane per turn limit
+    // Count all staged cards in this lane (any row in same column)
+    int stagedInLane = 0;
+    for (int r = 0; r <= 2; r++) {
+      final laneKey = _tileKey(r, col);
+      stagedInLane += (_stagedCards[laneKey]?.length ?? 0);
+    }
+
+    if (stagedInLane >= 1) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Only 1 card per lane per turn!')),
+      );
+      return;
+    }
+
+    // Check if tile is full (survivors + staged = max 2)
     final currentZoneRow = zoneToRow(lane.currentZone);
     int survivorCount = 0;
     if (row == currentZoneRow) {
-      // Survivors are on this tile - count player's cards only (can't place on opponent's)
       survivorCount = lane.playerStack.aliveCards.length;
     }
 
-    // Check if tile already has 2 cards (survivors + staged)
     final stagedCount = _stagedCards[key]!.length;
     if (survivorCount + stagedCount >= 2) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -504,6 +534,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
             'damage': card.damage,
             'health': card.health,
             'tick': card.tick,
+            'moveSpeed': card.moveSpeed,
             'element': card.element,
             'abilities': card.abilities,
             'cost': card.cost,
@@ -596,6 +627,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
               damage: data['damage'] as int,
               health: data['health'] as int,
               tick: data['tick'] as int,
+              moveSpeed: data['moveSpeed'] as int? ?? 1,
               element: data['element'] as String?,
               abilities: (data['abilities'] as List<dynamic>?)
                   ?.map((e) => e as String)
@@ -1816,24 +1848,23 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     // Fog of war: check if this lane's enemy base is revealed
     final isEnemyBaseRevealed = match.revealedEnemyBaseLanes.contains(lanePos);
 
-    // Track if cards are hidden by fog of war
-    int hiddenCardCount = 0;
-
     if (row == 0) {
-      // Enemy base - fog of war: only show cards if lane is revealed
+      // Enemy base row - show player's attacking cards + opponent's staging cards
+      // Player cards that reached enemy base (always visible - they're YOUR cards)
+      playerCardsAtTile = lane.playerCards.enemyBaseCards.aliveCards;
+      // Opponent's staging cards (with fog of war)
       if (isEnemyBaseRevealed) {
         opponentCardsAtTile = lane.opponentCards.baseCards.aliveCards;
-      } else {
-        // Cards hidden by fog of war
-        hiddenCardCount = lane.opponentCards.baseCards.aliveCards.length;
       }
     } else if (row == 1) {
       // Middle - show both sides' middle cards
       playerCardsAtTile = lane.playerCards.middleCards.aliveCards;
       opponentCardsAtTile = lane.opponentCards.middleCards.aliveCards;
     } else if (row == 2) {
-      // Player base - show player's base cards
+      // Player base row - show player's staging cards + opponent's attacking cards
       playerCardsAtTile = lane.playerCards.baseCards.aliveCards;
+      // Opponent cards that reached player base
+      opponentCardsAtTile = lane.opponentCards.enemyBaseCards.aliveCards;
     }
 
     // Count existing cards for placement check (only player cards count for placement)
@@ -1844,10 +1875,19 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     final isNotEnemyBase =
         row != 0; // Cannot stage on enemy base even if captured
     final stagedCount = stagedCardsOnTile.length;
+
+    // Check 1 card per lane limit - count staged cards in this lane (all rows)
+    int stagedInLane = 0;
+    for (int r = 0; r <= 2; r++) {
+      final laneKey = _tileKey(r, col);
+      stagedInLane += (_stagedCards[laneKey]?.length ?? 0);
+    }
+
     final canPlace =
         isPlayerOwned &&
         isNotEnemyBase &&
         _selectedCard != null &&
+        stagedInLane == 0 && // No card already staged in this lane
         (existingPlayerCount + stagedCount) < 2;
 
     // Determine tile color based on owner and terrain
@@ -2019,107 +2059,149 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                         labelColor = Colors.grey[600]!;
                       }
 
-                      return Container(
-                        margin: const EdgeInsets.symmetric(vertical: 1),
-                        padding: const EdgeInsets.all(3),
-                        decoration: BoxDecoration(
-                          color: cardColor,
-                          borderRadius: BorderRadius.circular(4),
-                          border: isStaged
-                              ? Border.all(color: Colors.amber, width: 2)
-                              : (isFrontCard
-                                    ? Border.all(
-                                        color: isOpponent
-                                            ? Colors.red
-                                            : Colors.blue,
-                                        width: 2,
-                                      )
-                                    : (isConcealed
-                                          ? Border.all(
-                                              color: Colors.grey[600]!,
-                                              width: 1,
-                                            )
-                                          : Border.all(
-                                              color: isOpponent
-                                                  ? Colors.red[300]!
-                                                  : Colors.blue[300]!,
-                                              width: 1,
-                                            ))),
-                        ),
-                        child: isConcealed
-                            // Show hidden card placeholder
-                            ? Column(
-                                crossAxisAlignment: CrossAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    positionLabel ?? '',
-                                    style: TextStyle(
-                                      fontSize: 7,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.grey[600],
-                                    ),
-                                  ),
-                                  const Text(
-                                    '🔮 Hidden',
-                                    style: TextStyle(
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                ],
-                              )
-                            // Show normal card info with position label
-                            : Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  // Position label row
-                                  if (positionLabel != null)
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 3,
-                                        vertical: 1,
-                                      ),
-                                      margin: const EdgeInsets.only(bottom: 2),
-                                      decoration: BoxDecoration(
-                                        color: labelColor.withValues(
-                                          alpha: 0.2,
-                                        ),
-                                        borderRadius: BorderRadius.circular(3),
-                                      ),
-                                      child: Text(
-                                        positionLabel,
+                      return Stack(
+                        children: [
+                          Container(
+                            margin: const EdgeInsets.symmetric(vertical: 1),
+                            padding: const EdgeInsets.all(3),
+                            decoration: BoxDecoration(
+                              color: cardColor,
+                              borderRadius: BorderRadius.circular(4),
+                              border: isStaged
+                                  ? Border.all(color: Colors.amber, width: 2)
+                                  : (isFrontCard
+                                        ? Border.all(
+                                            color: isOpponent
+                                                ? Colors.red
+                                                : Colors.blue,
+                                            width: 2,
+                                          )
+                                        : (isConcealed
+                                              ? Border.all(
+                                                  color: Colors.grey[600]!,
+                                                  width: 1,
+                                                )
+                                              : Border.all(
+                                                  color: isOpponent
+                                                      ? Colors.red[300]!
+                                                      : Colors.blue[300]!,
+                                                  width: 1,
+                                                ))),
+                            ),
+                            child: isConcealed
+                                // Show hidden card placeholder
+                                ? Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.center,
+                                    children: [
+                                      Text(
+                                        positionLabel ?? '',
                                         style: TextStyle(
                                           fontSize: 7,
                                           fontWeight: FontWeight.bold,
-                                          color: labelColor,
+                                          color: Colors.grey[600],
                                         ),
                                       ),
-                                    ),
-                                  Text(
-                                    card.name,
-                                    style: const TextStyle(
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text(
-                                        '⚔${card.damage}',
-                                        style: const TextStyle(fontSize: 8),
+                                      const Text(
+                                        '🔮 Hidden',
+                                        style: TextStyle(
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
+                                        ),
                                       ),
-                                      const SizedBox(width: 4),
+                                    ],
+                                  )
+                                // Show normal card info with position label
+                                : Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      // Position label row
+                                      if (positionLabel != null)
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 3,
+                                            vertical: 1,
+                                          ),
+                                          margin: const EdgeInsets.only(
+                                            bottom: 2,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: labelColor.withValues(
+                                              alpha: 0.2,
+                                            ),
+                                            borderRadius: BorderRadius.circular(
+                                              3,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            positionLabel,
+                                            style: TextStyle(
+                                              fontSize: 7,
+                                              fontWeight: FontWeight.bold,
+                                              color: labelColor,
+                                            ),
+                                          ),
+                                        ),
                                       Text(
-                                        '❤${card.currentHealth}/${card.health}',
-                                        style: const TextStyle(fontSize: 8),
+                                        card.name,
+                                        style: const TextStyle(
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text(
+                                            '⚔${card.damage}',
+                                            style: const TextStyle(fontSize: 8),
+                                          ),
+                                          const SizedBox(width: 3),
+                                          Text(
+                                            '❤${card.currentHealth}',
+                                            style: const TextStyle(fontSize: 8),
+                                          ),
+                                          const SizedBox(width: 3),
+                                          Text(
+                                            '🚀${card.moveSpeed}',
+                                            style: const TextStyle(fontSize: 8),
+                                          ),
+                                        ],
                                       ),
                                     ],
                                   ),
-                                ],
+                          ),
+                          // X button to remove staged cards
+                          if (isStaged &&
+                              match.currentPhase != MatchPhase.combatPhase)
+                            Positioned(
+                              top: 0,
+                              right: 0,
+                              child: GestureDetector(
+                                onTap: () =>
+                                    _removeCardFromTile(row, col, card),
+                                child: Container(
+                                  padding: const EdgeInsets.all(2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: Colors.white,
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: const Icon(
+                                    Icons.close,
+                                    size: 10,
+                                    color: Colors.white,
+                                  ),
+                                ),
                               ),
+                            ),
+                        ],
                       );
                     }).toList(),
                   ),
@@ -2402,7 +2484,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                                 style: const TextStyle(fontSize: 8),
                               ),
                               Text(
-                                'Tick: ${card.tick}',
+                                'Tick: ${card.tick}  Spd: ${card.moveSpeed}',
                                 style: const TextStyle(fontSize: 8),
                               ),
                               if (card.element != null)

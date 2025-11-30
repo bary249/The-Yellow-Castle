@@ -20,7 +20,9 @@
   - The board has **3 lanes**: Left, Center, Right.
 - Each lane has 3 zones:
   - **Your Base** → **Middle** → **Enemy Base**.
-- Each **base** (yours and your opponent's) can have a **terrain attunement** (e.g. Marsh, Woods, Lake, Desert).
+- Terrain assignments:
+  - **Base tiles** (yours and opponent's) have terrain matching their Hero's attunement.
+  - **Middle tiles** have **random terrain** (Woods, Lake, Desert, or Marsh).
 - Each player selects a **Hero** before the match begins.
 
 ---
@@ -67,6 +69,10 @@
   - **Damage** (how hard they hit).
   - **Health** (how much damage they can take).
   - **Tick** (1–5) = when/how often they act during combat.
+  - **Move Speed** (0, 1, or 2) = how many zones the card moves per turn.
+    - **0**: Stationary (stays in place, defensive)
+    - **1**: Normal (moves 1 zone per turn)
+    - **2**: Fast (moves 2 zones per turn, reaches enemy quickly)
   - **Rarity** (Common, Rare, Epic, Legendary) - determines deck limits.
   - Optional **Terrain tag** (Marsh, Woods, Lake, Desert, etc.).
   - Optional **Abilities** (keywords like Fury, Shield, Regen, etc.).
@@ -136,23 +142,33 @@ Each round has the following phases:
 
 ### 5.1 Turn Phase (Planning)
 - Both players act **simultaneously** within an **8-second timer**:
-  - Choose **0–2 cards per lane** from your hand.
-  - Choose front/back placement for each lane’s stack.
+  - Choose **0–1 card per lane** from your hand (max 1 card per lane per turn).
+  - Cards can only be staged at **your base** (row 2).
+    - Exception: Cards with **paratrooper** ability can be staged at middle if you own it.
+  - You can remove staged cards before submitting (X button on card).
   - Confirm your moves before the timer ends.
 - When you place a card in a lane and confirm:
   - It **leaves your hand**.
   - You **cannot pull it back** to your hand later that round.
 
-### 5.2 Combat Phase (Resolution)
+### 5.2 Movement Phase
+- **Before combat**, all cards move forward based on their **Move Speed**:
+  - Cards move 0, 1, or 2 zones toward the enemy base.
+  - Movement **stops** when encountering enemy cards.
+  - Combat happens wherever cards meet.
+
+### 5.3 Combat Phase (Resolution)
 - After **both players** submit their moves (or the timer expires), all lanes go into combat.
 - Combat is resolved using a **5-tick system** (see next section).
 
-### 5.3 Lane Advancement & Crystal Damage
-- After combat in all lanes:
-  - Winning sides **push their lane’s zone** forward toward the enemy base.
-  - If a side reaches the **enemy base**, surviving cards **hit the enemy crystal**.
+### 5.4 Crystal Damage
+- Crystal damage occurs when:
+  - **Uncontested**: Your cards at enemy base with no defenders → deal damage each turn.
+  - **Combat victory at enemy base**: Surviving attackers deal their damage.
+- Attackers **stay at enemy base** after dealing damage (they hold position).
+- Defender must send cards to push attackers back.
 
-### 5.4 Draw Phase
+### 5.5 Draw Phase
 - After advancement:
   - Both players draw **2 new cards** (if their deck still has cards).
   - The next **Turn Phase** begins.
@@ -237,11 +253,13 @@ Each lane tracks how far you've pushed toward the enemy crystal.
   - If your opponent wins, the zone moves **toward your base**.
   - If it's a **draw** (no clear winner), the zone **doesn't move**.
 
-### 8.4 Crystal Damage & Retreat
-- When you win combat **at the enemy base**:
-  - Surviving cards deal their **Damage** to the **enemy crystal**.
-  - After hitting the crystal, survivors **retreat to middle** (they cannot hold enemy base).
-- This creates a push-pull dynamic where you must keep winning at enemy base to deal repeated crystal damage.
+### 8.4 Crystal Damage
+- Crystal damage occurs when your cards are at **enemy base**:
+  - **Uncontested attack**: If no defenders, your cards deal damage each turn they stay there.
+  - **Combat victory**: If you win combat at enemy base, survivors deal their damage.
+- Attackers **stay at enemy base** after dealing damage (no retreat).
+- To stop crystal damage, the defender must send cards to that lane.
+- This creates pressure: once attackers reach enemy base, they keep dealing damage until pushed back.
 
 ---
 

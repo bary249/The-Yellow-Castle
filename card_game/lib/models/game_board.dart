@@ -18,6 +18,9 @@ class GameBoard {
 
   GameBoard._({required this.tiles});
 
+  /// All possible terrain types for random assignment
+  static const allTerrains = ['woods', 'lake', 'desert', 'marsh'];
+
   /// Create a new game board with initial ownership and terrain.
   ///
   /// [playerTerrains] - List of 1-2 terrain types for player's base tiles.
@@ -44,9 +47,9 @@ class GameBoard {
           owner = TileOwner.player;
           terrain = playerTerrains[random.nextInt(playerTerrains.length)];
         } else {
-          // Middle row - neutral, no terrain
+          // Middle row - neutral with random terrain
           owner = TileOwner.neutral;
-          terrain = null;
+          terrain = allTerrains[random.nextInt(allTerrains.length)];
         }
 
         rowTiles.add(

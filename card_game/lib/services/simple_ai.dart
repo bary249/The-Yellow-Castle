@@ -9,9 +9,12 @@ import '../models/game_board.dart';
 class SimpleAI {
   final Random _random = Random();
 
-  /// Generate tile-based AI placements (supports middle tiles if captured)
+  /// Generate tile-based AI placements
+  /// NEW RULES:
+  /// - Cards can only be staged at base (row 0 for opponent, row 2 for player)
+  /// - Only 1 card per lane per turn
+  /// - Exception: cards with 'paratrooper' ability can stage at middle
   /// Returns a map of "row,col" to list of cards to play
-  /// For opponent AI: row 0 = their base, row 1 = middle (if captured)
   Map<String, List<GameCard>> generateTileMoves(
     Player aiPlayer,
     GameBoard board,
@@ -21,74 +24,70 @@ class SimpleAI {
     final moves = <String, List<GameCard>>{};
     if (aiPlayer.hand.isEmpty) return moves;
 
-    // Collect all tiles the AI can place on
-    final availableTiles = <String, int>{}; // "row,col" -> available slots
+    // Track which lanes already have a card staged this turn
+    final lanesUsed = <int>{};
 
-    for (int col = 0; col < 3; col++) {
+    // Shuffle hand for variety
+    final handCopy = [...aiPlayer.hand]..shuffle(_random);
+
+    for (final card in handCopy) {
+      // Find an available lane (0, 1, or 2)
+      final availableLanes = [
+        0,
+        1,
+        2,
+      ].where((col) => !lanesUsed.contains(col)).toList();
+      if (availableLanes.isEmpty) break;
+
+      // Randomly decide whether to play this card (50% chance)
+      if (_random.nextBool()) continue;
+
+      // Pick a random available lane
+      final col = availableLanes[_random.nextInt(availableLanes.length)];
       final lane = lanes[col];
 
+      // Determine placement row
+      int row;
       if (isOpponent) {
-        // Opponent's base is row 0 (always available)
-        final baseCards = lane.opponentCards.baseCards;
-        final baseSlots = 2 - baseCards.count;
-        if (baseSlots > 0) {
-          availableTiles['0,$col'] = baseSlots;
-        }
-
-        // Check if opponent owns middle tile (row 1)
-        final middleTile = board.getTile(1, col);
-        if (middleTile.owner == TileOwner.opponent) {
-          final middleCards = lane.opponentCards.middleCards;
-          final middleSlots = 2 - middleCards.count;
-          if (middleSlots > 0) {
-            availableTiles['1,$col'] = middleSlots;
+        // Opponent's base is row 0
+        row = 0;
+        // Check if paratrooper can go to middle
+        if (card.abilities.contains('paratrooper')) {
+          final middleTile = board.getTile(1, col);
+          if (middleTile.owner == TileOwner.opponent) {
+            row = 1; // Use middle if owned and has paratrooper
           }
         }
       } else {
-        // Player's base is row 2 (always available)
-        final baseCards = lane.playerCards.baseCards;
-        final baseSlots = 2 - baseCards.count;
-        if (baseSlots > 0) {
-          availableTiles['2,$col'] = baseSlots;
-        }
-
-        // Check if player owns middle tile (row 1)
-        final middleTile = board.getTile(1, col);
-        if (middleTile.owner == TileOwner.player) {
-          final middleCards = lane.playerCards.middleCards;
-          final middleSlots = 2 - middleCards.count;
-          if (middleSlots > 0) {
-            availableTiles['1,$col'] = middleSlots;
+        // Player's base is row 2
+        row = 2;
+        // Check if paratrooper can go to middle
+        if (card.abilities.contains('paratrooper')) {
+          final middleTile = board.getTile(1, col);
+          if (middleTile.owner == TileOwner.player) {
+            row = 1; // Use middle if owned and has paratrooper
           }
         }
       }
-    }
 
-    if (availableTiles.isEmpty) return moves;
+      // Check if there's room at the target tile
+      final tileKey = '$row,$col';
+      final existingCards = isOpponent
+          ? (row == 0
+                ? lane.opponentCards.baseCards.count
+                : lane.opponentCards.middleCards.count)
+          : (row == 2
+                ? lane.playerCards.baseCards.count
+                : lane.playerCards.middleCards.count);
 
-    // Shuffle tile keys for variety
-    final tileKeys = availableTiles.keys.toList()..shuffle(_random);
+      if (existingCards >= 2) continue; // Tile full
 
-    // Distribute cards across available tiles
-    for (final tileKey in tileKeys) {
-      if (aiPlayer.hand.isEmpty) break;
+      // Add card to moves
+      moves[tileKey] = [card];
+      lanesUsed.add(col);
 
-      final slots = availableTiles[tileKey]!;
-      final cardsToPlay = _random.nextInt(slots + 1); // 0 to slots
-
-      if (cardsToPlay == 0) continue;
-
-      final tileCards = <GameCard>[];
-      for (int i = 0; i < cardsToPlay && aiPlayer.hand.isNotEmpty; i++) {
-        final card = _pickRandomCard(aiPlayer.hand);
-        if (card != null) {
-          tileCards.add(card);
-        }
-      }
-
-      if (tileCards.isNotEmpty) {
-        moves[tileKey] = tileCards;
-      }
+      // Remove from hand copy (actual removal happens in match_manager)
+      // Just mark this lane as used
     }
 
     return moves;

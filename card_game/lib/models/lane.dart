@@ -102,71 +102,73 @@ class CardStack {
 }
 
 /// Tracks cards at different positions for one side (player or opponent)
-/// Each position (base, middle) can hold up to 2 cards
+/// Each position (base, middle, enemyBase) can hold up to 2 cards
 class PositionalCards {
   final bool isPlayerOwned;
 
-  // Cards at each position
-  final CardStack baseCards; // Player's base (row 2) or Opponent's base (row 0)
-  final CardStack middleCards; // Middle row (row 1)
+  // Cards at each position (from this side's perspective)
+  final CardStack baseCards; // Own base - staging area
+  final CardStack middleCards; // Middle row - neutral zone
+  final CardStack enemyBaseCards; // Enemy base - attacking position
 
   PositionalCards({required this.isPlayerOwned})
     : baseCards = CardStack(isPlayerOwned: isPlayerOwned),
-      middleCards = CardStack(isPlayerOwned: isPlayerOwned);
+      middleCards = CardStack(isPlayerOwned: isPlayerOwned),
+      enemyBaseCards = CardStack(isPlayerOwned: isPlayerOwned);
+
+  /// Get the CardStack at a specific zone
+  /// Zone is always from PLAYER's perspective:
+  /// - Zone.playerBase = Row 2 = Player's home base
+  /// - Zone.middle = Row 1 = Neutral middle zone
+  /// - Zone.enemyBase = Row 0 = Opponent's home base
+  /// The isPlayer param is ignored - mapping is based on isPlayerOwned
+  CardStack getStackAt(Zone zone, bool isPlayer) {
+    if (isPlayerOwned) {
+      // Player's cards - direct mapping
+      switch (zone) {
+        case Zone.playerBase:
+          return baseCards; // Player cards at player base
+        case Zone.middle:
+          return middleCards;
+        case Zone.enemyBase:
+          return enemyBaseCards; // Player cards attacking enemy base
+      }
+    } else {
+      // Opponent's cards - flip the zone mapping
+      // Opponent cards at player base = their attack target = enemyBaseCards
+      switch (zone) {
+        case Zone.playerBase:
+          return enemyBaseCards; // Opponent attacking player base
+        case Zone.middle:
+          return middleCards;
+        case Zone.enemyBase:
+          return baseCards; // Opponent defending their base
+      }
+    }
+  }
 
   /// Get active card for combat at the given zone
   GameCard? getActiveCardAt(Zone zone, bool isPlayer) {
-    if (isPlayer) {
-      // Player's perspective: playerBase = their base
-      switch (zone) {
-        case Zone.playerBase:
-          return baseCards.activeCard;
-        case Zone.middle:
-          return middleCards.activeCard;
-        case Zone.enemyBase:
-          return middleCards.activeCard; // Player attacks from middle
-      }
-    } else {
-      // Opponent's perspective: enemyBase = their base
-      switch (zone) {
-        case Zone.enemyBase:
-          return baseCards.activeCard;
-        case Zone.middle:
-          return middleCards.activeCard;
-        case Zone.playerBase:
-          return middleCards.activeCard; // Opponent attacks from middle
-      }
-    }
+    return getStackAt(zone, isPlayer).activeCard;
   }
 
   /// Get all alive cards at a zone
   List<GameCard> getAliveCardsAt(Zone zone, bool isPlayer) {
-    if (isPlayer) {
-      switch (zone) {
-        case Zone.playerBase:
-          return baseCards.aliveCards;
-        case Zone.middle:
-        case Zone.enemyBase:
-          return middleCards.aliveCards;
-      }
-    } else {
-      switch (zone) {
-        case Zone.enemyBase:
-          return baseCards.aliveCards;
-        case Zone.middle:
-        case Zone.playerBase:
-          return middleCards.aliveCards;
-      }
-    }
+    return getStackAt(zone, isPlayer).aliveCards;
   }
 
   /// Get all alive cards across all positions
   List<GameCard> get allAliveCards {
-    return [...baseCards.aliveCards, ...middleCards.aliveCards];
+    return [
+      ...baseCards.aliveCards,
+      ...middleCards.aliveCards,
+      ...enemyBaseCards.aliveCards,
+    ];
   }
 
   /// Check if there are any cards
-  bool get hasCards => !baseCards.isEmpty || !middleCards.isEmpty;
+  bool get hasCards =>
+      !baseCards.isEmpty || !middleCards.isEmpty || !enemyBaseCards.isEmpty;
 
   /// Add card to a specific position
   bool addCardAt(
@@ -175,101 +177,137 @@ class PositionalCards {
     bool isPlayer, {
     bool asTopCard = false,
   }) {
-    if (isPlayer) {
-      switch (zone) {
-        case Zone.playerBase:
-          return baseCards.addCard(card, asTopCard: asTopCard);
-        case Zone.middle:
-        case Zone.enemyBase:
-          return middleCards.addCard(card, asTopCard: asTopCard);
-      }
-    } else {
-      switch (zone) {
-        case Zone.enemyBase:
-          return baseCards.addCard(card, asTopCard: asTopCard);
-        case Zone.middle:
-        case Zone.playerBase:
-          return middleCards.addCard(card, asTopCard: asTopCard);
-      }
-    }
+    return getStackAt(zone, isPlayer).addCard(card, asTopCard: asTopCard);
   }
 
-  /// Advance cards from base to middle (if middle has room)
-  /// Front card (topCard) advances first, back card becomes new front
-  /// Returns number of cards advanced
-  int advanceFromBase() {
-    int advanced = 0;
+  /// Move a single card forward based on its moveSpeed
+  /// Returns the zone the card ended up at, or null if blocked by enemy
+  /// The `enemyCards` parameter is used to check for blocking
+  Zone? moveCardForward(
+    GameCard card,
+    Zone currentZone,
+    PositionalCards enemyCards,
+    bool isPlayer,
+  ) {
+    final speed = card.moveSpeed;
+    if (speed == 0) return currentZone; // Stationary card
 
-    // Move FRONT card (topCard) first
-    if (baseCards.topCard != null && !middleCards.isFull) {
-      middleCards.addCard(baseCards.topCard!, asTopCard: false);
-      baseCards.topCard = null;
-      advanced++;
+    Zone targetZone = currentZone;
 
-      // Promote back card to front position
-      if (baseCards.bottomCard != null) {
-        baseCards.topCard = baseCards.bottomCard;
-        baseCards.bottomCard = null;
+    for (int step = 0; step < speed; step++) {
+      final nextZone = _getNextZone(targetZone, isPlayer);
+      if (nextZone == null) break; // Already at enemy base
+
+      // Move to next zone
+      targetZone = nextZone;
+
+      // Check if enemy has cards at this zone - if so, stop here to fight
+      final enemyStack = enemyCards.getStackAt(targetZone, !isPlayer);
+      if (!enemyStack.isEmpty) {
+        // Enemy present - stop here and fight
+        break;
       }
     }
 
-    // Move remaining front card (was back card) if still room
-    if (baseCards.topCard != null && !middleCards.isFull) {
-      middleCards.addCard(baseCards.topCard!, asTopCard: false);
-      baseCards.topCard = null;
-      advanced++;
+    // Move card if it changed zones
+    if (targetZone != currentZone) {
+      final sourceStack = getStackAt(currentZone, isPlayer);
+      final targetStack = getStackAt(targetZone, isPlayer);
+
+      // Remove from source
+      if (sourceStack.topCard == card) {
+        sourceStack.topCard = sourceStack.bottomCard;
+        sourceStack.bottomCard = null;
+      } else if (sourceStack.bottomCard == card) {
+        sourceStack.bottomCard = null;
+      }
+
+      // Add to target
+      targetStack.addCard(card, asTopCard: false);
     }
 
-    return advanced;
+    return targetZone;
+  }
+
+  /// Get the next zone in the forward direction
+  Zone? _getNextZone(Zone current, bool isPlayer) {
+    if (isPlayer) {
+      switch (current) {
+        case Zone.playerBase:
+          return Zone.middle;
+        case Zone.middle:
+          return Zone.enemyBase;
+        case Zone.enemyBase:
+          return null; // Already at enemy base
+      }
+    } else {
+      switch (current) {
+        case Zone.enemyBase:
+          return Zone.middle;
+        case Zone.middle:
+          return Zone.playerBase;
+        case Zone.playerBase:
+          return null; // Already at player base (enemy's target)
+      }
+    }
   }
 
   /// Cleanup dead cards at all positions
   void cleanup() {
     baseCards.cleanup();
     middleCards.cleanup();
+    enemyBaseCards.cleanup();
   }
 
   /// Clear all cards
   void clear() {
     baseCards.clear();
     middleCards.clear();
+    enemyBaseCards.clear();
   }
 }
 
 /// Represents one of the 3 battle lanes
 class Lane {
   final LanePosition position;
-  Zone currentZone;
+  Zone currentZone; // The zone where combat is happening
 
   // Positional card tracking for each side
   final PositionalCards playerCards;
   final PositionalCards opponentCards;
 
-  // Legacy CardStack references for combat compatibility
-  // These are now aliases to middleCards for combat system
-  CardStack get playerStack => playerCards.middleCards;
-  CardStack get opponentStack => opponentCards.middleCards;
+  // Combat stacks - returns cards at the current combat zone
+  CardStack get playerStack => playerCards.getStackAt(currentZone, true);
+  CardStack get opponentStack => opponentCards.getStackAt(currentZone, false);
 
   Lane({required this.position, this.currentZone = Zone.middle})
     : playerCards = PositionalCards(isPlayerOwned: true),
       opponentCards = PositionalCards(isPlayerOwned: false);
 
-  /// Check if lane has any active cards at current zone
-  bool get hasActiveCards {
-    final playerActive =
-        playerCards.getActiveCardAt(currentZone, true) != null ||
-        playerCards.baseCards.activeCard != null;
-    final opponentActive =
-        opponentCards.getActiveCardAt(currentZone, false) != null ||
-        opponentCards.baseCards.activeCard != null;
-    return playerActive || opponentActive;
+  /// Update currentZone to where combat should happen
+  /// Call this after movement and before combat resolution
+  void updateCombatZone() {
+    final combatZone = findCombatZone();
+    if (combatZone != null) {
+      currentZone = combatZone;
+    }
   }
 
-  /// Get the winning side (null if tie or no winner yet)
+  /// Check if lane has any cards that could engage in combat
+  bool get hasActiveCards {
+    // Check all zones for any alive cards
+    return playerCards.hasCards || opponentCards.hasCards;
+  }
+
+  /// Check if there's active combat (both sides have cards at combat zone)
+  bool get hasCombat {
+    return !playerStack.isEmpty && !opponentStack.isEmpty;
+  }
+
+  /// Get the winning side at current combat zone (null if tie or no winner yet)
   bool? get playerWon {
-    // Check middle cards (where combat happens)
-    final playerAlive = playerCards.middleCards.activeCard != null;
-    final opponentAlive = opponentCards.middleCards.activeCard != null;
+    final playerAlive = playerStack.activeCard != null;
+    final opponentAlive = opponentStack.activeCard != null;
 
     if (playerAlive && !opponentAlive) return true;
     if (!playerAlive && opponentAlive) return false;
@@ -322,14 +360,94 @@ class Lane {
     }
   }
 
-  /// Advance cards from base to middle for the winning side
-  /// Call this after combat to move reinforcements forward
-  int advancePlayerCards() {
-    return playerCards.advanceFromBase();
+  /// Move all player cards forward based on their moveSpeed
+  /// Returns a map of card -> zone they ended up at
+  Map<GameCard, Zone> movePlayerCardsForward() {
+    final results = <GameCard, Zone>{};
+
+    // Process cards from front to back (enemyBase, middle, base)
+    // to avoid conflicts
+    for (final zone in [Zone.enemyBase, Zone.middle, Zone.playerBase]) {
+      final stack = playerCards.getStackAt(zone, true);
+      final cardsToMove = [...stack.aliveCards];
+
+      for (final card in cardsToMove) {
+        final endZone = playerCards.moveCardForward(
+          card,
+          zone,
+          opponentCards,
+          true,
+        );
+        if (endZone != null) {
+          results[card] = endZone;
+        }
+      }
+    }
+
+    return results;
   }
 
-  int advanceOpponentCards() {
-    return opponentCards.advanceFromBase();
+  /// Move all opponent cards forward based on their moveSpeed
+  /// Returns a map of card -> zone they ended up at
+  Map<GameCard, Zone> moveOpponentCardsForward() {
+    final results = <GameCard, Zone>{};
+
+    // Process cards from front to back (playerBase, middle, enemyBase)
+    for (final zone in [Zone.playerBase, Zone.middle, Zone.enemyBase]) {
+      final stack = opponentCards.getStackAt(zone, false);
+      final cardsToMove = [...stack.aliveCards];
+
+      for (final card in cardsToMove) {
+        final endZone = opponentCards.moveCardForward(
+          card,
+          zone,
+          playerCards,
+          false,
+        );
+        if (endZone != null) {
+          results[card] = endZone;
+        }
+      }
+    }
+
+    return results;
+  }
+
+  /// Find the combat zone where both sides have cards
+  /// Returns null if no combat (cards haven't met yet)
+  Zone? findCombatZone() {
+    // Check each zone for combat
+    for (final zone in Zone.values) {
+      final playerStack = playerCards.getStackAt(zone, true);
+      final opponentStack = opponentCards.getStackAt(zone, false);
+
+      if (!playerStack.isEmpty && !opponentStack.isEmpty) {
+        return zone;
+      }
+    }
+    return null;
+  }
+
+  /// Get cards at enemy base that can deal crystal damage (uncontested)
+  List<GameCard> getUncontestedPlayerAttackers() {
+    final attackers = playerCards.enemyBaseCards.aliveCards;
+    final defenders = opponentCards.baseCards.aliveCards;
+
+    if (defenders.isEmpty) {
+      return attackers;
+    }
+    return [];
+  }
+
+  /// Get opponent cards at player base that can deal crystal damage (uncontested)
+  List<GameCard> getUncontestedOpponentAttackers() {
+    final attackers = opponentCards.enemyBaseCards.aliveCards;
+    final defenders = playerCards.baseCards.aliveCards;
+
+    if (defenders.isEmpty) {
+      return attackers;
+    }
+    return [];
   }
 
   /// Get zone display string

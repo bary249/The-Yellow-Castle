@@ -388,36 +388,41 @@ class MatchManager {
     _log('\n--- BOARD STATE (AFTER STAGING) ---');
     _logBoardState();
 
-    // Advance cards from base to middle (if room available)
-    _log('\n--- CARD ADVANCEMENT ---');
+    // Move cards forward based on their moveSpeed
+    _log('\n--- CARD MOVEMENT ---');
     for (final lane in _currentMatch!.lanes) {
       final laneName = lane.position.name.toUpperCase();
 
-      // Player cards advance from base to middle
-      final playerAdvanced = lane.advancePlayerCards();
-      if (playerAdvanced > 0) {
+      // Player cards move forward
+      final playerMoves = lane.movePlayerCardsForward();
+      for (final entry in playerMoves.entries) {
         _log(
-          '$laneName: Player advanced $playerAdvanced card(s) from base to middle',
+          '$laneName: Player ${entry.key.name} moved to ${entry.value.name}',
         );
       }
 
-      // Opponent cards advance from base to middle
-      final opponentAdvanced = lane.advanceOpponentCards();
-      if (opponentAdvanced > 0) {
+      // Opponent cards move forward
+      final opponentMoves = lane.moveOpponentCardsForward();
+      for (final entry in opponentMoves.entries) {
         _log(
-          '$laneName: Opponent advanced $opponentAdvanced card(s) from base to middle',
+          '$laneName: Opponent ${entry.key.name} moved to ${entry.value.name}',
         );
       }
     }
-    _log('--- END CARD ADVANCEMENT ---');
+    _log('--- END CARD MOVEMENT ---');
 
-    // Log board state AFTER advancement (shows combat positions)
+    // Update combat zones for each lane (find where cards meet)
+    for (final lane in _currentMatch!.lanes) {
+      lane.updateCombatZone();
+    }
+
+    // Log board state AFTER movement (shows combat positions)
     _log('\n--- BOARD STATE (BEFORE COMBAT) ---');
     _logBoardState();
 
     // Resolve each lane with tick-by-tick animation
     for (final lane in _currentMatch!.lanes) {
-      if (lane.hasActiveCards) {
+      if (lane.hasCombat) {
         await _resolveLaneAnimated(lane);
       }
     }
@@ -567,125 +572,138 @@ class MatchManager {
     onCombatUpdate?.call();
   }
 
-  /// Check zone advancement and crystal damage
-  /// Implements:
-  /// - Auto-advance survivors after winning
-  /// - Uncontested attack: if reaching enemy base with no defenders, hit crystal and return to middle
+  /// Check crystal damage after combat
+  /// Crystal damage occurs when:
+  /// 1. Uncontested: Attackers at enemy base with no defenders
+  /// 2. Combat victory at enemy base: Surviving attackers deal damage
+  /// Attackers STAY at enemy base (no retreat unless special ability)
   void _checkCrystalDamage() {
     if (_currentMatch == null) return;
 
-    _log('\n--- ZONE ADVANCEMENT ---');
+    _log('\n--- CRYSTAL DAMAGE CHECK ---');
 
     for (final lane in _currentMatch!.lanes) {
-      final playerWon = lane.playerWon;
       final laneName = lane.position.name.toUpperCase();
-      final colIndex = lane.position.index; // 0=left, 1=center, 2=right
+      final colIndex = lane.position.index;
 
-      if (playerWon == true) {
-        // Player won lane - check advancement
-        _log('$laneName: Player victory! ${lane.zoneDisplay}');
+      // Check for player attackers at enemy base
+      final playerAttackers = lane.playerCards.enemyBaseCards.aliveCards;
+      final opponentDefenders = lane.opponentCards.baseCards.aliveCards;
 
-        // Check if enemy base has defenders BEFORE advancing
-        final currentZone = lane.currentZone;
-        final enemyHasDefenders = lane.opponentStack.aliveCards.isNotEmpty;
-
-        if (currentZone == Zone.enemyBase) {
-          // At enemy base, won combat → hit crystal, return to middle
-          // Already at enemy base, won combat → hit crystal, return to middle
-          final totalDamage = lane.playerStack.aliveCards.fold<int>(
+      if (playerAttackers.isNotEmpty) {
+        if (opponentDefenders.isEmpty) {
+          // Uncontested - deal full damage
+          final totalDamage = playerAttackers.fold<int>(
             0,
             (sum, card) => sum + card.damage,
           );
           _currentMatch!.opponent.takeCrystalDamage(totalDamage);
-          _log('$laneName: 💥 $totalDamage crystal damage to AI!');
+          _log('$laneName: 💥 $totalDamage UNCONTESTED crystal damage to AI!');
+          _log('$laneName: Player attackers hold enemy base');
 
-          // Return to middle after hitting crystal
-          lane.retreatZone(true);
-          _log('$laneName: ↩️ Survivors return to middle');
-
-          // Capture middle tile
-          _updateTileOwnership(colIndex, Zone.middle, isPlayerAdvancing: true);
-        } else if (currentZone == Zone.middle && !enemyHasDefenders) {
-          // At middle with NO enemy defenders at base → advance to enemy base (no crystal damage yet)
-          lane.advanceZone(true);
-          _log(
-            '$laneName: Advanced to ${lane.zoneDisplay} (enemy base undefended)',
-          );
-
-          // Capture middle tile
-          _updateTileOwnership(colIndex, Zone.middle, isPlayerAdvancing: true);
-        } else {
-          // Advance zone (middle → enemyBase with defenders, or playerBase → middle)
-          lane.advanceZone(true);
-          _log('$laneName: Advanced to ${lane.zoneDisplay}');
-
-          // Capture middle tile if advancing to/through it
+          // Update tile ownership
           _updateTileOwnership(
             colIndex,
-            lane.currentZone,
+            Zone.enemyBase,
             isPlayerAdvancing: true,
           );
+        } else if (lane.currentZone == Zone.enemyBase &&
+            lane.playerWon == true) {
+          // Won combat at enemy base - survivors deal damage
+          final survivors = lane.playerStack.aliveCards;
+          if (survivors.isNotEmpty) {
+            final totalDamage = survivors.fold<int>(
+              0,
+              (sum, card) => sum + card.damage,
+            );
+            _currentMatch!.opponent.takeCrystalDamage(totalDamage);
+            _log(
+              '$laneName: 💥 $totalDamage crystal damage to AI (combat victory)!',
+            );
+            _log('$laneName: Player attackers hold enemy base');
+
+            // Update tile ownership
+            _updateTileOwnership(
+              colIndex,
+              Zone.enemyBase,
+              isPlayerAdvancing: true,
+            );
+          }
+
+          // Award gold for combat victory
+          _currentMatch!.player.earnGold(400);
         }
+      }
 
-        // Award gold for winning lane
-        _currentMatch!.player.earnGold(400);
-      } else if (playerWon == false) {
-        // Opponent won lane - check advancement
-        _log('$laneName: AI victory! ${lane.zoneDisplay}');
+      // Check for opponent attackers at player base
+      final opponentAttackers = lane.opponentCards.enemyBaseCards.aliveCards;
+      final playerDefenders = lane.playerCards.baseCards.aliveCards;
 
-        // Check if player base has defenders BEFORE advancing
-        final currentZone = lane.currentZone;
-        final playerHasDefenders = lane.playerStack.aliveCards.isNotEmpty;
-
-        if (currentZone == Zone.playerBase) {
-          // At player base, won combat → hit crystal, return to middle
-          // Already at player base, won combat → hit crystal, return to middle
-          final totalDamage = lane.opponentStack.aliveCards.fold<int>(
+      if (opponentAttackers.isNotEmpty) {
+        if (playerDefenders.isEmpty) {
+          // Uncontested - deal full damage
+          final totalDamage = opponentAttackers.fold<int>(
             0,
             (sum, card) => sum + card.damage,
           );
           _currentMatch!.player.takeCrystalDamage(totalDamage);
-          _log('$laneName: 💥 $totalDamage crystal damage to Player!');
-
-          // Return to middle after hitting crystal
-          lane.retreatZone(false);
-          _log('$laneName: ↩️ AI survivors return to middle');
-
-          // Capture middle tile
-          _updateTileOwnership(colIndex, Zone.middle, isPlayerAdvancing: false);
-        } else if (currentZone == Zone.middle && !playerHasDefenders) {
-          // At middle with NO player defenders at base → advance to player base (no crystal damage yet)
-          lane.advanceZone(false);
           _log(
-            '$laneName: Advanced to ${lane.zoneDisplay} (player base undefended)',
+            '$laneName: 💥 $totalDamage UNCONTESTED crystal damage to Player!',
           );
+          _log('$laneName: AI attackers hold player base');
 
-          // Capture middle tile
-          _updateTileOwnership(colIndex, Zone.middle, isPlayerAdvancing: false);
-        } else {
-          // Advance zone (middle → playerBase with defenders, or enemyBase → middle)
-          lane.advanceZone(false);
-          _log('$laneName: Advanced to ${lane.zoneDisplay}');
-
-          // Capture middle tile if advancing to/through it
+          // Update tile ownership
           _updateTileOwnership(
             colIndex,
-            lane.currentZone,
+            Zone.playerBase,
             isPlayerAdvancing: false,
           );
-        }
+        } else if (lane.currentZone == Zone.playerBase &&
+            lane.playerWon == false) {
+          // Won combat at player base - survivors deal damage
+          final survivors = lane.opponentStack.aliveCards;
+          if (survivors.isNotEmpty) {
+            final totalDamage = survivors.fold<int>(
+              0,
+              (sum, card) => sum + card.damage,
+            );
+            _currentMatch!.player.takeCrystalDamage(totalDamage);
+            _log(
+              '$laneName: 💥 $totalDamage crystal damage to Player (combat victory)!',
+            );
+            _log('$laneName: AI attackers hold player base');
 
-        // Award gold for winning lane
-        _currentMatch!.opponent.earnGold(400);
-      } else {
-        // Draw - no advancement
-        _log('$laneName: Draw - no advancement. ${lane.zoneDisplay}');
+            // Update tile ownership
+            _updateTileOwnership(
+              colIndex,
+              Zone.playerBase,
+              isPlayerAdvancing: false,
+            );
+          }
+
+          // Award gold for combat victory
+          _currentMatch!.opponent.earnGold(400);
+        }
+      }
+
+      // Check for combat victories at other zones (award gold)
+      if (lane.hasCombat || lane.playerWon != null) {
+        if (lane.playerWon == true && lane.currentZone != Zone.enemyBase) {
+          _log('$laneName: Player victory at ${lane.zoneDisplay}');
+          _currentMatch!.player.earnGold(400);
+        } else if (lane.playerWon == false &&
+            lane.currentZone != Zone.playerBase) {
+          _log('$laneName: AI victory at ${lane.zoneDisplay}');
+          _currentMatch!.opponent.earnGold(400);
+        } else if (lane.playerWon == null && lane.hasCombat) {
+          _log('$laneName: Draw at ${lane.zoneDisplay}');
+        }
       }
     }
 
-    _log('--- END ZONE ADVANCEMENT ---');
+    _log('--- END CRYSTAL DAMAGE CHECK ---');
 
-    // Log the board state after zone advancement
+    // Log the board state after combat resolution
     _log('\n--- BOARD STATE (AFTER COMBAT) ---');
     _logBoardState();
   }
@@ -730,76 +748,41 @@ class MatchManager {
           LanePosition.east,
         ][col];
 
-        // Determine zone row: where combat happens for this lane
-        // Zone.enemyBase = row 0, Zone.middle = row 1, Zone.playerBase = row 2
-        final zoneRow = lane.currentZone == Zone.enemyBase
-            ? 0
-            : (lane.currentZone == Zone.playerBase ? 2 : 1);
-
         // Row 0 = enemy base, Row 1 = middle, Row 2 = player base
+        // Show cards at their ACTUAL positions (not based on combat zone)
         if (row == 0) {
-          // Enemy base row
-          if (zoneRow == 0) {
-            // Combat is here - show fighting cards (middleCards)
-            if (_currentMatch!.revealedEnemyBaseLanes.contains(lanePos)) {
-              for (final card in lane.playerCards.middleCards.aliveCards) {
-                cardNames.add('P:${card.name}(${card.currentHealth}hp)');
-              }
-              for (final card in lane.opponentCards.middleCards.aliveCards) {
-                cardNames.add('O:${card.name}(${card.currentHealth}hp)');
-              }
-            } else {
-              // Hidden - show player cards, hide opponent cards
-              for (final card in lane.playerCards.middleCards.aliveCards) {
-                cardNames.add('P:${card.name}(${card.currentHealth}hp)');
-              }
-              final hiddenCount =
-                  lane.opponentCards.middleCards.aliveCards.length;
-              if (hiddenCount > 0) {
-                cardNames.add('??? ($hiddenCount hidden)');
-              }
+          // Enemy base row - show opponent's base cards + player's attacking cards
+          // Player cards that reached enemy base
+          for (final card in lane.playerCards.enemyBaseCards.aliveCards) {
+            cardNames.add('P:${card.name}(${card.currentHealth}hp)');
+          }
+          // Opponent's staging cards (with fog of war)
+          if (_currentMatch!.revealedEnemyBaseLanes.contains(lanePos)) {
+            for (final card in lane.opponentCards.baseCards.aliveCards) {
+              cardNames.add('O:${card.name}(${card.currentHealth}hp)');
             }
           } else {
-            // Zone not here - show staging cards (baseCards)
-            if (_currentMatch!.revealedEnemyBaseLanes.contains(lanePos)) {
-              for (final card in lane.opponentCards.baseCards.aliveCards) {
-                cardNames.add('O:${card.name}(${card.currentHealth}hp)');
-              }
-            } else {
-              final hiddenCount =
-                  lane.opponentCards.baseCards.aliveCards.length;
-              if (hiddenCount > 0) {
-                cardNames.add('??? ($hiddenCount hidden)');
-              }
+            final hiddenCount = lane.opponentCards.baseCards.aliveCards.length;
+            if (hiddenCount > 0) {
+              cardNames.add('??? ($hiddenCount hidden)');
             }
           }
         } else if (row == 1) {
-          // Middle row
-          if (zoneRow == 1) {
-            // Combat is here - show fighting cards (middleCards)
-            for (final card in lane.playerCards.middleCards.aliveCards) {
-              cardNames.add('P:${card.name}(${card.currentHealth}hp)');
-            }
-            for (final card in lane.opponentCards.middleCards.aliveCards) {
-              cardNames.add('O:${card.name}(${card.currentHealth}hp)');
-            }
+          // Middle row - show both sides' middle cards
+          for (final card in lane.playerCards.middleCards.aliveCards) {
+            cardNames.add('P:${card.name}(${card.currentHealth}hp)');
           }
-          // If zone is at a base, middle row is empty (cards are fighting at base)
+          for (final card in lane.opponentCards.middleCards.aliveCards) {
+            cardNames.add('O:${card.name}(${card.currentHealth}hp)');
+          }
         } else if (row == 2) {
-          // Player base row
-          if (zoneRow == 2) {
-            // Combat is here - show fighting cards (middleCards)
-            for (final card in lane.playerCards.middleCards.aliveCards) {
-              cardNames.add('P:${card.name}(${card.currentHealth}hp)');
-            }
-            for (final card in lane.opponentCards.middleCards.aliveCards) {
-              cardNames.add('O:${card.name}(${card.currentHealth}hp)');
-            }
-          } else {
-            // Zone not here - show staging cards (baseCards)
-            for (final card in lane.playerCards.baseCards.aliveCards) {
-              cardNames.add('P:${card.name}(${card.currentHealth}hp)');
-            }
+          // Player base row - show player's base cards + opponent's attacking cards
+          for (final card in lane.playerCards.baseCards.aliveCards) {
+            cardNames.add('P:${card.name}(${card.currentHealth}hp)');
+          }
+          // Opponent cards that reached player base
+          for (final card in lane.opponentCards.enemyBaseCards.aliveCards) {
+            cardNames.add('O:${card.name}(${card.currentHealth}hp)');
           }
         }
 

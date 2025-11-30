@@ -21,6 +21,7 @@ GameCard desertQuickStrike(int index) => GameCard(
   damage: 4,
   health: 4,
   tick: 1,
+  moveSpeed: 2, // Fast - reaches enemy quickly
   element: 'Desert',
   abilities: const [],
   cost: 1,
@@ -33,6 +34,7 @@ GameCard lakeQuickStrike(int index) => GameCard(
   damage: 3,
   health: 6,
   tick: 1,
+  moveSpeed: 2, // Fast - reaches enemy quickly
   element: 'Lake',
   abilities: const [],
   cost: 1,
@@ -45,6 +47,7 @@ GameCard woodsQuickStrike(int index) => GameCard(
   damage: 3,
   health: 5,
   tick: 1,
+  moveSpeed: 2, // Fast - reaches enemy quickly
   element: 'Woods',
   abilities: const [],
   cost: 1,
@@ -57,6 +60,7 @@ GameCard desertWarrior(int index) => GameCard(
   damage: 6,
   health: 9,
   tick: 3,
+  moveSpeed: 1, // Normal speed
   element: 'Desert',
   abilities: const [],
   cost: 2,
@@ -69,6 +73,7 @@ GameCard lakeWarrior(int index) => GameCard(
   damage: 5,
   health: 11,
   tick: 3,
+  moveSpeed: 1, // Normal speed
   element: 'Lake',
   abilities: const [],
   cost: 2,
@@ -81,6 +86,7 @@ GameCard woodsWarrior(int index) => GameCard(
   damage: 5,
   health: 10,
   tick: 3,
+  moveSpeed: 1, // Normal speed
   element: 'Woods',
   abilities: const [],
   cost: 2,
@@ -93,6 +99,7 @@ GameCard desertTank(int index) => GameCard(
   damage: 9,
   health: 14,
   tick: 5,
+  moveSpeed: 0, // Stationary - holds position
   element: 'Desert',
   abilities: const [],
   cost: 3,
@@ -105,6 +112,7 @@ GameCard lakeTank(int index) => GameCard(
   damage: 8,
   health: 16,
   tick: 5,
+  moveSpeed: 0, // Stationary - holds position
   element: 'Lake',
   abilities: const [],
   cost: 3,
@@ -117,6 +125,7 @@ GameCard woodsTank(int index) => GameCard(
   damage: 8,
   health: 15,
   tick: 5,
+  moveSpeed: 0, // Stationary - holds position
   element: 'Woods',
   abilities: const [],
   cost: 3,
@@ -133,6 +142,7 @@ GameCard desertEliteStriker(int index) => GameCard(
   damage: 5, // +1 from common
   health: 5, // +1 from common
   tick: 1,
+  moveSpeed: 2, // Fast - like Quick Strike
   element: 'Desert',
   abilities: const [],
   cost: 2,
@@ -145,6 +155,7 @@ GameCard lakeEliteStriker(int index) => GameCard(
   damage: 4, // +1 from common
   health: 7, // +1 from common
   tick: 1,
+  moveSpeed: 2, // Fast - like Quick Strike
   element: 'Lake',
   abilities: const [],
   cost: 2,
@@ -157,6 +168,7 @@ GameCard woodsEliteStriker(int index) => GameCard(
   damage: 4, // +1 from common
   health: 6, // +1 from common
   tick: 1,
+  moveSpeed: 2, // Fast - like Quick Strike
   element: 'Woods',
   abilities: const [],
   cost: 2,
@@ -169,6 +181,7 @@ GameCard desertVeteran(int index) => GameCard(
   damage: 8, // +2 from common warrior
   health: 11, // +2 from common warrior
   tick: 3,
+  moveSpeed: 1, // Normal speed
   element: 'Desert',
   abilities: const [],
   cost: 3,
@@ -181,6 +194,7 @@ GameCard lakeVeteran(int index) => GameCard(
   damage: 7, // +2 from common warrior
   health: 13, // +2 from common warrior
   tick: 3,
+  moveSpeed: 1, // Normal speed
   element: 'Lake',
   abilities: const [],
   cost: 3,
@@ -193,6 +207,7 @@ GameCard woodsVeteran(int index) => GameCard(
   damage: 7, // +2 from common warrior
   health: 12, // +2 from common warrior
   tick: 3,
+  moveSpeed: 1, // Normal speed
   element: 'Woods',
   abilities: const [],
   cost: 3,
@@ -210,6 +225,7 @@ GameCard lakeShieldTotem(int index) => GameCard(
   damage: 0,
   health: 1,
   tick: 3,
+  moveSpeed: 0, // Stationary support
   element: 'Lake',
   abilities: const ['shield_2', 'stack_debuff_enemy_damage_2'],
   cost: 2,
@@ -223,6 +239,7 @@ GameCard desertWarBanner(int index) => GameCard(
   damage: 0,
   health: 1,
   tick: 3,
+  moveSpeed: 0, // Stationary support
   element: 'Desert',
   abilities: const ['fury_2', 'stack_buff_damage_2'],
   cost: 2,
@@ -236,6 +253,7 @@ GameCard woodsHealingTree(int index) => GameCard(
   damage: 0,
   health: 3,
   tick: 4,
+  moveSpeed: 0, // Stationary support
   element: 'Woods',
   abilities: const ['heal_ally_2', 'regen_1'],
   cost: 2,
@@ -249,6 +267,7 @@ GameCard desertBerserker(int index) => GameCard(
   damage: 12, // Very high damage
   health: 10, // Lower health - glass cannon
   tick: 4,
+  moveSpeed: 1, // Normal speed
   element: 'Desert',
   abilities: const ['fury_1'], // +1 damage when attacking
   cost: 4,
@@ -262,6 +281,7 @@ GameCard lakeGuardian(int index) => GameCard(
   damage: 6,
   health: 20, // Very tanky
   tick: 5,
+  moveSpeed: 0, // Stationary - elite tank holds position
   element: 'Lake',
   abilities: const ['shield_1'], // Reduces incoming damage
   cost: 4,
@@ -275,6 +295,7 @@ GameCard woodsSentinel(int index) => GameCard(
   damage: 8,
   health: 14,
   tick: 4,
+  moveSpeed: 1, // Normal speed
   element: 'Woods',
   abilities: const ['regen_1'], // Heals 1 HP per tick
   cost: 4,
@@ -289,6 +310,7 @@ GameCard desertShadowScout(int index) => GameCard(
   damage: 5,
   health: 6,
   tick: 2,
+  moveSpeed: 2, // Fast scout
   element: 'Desert',
   abilities: const ['conceal_back'], // Hides back card from enemy view
   cost: 3,
@@ -303,6 +325,7 @@ GameCard lakeMistWeaver(int index) => GameCard(
   damage: 4,
   health: 8,
   tick: 2,
+  moveSpeed: 1, // Normal speed
   element: 'Lake',
   abilities: const ['conceal_back', 'shield_1'], // Conceals and has light armor
   cost: 3,
@@ -317,6 +340,7 @@ GameCard woodsShroudWalker(int index) => GameCard(
   damage: 4,
   health: 7,
   tick: 2,
+  moveSpeed: 1, // Normal speed
   element: 'Woods',
   abilities: const ['conceal_back', 'regen_1'], // Conceals and regenerates
   cost: 3,
@@ -334,6 +358,7 @@ GameCard sunfireWarlord() => GameCard(
   damage: 15,
   health: 18,
   tick: 5,
+  moveSpeed: 1, // Normal speed - powerful but balanced
   element: 'Desert',
   abilities: const ['fury_2', 'cleave'], // +2 damage, hits multiple
   cost: 5,
@@ -347,6 +372,7 @@ GameCard tidalLeviathan() => GameCard(
   damage: 10,
   health: 28,
   tick: 6,
+  moveSpeed: 0, // Stationary - legendary tank holds the line
   element: 'Lake',
   abilities: const ['shield_3', 'regenerate'], // Massive tank
   cost: 5,
@@ -360,6 +386,7 @@ GameCard ancientTreant() => GameCard(
   damage: 12,
   health: 22,
   tick: 5,
+  moveSpeed: 0, // Stationary - legendary tree holds position
   element: 'Woods',
   abilities: const ['regen_2', 'thorns_3'], // Heals and reflects damage
   cost: 5,

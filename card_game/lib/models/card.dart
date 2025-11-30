@@ -9,6 +9,12 @@ class GameCard {
   /// 1-5: determines when the card acts in combat
   final int tick;
 
+  /// 0, 1, or 2: how many tiles this card moves forward each turn
+  /// 0 = stationary (doesn't advance)
+  /// 1 = normal (moves 1 tile per turn)
+  /// 2 = fast (moves 2 tiles per turn - can reach enemy base from own base in 1 turn)
+  final int moveSpeed;
+
   /// Optional element for advantage matrix (e.g. 'Fire', 'Water', 'Nature')
   final String? element;
 
@@ -31,6 +37,7 @@ class GameCard {
     required this.damage,
     required this.health,
     required this.tick,
+    this.moveSpeed = 1, // Default: normal speed (1 tile per turn)
     this.element,
     this.family,
     List<String>? abilities,
@@ -47,6 +54,7 @@ class GameCard {
       damage: damage,
       health: health,
       tick: tick,
+      moveSpeed: moveSpeed,
       element: element,
       family: family,
       abilities: abilities,
@@ -72,7 +80,7 @@ class GameCard {
 
   @override
   String toString() =>
-      '$name (HP: $currentHealth/$health, DMG: $damage, Tick: $tick)';
+      '$name (HP: $currentHealth/$health, DMG: $damage, Tick: $tick, Speed: $moveSpeed)';
 
   /// Factory method for creating test cards
   factory GameCard.test({
@@ -81,6 +89,7 @@ class GameCard {
     int damage = 5,
     int health = 10,
     int tick = 3,
+    int moveSpeed = 1,
     String? element,
     String? family,
     List<String>? abilities,
@@ -93,6 +102,7 @@ class GameCard {
       damage: damage,
       health: health,
       tick: tick,
+      moveSpeed: moveSpeed,
       element: element,
       family: family,
       abilities: abilities,
