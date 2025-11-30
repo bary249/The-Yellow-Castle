@@ -39,8 +39,8 @@ class SimpleAI {
       ].where((col) => !lanesUsed.contains(col)).toList();
       if (availableLanes.isEmpty) break;
 
-      // Randomly decide whether to play this card (50% chance)
-      if (_random.nextBool()) continue;
+      // Occasionally skip a card (~20% chance), but generally be aggressive
+      if (_random.nextInt(100) < 20) continue;
 
       // Pick a random available lane
       final col = availableLanes[_random.nextInt(availableLanes.length)];

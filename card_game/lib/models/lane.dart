@@ -180,77 +180,8 @@ class PositionalCards {
     return getStackAt(zone, isPlayer).addCard(card, asTopCard: asTopCard);
   }
 
-  /// Move a single card forward based on its moveSpeed
-  /// Returns the zone the card ended up at, or null if blocked by enemy
-  /// The `enemyCards` parameter is used to check for blocking
-  Zone? moveCardForward(
-    GameCard card,
-    Zone currentZone,
-    PositionalCards enemyCards,
-    bool isPlayer,
-  ) {
-    final speed = card.moveSpeed;
-    if (speed == 0) return currentZone; // Stationary card
-
-    Zone targetZone = currentZone;
-
-    for (int step = 0; step < speed; step++) {
-      final nextZone = _getNextZone(targetZone, isPlayer);
-      if (nextZone == null) break; // Already at enemy base
-
-      // Move to next zone
-      targetZone = nextZone;
-
-      // Check if enemy has cards at this zone - if so, stop here to fight
-      final enemyStack = enemyCards.getStackAt(targetZone, !isPlayer);
-      if (!enemyStack.isEmpty) {
-        // Enemy present - stop here and fight
-        break;
-      }
-    }
-
-    // Move card if it changed zones
-    if (targetZone != currentZone) {
-      final sourceStack = getStackAt(currentZone, isPlayer);
-      final targetStack = getStackAt(targetZone, isPlayer);
-
-      // Remove from source
-      if (sourceStack.topCard == card) {
-        sourceStack.topCard = sourceStack.bottomCard;
-        sourceStack.bottomCard = null;
-      } else if (sourceStack.bottomCard == card) {
-        sourceStack.bottomCard = null;
-      }
-
-      // Add to target
-      targetStack.addCard(card, asTopCard: false);
-    }
-
-    return targetZone;
-  }
-
-  /// Get the next zone in the forward direction
-  Zone? _getNextZone(Zone current, bool isPlayer) {
-    if (isPlayer) {
-      switch (current) {
-        case Zone.playerBase:
-          return Zone.middle;
-        case Zone.middle:
-          return Zone.enemyBase;
-        case Zone.enemyBase:
-          return null; // Already at enemy base
-      }
-    } else {
-      switch (current) {
-        case Zone.enemyBase:
-          return Zone.middle;
-        case Zone.middle:
-          return Zone.playerBase;
-        case Zone.playerBase:
-          return null; // Already at player base (enemy's target)
-      }
-    }
-  }
+  /// Step-based movement is handled at the Lane level where both sides
+  /// are considered together so units can't pass through each other.
 
   /// Cleanup dead cards at all positions
   void cleanup() {
@@ -265,6 +196,14 @@ class PositionalCards {
     middleCards.clear();
     enemyBaseCards.clear();
   }
+}
+
+/// Result of a full step-based movement for a lane.
+class LaneMovementResult {
+  final Map<GameCard, Zone> playerMoves;
+  final Map<GameCard, Zone> opponentMoves;
+
+  LaneMovementResult({required this.playerMoves, required this.opponentMoves});
 }
 
 /// Represents one of the 3 battle lanes
@@ -360,57 +299,242 @@ class Lane {
     }
   }
 
-  /// Move all player cards forward based on their moveSpeed
-  /// Returns a map of card -> zone they ended up at
-  Map<GameCard, Zone> movePlayerCardsForward() {
-    final results = <GameCard, Zone>{};
+  /// Shared, step-based movement for both sides.
+  /// Applies no-crossing and stop-on-shared-tile rules.
+  LaneMovementResult moveCardsStepBased() {
+    // Snapshot initial positions
+    final Map<GameCard, Zone> playerPos = {};
+    final Map<GameCard, Zone> opponentPos = {};
 
-    // Process cards from front to back (enemyBase, middle, base)
-    // to avoid conflicts
-    for (final zone in [Zone.enemyBase, Zone.middle, Zone.playerBase]) {
-      final stack = playerCards.getStackAt(zone, true);
-      final cardsToMove = [...stack.aliveCards];
-
-      for (final card in cardsToMove) {
-        final endZone = playerCards.moveCardForward(
-          card,
-          zone,
-          opponentCards,
-          true,
-        );
-        if (endZone != null) {
-          results[card] = endZone;
+    void _collectPositions(
+      Map<GameCard, Zone> target,
+      PositionalCards source,
+      bool isPlayer,
+    ) {
+      for (final zone in Zone.values) {
+        final stack = source.getStackAt(zone, isPlayer);
+        for (final card in stack.aliveCards) {
+          target[card] = zone;
         }
       }
     }
 
-    return results;
-  }
+    _collectPositions(playerPos, playerCards, true);
+    _collectPositions(opponentPos, opponentCards, false);
 
-  /// Move all opponent cards forward based on their moveSpeed
-  /// Returns a map of card -> zone they ended up at
-  Map<GameCard, Zone> moveOpponentCardsForward() {
-    final results = <GameCard, Zone>{};
+    // Track which cards are locked in combat and cannot move further
+    final Set<GameCard> locked = {};
 
-    // Process cards from front to back (playerBase, middle, enemyBase)
-    for (final zone in [Zone.playerBase, Zone.middle, Zone.enemyBase]) {
-      final stack = opponentCards.getStackAt(zone, false);
-      final cardsToMove = [...stack.aliveCards];
+    // PRE-LOCK: Any cards that already share a tile at the start of
+    // movement (same Zone for both sides) are immediately locked and
+    // will not advance this turn. They must resolve combat where they
+    // are instead of walking past each other.
+    for (final zone in Zone.values) {
+      final playersHere = playerPos.keys
+          .where((card) => playerPos[card] == zone)
+          .toList();
+      final opponentsHere = opponentPos.keys
+          .where((card) => opponentPos[card] == zone)
+          .toList();
+      if (playersHere.isNotEmpty && opponentsHere.isNotEmpty) {
+        locked.addAll(playersHere);
+        locked.addAll(opponentsHere);
+      }
+    }
 
-      for (final card in cardsToMove) {
-        final endZone = opponentCards.moveCardForward(
-          card,
-          zone,
-          playerCards,
-          false,
-        );
-        if (endZone != null) {
-          results[card] = endZone;
+    // Local helper: get the next zone in the forward direction for a side
+    Zone? _nextZone(Zone current, bool isPlayer) {
+      if (isPlayer) {
+        switch (current) {
+          case Zone.playerBase:
+            return Zone.middle;
+          case Zone.middle:
+            return Zone.enemyBase;
+          case Zone.enemyBase:
+            return null; // Already at enemy base
+        }
+      } else {
+        switch (current) {
+          case Zone.enemyBase:
+            return Zone.middle;
+          case Zone.middle:
+            return Zone.playerBase;
+          case Zone.playerBase:
+            return null; // Already at player base (enemy's target)
         }
       }
     }
 
-    return results;
+    // Helper: run a single movement step
+    void _runStep(int stepIndex) {
+      // Build occupancy at start of step
+      final Map<Zone, List<GameCard>> playerAt = {
+        for (final z in Zone.values) z: [],
+      };
+      final Map<Zone, List<GameCard>> opponentAt = {
+        for (final z in Zone.values) z: [],
+      };
+
+      playerPos.forEach((card, zone) {
+        playerAt[zone]!.add(card);
+      });
+      opponentPos.forEach((card, zone) {
+        opponentAt[zone]!.add(card);
+      });
+
+      // Compute intents
+      final Map<GameCard, Zone> intended = {};
+
+      void _computeIntentsForSide(
+        Map<GameCard, Zone> positions,
+        Map<Zone, List<GameCard>> enemyAt,
+        bool isPlayer,
+      ) {
+        positions.forEach((card, zone) {
+          if (locked.contains(card)) {
+            intended[card] = zone;
+            return;
+          }
+
+          // Remaining speed: if this step exceeds moveSpeed, stay
+          if (stepIndex > card.moveSpeed || card.moveSpeed == 0) {
+            intended[card] = zone;
+            return;
+          }
+
+          final next = _nextZone(zone, isPlayer);
+          if (next == null) {
+            intended[card] = zone;
+            return;
+          }
+
+          // Block movement into occupied tiles, EXCEPT bases:
+          // - You may move into an occupied enemyBase (to contest it).
+          // - Opponent may move into an occupied playerBase.
+          final isEnteringEnemyBase = isPlayer && next == Zone.enemyBase;
+          final isEnteringPlayerBase = !isPlayer && next == Zone.playerBase;
+          if (enemyAt[next]!.isNotEmpty &&
+              !(isEnteringEnemyBase || isEnteringPlayerBase)) {
+            intended[card] = zone;
+            return;
+          }
+
+          intended[card] = next;
+        });
+      }
+
+      _computeIntentsForSide(playerPos, opponentAt, true);
+      _computeIntentsForSide(opponentPos, playerAt, false);
+
+      // Handle crossing: playerBase<->middle and middle<->enemyBase
+      void _resolveCrossing(Zone a, Zone b) {
+        // Players moving a->b, opponents moving b->a
+        final crossingPlayers = playerPos.keys.where((card) {
+          final from = playerPos[card]!;
+          final to = intended[card] ?? from;
+          return from == a && to == b;
+        }).toList();
+
+        final crossingOpponents = opponentPos.keys.where((card) {
+          final from = opponentPos[card]!;
+          final to = intended[card] ?? from;
+          return from == b && to == a;
+        }).toList();
+
+        if (crossingPlayers.isNotEmpty && crossingOpponents.isNotEmpty) {
+          // Meeting tile is always the middle between a and b (which is b if a==playerBase)
+          final meetZone = Zone.middle;
+          for (final card in crossingPlayers) {
+            intended[card] = meetZone;
+          }
+          for (final card in crossingOpponents) {
+            intended[card] = meetZone;
+          }
+        }
+      }
+
+      _resolveCrossing(Zone.playerBase, Zone.middle);
+      _resolveCrossing(Zone.middle, Zone.enemyBase);
+
+      // Special edge case: both sides start in middle and try to move
+      // outward to opposite bases in the same step.
+      // They should NOT pass through each other; instead, they both
+      // remain in middle and are locked in combat there.
+      final middlePlayersOut = playerPos.keys.where((card) {
+        final from = playerPos[card]!;
+        final to = intended[card] ?? from;
+        return from == Zone.middle && to == Zone.enemyBase;
+      }).toList();
+
+      final middleOpponentsOut = opponentPos.keys.where((card) {
+        final from = opponentPos[card]!;
+        final to = intended[card] ?? from;
+        return from == Zone.middle && to == Zone.playerBase;
+      }).toList();
+
+      if (middlePlayersOut.isNotEmpty && middleOpponentsOut.isNotEmpty) {
+        for (final card in middlePlayersOut) {
+          intended[card] = Zone.middle;
+        }
+        for (final card in middleOpponentsOut) {
+          intended[card] = Zone.middle;
+        }
+      }
+
+      // Apply intents and lock any tiles with both sides present
+      final Map<Zone, List<GameCard>> newPlayerAt = {
+        for (final z in Zone.values) z: [],
+      };
+      final Map<Zone, List<GameCard>> newOpponentAt = {
+        for (final z in Zone.values) z: [],
+      };
+
+      playerPos.forEach((card, _) {
+        final z = intended[card] ?? playerPos[card]!;
+        playerPos[card] = z;
+        newPlayerAt[z]!.add(card);
+      });
+      opponentPos.forEach((card, _) {
+        final z = intended[card] ?? opponentPos[card]!;
+        opponentPos[card] = z;
+        newOpponentAt[z]!.add(card);
+      });
+
+      // Lock any cards sharing a tile with enemies
+      for (final z in Zone.values) {
+        if (newPlayerAt[z]!.isNotEmpty && newOpponentAt[z]!.isNotEmpty) {
+          locked.addAll(newPlayerAt[z]!);
+          locked.addAll(newOpponentAt[z]!);
+        }
+      }
+    }
+
+    // Run up to 2 steps (max moveSpeed is 2)
+    for (int step = 1; step <= 2; step++) {
+      _runStep(step);
+    }
+
+    // Build movement result maps (card -> final zone)
+    final Map<GameCard, Zone> playerMoves = {};
+    final Map<GameCard, Zone> opponentMoves = {};
+
+    // Clear stacks and repopulate from final positions
+    playerCards.clear();
+    opponentCards.clear();
+
+    playerPos.forEach((card, zone) {
+      playerCards.addCardAt(zone, card, true, asTopCard: false);
+      playerMoves[card] = zone;
+    });
+    opponentPos.forEach((card, zone) {
+      opponentCards.addCardAt(zone, card, false, asTopCard: false);
+      opponentMoves[card] = zone;
+    });
+
+    return LaneMovementResult(
+      playerMoves: playerMoves,
+      opponentMoves: opponentMoves,
+    );
   }
 
   /// Find the combat zone where both sides have cards

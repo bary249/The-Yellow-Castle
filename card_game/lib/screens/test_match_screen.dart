@@ -2460,57 +2460,60 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                                 : null,
                           ),
                           padding: const EdgeInsets.all(6),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                card.name,
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 1),
-                              Text(
-                                'HP: ${card.health}',
-                                style: const TextStyle(fontSize: 8),
-                              ),
-                              Text(
-                                'DMG: ${card.damage}',
-                                style: const TextStyle(fontSize: 8),
-                              ),
-                              Text(
-                                'Tick: ${card.tick}  Spd: ${card.moveSpeed}',
-                                style: const TextStyle(fontSize: 8),
-                              ),
-                              if (card.element != null)
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
                                 Text(
-                                  'Elem: ${card.element}',
-                                  style: const TextStyle(fontSize: 7),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              if (card.abilities.isNotEmpty)
-                                Text(
-                                  card.abilities.join(', '),
-                                  style: const TextStyle(fontSize: 6),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              if (isSelected)
-                                const Padding(
-                                  padding: EdgeInsets.only(top: 2),
-                                  child: Icon(
-                                    Icons.touch_app,
-                                    size: 14,
-                                    color: Colors.green,
+                                  card.name,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.bold,
                                   ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                            ],
+                                const SizedBox(height: 1),
+                                Text(
+                                  'HP: ${card.health}',
+                                  style: const TextStyle(fontSize: 8),
+                                ),
+                                Text(
+                                  'DMG: ${card.damage}',
+                                  style: const TextStyle(fontSize: 8),
+                                ),
+                                Text(
+                                  'Tick: ${card.tick}  Spd: ${card.moveSpeed}',
+                                  style: const TextStyle(fontSize: 8),
+                                ),
+                                if (card.element != null)
+                                  Text(
+                                    'Elem: ${card.element}',
+                                    style: const TextStyle(fontSize: 7),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                if (card.abilities.isNotEmpty)
+                                  Text(
+                                    card.abilities.join(', '),
+                                    style: const TextStyle(fontSize: 6),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                if (isSelected)
+                                  const Padding(
+                                    padding: EdgeInsets.only(top: 2),
+                                    child: Icon(
+                                      Icons.touch_app,
+                                      size: 14,
+                                      color: Colors.green,
+                                    ),
+                                  ),
+                              ],
+                            ),
                           ),
                         ),
                       );

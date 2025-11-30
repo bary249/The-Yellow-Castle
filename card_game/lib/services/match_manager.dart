@@ -388,22 +388,20 @@ class MatchManager {
     _log('\n--- BOARD STATE (AFTER STAGING) ---');
     _logBoardState();
 
-    // Move cards forward based on their moveSpeed
+    // Move cards forward based on their moveSpeed (step-based, shared plan)
     _log('\n--- CARD MOVEMENT ---');
     for (final lane in _currentMatch!.lanes) {
       final laneName = lane.position.name.toUpperCase();
 
-      // Player cards move forward
-      final playerMoves = lane.movePlayerCardsForward();
-      for (final entry in playerMoves.entries) {
+      final movement = lane.moveCardsStepBased();
+
+      for (final entry in movement.playerMoves.entries) {
         _log(
           '$laneName: Player ${entry.key.name} moved to ${entry.value.name}',
         );
       }
 
-      // Opponent cards move forward
-      final opponentMoves = lane.moveOpponentCardsForward();
-      for (final entry in opponentMoves.entries) {
+      for (final entry in movement.opponentMoves.entries) {
         _log(
           '$laneName: Opponent ${entry.key.name} moved to ${entry.value.name}',
         );
@@ -585,12 +583,18 @@ class MatchManager {
     for (final lane in _currentMatch!.lanes) {
       final laneName = lane.position.name.toUpperCase();
       final colIndex = lane.position.index;
+      final lanePos = lane.position;
 
       // Check for player attackers at enemy base
       final playerAttackers = lane.playerCards.enemyBaseCards.aliveCards;
       final opponentDefenders = lane.opponentCards.baseCards.aliveCards;
 
       if (playerAttackers.isNotEmpty) {
+        // Fog of war: as soon as you have attackers at enemy base,
+        // reveal that lane's enemy base to the player.
+        if (!_currentMatch!.revealedEnemyBaseLanes.contains(lanePos)) {
+          _currentMatch!.revealedEnemyBaseLanes.add(lanePos);
+        }
         if (opponentDefenders.isEmpty) {
           // Uncontested - deal full damage
           final totalDamage = playerAttackers.fold<int>(
@@ -805,7 +809,7 @@ class MatchManager {
 
     _log('╚════════════════════════════════════╝');
 
-    // Add compact visual grid
+    // Add compact visual grid based on ACTUAL positions (same as UI)
     _log('\n     W   C   E     POSITIONS');
     _log('   ┌───┬───┬───┐');
     for (int row = 0; row < 3; row++) {
@@ -815,44 +819,32 @@ class MatchManager {
         final tile = board.getTile(row, col);
         final lane = lanes[col];
 
-        // Zone row: where combat happens for this lane
-        final zoneRow = lane.currentZone == Zone.enemyBase
-            ? 0
-            : (lane.currentZone == Zone.playerBase ? 2 : 1);
+        bool hasPlayer;
+        bool hasOpponent;
 
-        // Fighting cards (middleCards) - shown at zone row
-        final hasFightingPlayer =
-            lane.playerCards.middleCards.aliveCards.isNotEmpty;
-        final hasFightingOpponent =
-            lane.opponentCards.middleCards.aliveCards.isNotEmpty;
-
-        // Staging cards (baseCards) - shown at base rows when zone is elsewhere
-        final hasStagingPlayer =
-            lane.playerCards.baseCards.aliveCards.isNotEmpty;
-        final hasStagingOpponent =
-            lane.opponentCards.baseCards.aliveCards.isNotEmpty;
-
-        // Cell content based on zone position
-        String cell;
-        if (row == zoneRow) {
-          // This is the combat zone for this lane
-          if (hasFightingPlayer && hasFightingOpponent) {
-            cell = 'X'; // Combat!
-          } else if (hasFightingPlayer) {
-            cell = 'P';
-          } else if (hasFightingOpponent) {
-            cell = 'O';
-          } else {
-            cell = '·';
-          }
-        } else if (row == 0) {
-          // Enemy base row - show staging cards if zone is not here
-          cell = hasStagingOpponent ? 'O' : '·';
-        } else if (row == 2) {
-          // Player base row - show staging cards if zone is not here
-          cell = hasStagingPlayer ? 'P' : '·';
+        // Row 0 = enemy base, Row 1 = middle, Row 2 = player base
+        if (row == 0) {
+          // Enemy base: player attackers + opponent base stack
+          hasPlayer = lane.playerCards.enemyBaseCards.aliveCards.isNotEmpty;
+          hasOpponent = lane.opponentCards.baseCards.aliveCards.isNotEmpty;
+        } else if (row == 1) {
+          // Middle: both sides' middle stacks
+          hasPlayer = lane.playerCards.middleCards.aliveCards.isNotEmpty;
+          hasOpponent = lane.opponentCards.middleCards.aliveCards.isNotEmpty;
         } else {
-          // Middle row but zone is at a base - empty
+          // Player base: player base stack + opponent attackers at your base
+          hasPlayer = lane.playerCards.baseCards.aliveCards.isNotEmpty;
+          hasOpponent = lane.opponentCards.enemyBaseCards.aliveCards.isNotEmpty;
+        }
+
+        String cell;
+        if (hasPlayer && hasOpponent) {
+          cell = 'X';
+        } else if (hasPlayer) {
+          cell = 'P';
+        } else if (hasOpponent) {
+          cell = 'O';
+        } else {
           cell = '·';
         }
 
@@ -867,7 +859,6 @@ class MatchManager {
         rowStr += ' $cell$ownerMark│';
       }
 
-      // Add row labels
       final rowName = row == 0 ? 'Enemy' : (row == 1 ? 'Mid' : 'You');
       _log('$rowStr  $rowName');
       if (row < 2) _log('   ├───┼───┼───┤');
