@@ -215,19 +215,33 @@ The UI will show these abilities as **keywords** on the card with full descripti
 ---
 
 ## 8. Lane Advancement & Zones
-Each lane tracks how far you’ve pushed toward the enemy crystal.
+Each lane tracks how far you've pushed toward the enemy crystal.
 
-- **Zones** per lane:
-  - Your Base → Middle → Enemy Base.
+### 8.1 Zone Positions
+- **Zones** per lane: Your Base → Middle → Enemy Base.
+- The **zone represents where combat happens** (the front line).
+- Players can **only stage cards at their own base** (captured tiles).
+- You **cannot stage cards at enemy base** - capturing enemy base = win condition.
+
+### 8.2 Combat Location
+- Combat happens **at the zone position**:
+  - Zone at Middle → combat at middle (neutral terrain)
+  - Zone at Enemy Base → combat at enemy base (enemy's terrain buffs apply)
+  - Zone at Your Base → combat at your base (your terrain buffs apply)
+- Cards from both sides **advance toward the zone** to fight.
+
+### 8.3 Zone Movement
 - After combat in a lane:
   - If you clearly **win** that lane this round:
-    - The lane’s zone moves **one step toward the enemy base**.
+    - The lane's zone moves **one step toward the enemy base**.
   - If your opponent wins, the zone moves **toward your base**.
-  - If it’s a **draw** (no clear winner), the zone **doesn’t move**.
-- Reaching the **enemy base**:
-  - Surviving cards in that lane directly deal their **Damage** to the **enemy crystal**.
+  - If it's a **draw** (no clear winner), the zone **doesn't move**.
 
-Zones also interact with the **terrain attunement** system (e.g. slightly stronger in your own attuned base terrain; no direct terrain-vs-terrain matchup).
+### 8.4 Crystal Damage & Retreat
+- When you win combat **at the enemy base**:
+  - Surviving cards deal their **Damage** to the **enemy crystal**.
+  - After hitting the crystal, survivors **retreat to middle** (they cannot hold enemy base).
+- This creates a push-pull dynamic where you must keep winning at enemy base to deal repeated crystal damage.
 
 ---
 

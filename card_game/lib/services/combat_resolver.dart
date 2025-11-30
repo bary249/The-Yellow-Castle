@@ -170,7 +170,8 @@ class CombatResolver {
     final playerAliveBeforeTick = playerCard?.isAlive ?? false;
     final opponentAliveBeforeTick = opponentCard?.isAlive ?? false;
 
-    // Simultaneous attacks - both happen even if one dies
+    // Simultaneous attacks - if a card is alive when their tick arrives,
+    // they attack even if they will be killed on that same tick.
     if (playerActs &&
         opponentCard != null &&
         playerAliveBeforeTick &&

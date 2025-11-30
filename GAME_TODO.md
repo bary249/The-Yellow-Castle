@@ -44,6 +44,14 @@
   - Combat still uses middleCards (legacy compatibility)
 - [ ] Remove legacy Lane system (deferred - working as hybrid)
 
+### Zone & Combat Logic Fixes ✅
+- [x] Fixed crystal damage: only occurs when winning at enemy base (not from middle)
+- [x] Zone represents front line where combat happens (not just territory control)
+- [x] Board display now shows cards at zone position (combat location)
+- [x] Terrain buffs correctly applied based on zone (combat at base = terrain bonus)
+- [x] Survivors retreat to middle after dealing crystal damage
+- [x] Updated GAME_RULES.md and GAME_LOGIC_SPEC.md with clarified zone mechanics
+
 ---
 
 ## 🏗️ 1. Project Setup & Architecture

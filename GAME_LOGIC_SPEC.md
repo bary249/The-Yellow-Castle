@@ -112,8 +112,17 @@ This document captures the **implemented and intended logic** of the game, mappe
 - `Zone` enum: `playerBase`, `middle`, `enemyBase`.
 - Fields:
   - `position` (lane id).
-  - `currentZone` (where the battle is happening for this lane this round).
-  - `playerStack`, `opponentStack` (CardStack each).
+  - `currentZone` (the front line - **where combat happens** for this lane).
+  - `playerCards`, `opponentCards` (PositionalCards each - holds base and middle cards).
+
+**Zone & Combat Location:**
+- The **zone represents where combat happens** (the front line).
+- Players can **only stage cards at their own base** (not at enemy base).
+- Combat happens **at the zone position**:
+  - Zone at `middle` → combat at middle (neutral terrain).
+  - Zone at `enemyBase` → combat at enemy base (enemy's terrain buffs apply).
+  - Zone at `playerBase` → combat at player base (player's terrain buffs apply).
+- Cards from both sides **advance toward the zone** to fight.
 
 **CardStack**
 - Conceptually holds up to **2 cards** per side:
@@ -153,9 +162,14 @@ This document captures the **implemented and intended logic** of the game, mappe
   - If `playerWon == true`:
     - `playerBase` → `middle`.
     - `middle` → `enemyBase`.
-    - `enemyBase` → returns `true` (reached enemy base, crystal damage should be applied).
+    - `enemyBase` → returns `true` (already at enemy base, crystal damage applied).
   - If `playerWon == false` (opponent wins): mirrored logic toward `playerBase`.
-  - Return value = **did victor reach enemy base this advancement step?**
+  - Return value = **did victor win while already at enemy base?**
+
+**Retreat after crystal damage:**
+- `retreatZone(bool playerAttacking)`:
+  - After dealing crystal damage, survivors **retreat to middle**.
+  - This creates a push-pull dynamic - you cannot hold enemy base permanently.
 
 Note: Lane `reset()` clears cards but **does not reset `currentZone`**.
 
