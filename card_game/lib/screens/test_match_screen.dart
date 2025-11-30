@@ -902,6 +902,11 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
           bottom: 0,
           child: _buildBattleLogDrawer(),
         ),
+
+        // Combat zoom overlay - shown when a lane is actively in combat
+        if (match.currentPhase == MatchPhase.combatPhase &&
+            _matchManager.currentCombatLane != null)
+          Positioned.fill(child: _buildCombatZoomOverlay()),
       ],
     );
   }
@@ -1088,6 +1093,558 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         ),
         if (isComplete)
           const Text('✓', style: TextStyle(color: Colors.green, fontSize: 12)),
+      ],
+    );
+  }
+
+  /// Build the combat zoom overlay showing the active lane in detail
+  Widget _buildCombatZoomOverlay() {
+    final match = _matchManager.currentMatch;
+    if (match == null) return const SizedBox.shrink();
+
+    final activeLane = _matchManager.currentCombatLane;
+    if (activeLane == null) return const SizedBox.shrink();
+
+    final lane = match.getLane(activeLane);
+    final currentTick = _matchManager.currentCombatTick ?? 0;
+    final zone = lane.currentZone;
+
+    // Get fighting cards (middleCards)
+    final playerFront = lane.playerStack.topCard;
+    final playerBack = lane.playerStack.bottomCard;
+    final opponentFront = lane.opponentStack.topCard;
+    final opponentBack = lane.opponentStack.bottomCard;
+
+    return Container(
+      color: Colors.black87,
+      child: SafeArea(
+        child: Column(
+          children: [
+            // Header with lane info
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.red[800]!, Colors.orange[700]!],
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.flash_on, color: Colors.yellow, size: 28),
+                  const SizedBox(width: 8),
+                  Text(
+                    '⚔️ ${activeLane.name.toUpperCase()} LANE ⚔️',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 2,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Icon(Icons.flash_on, color: Colors.yellow, size: 28),
+                ],
+              ),
+            ),
+
+            // Zone indicator
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              color: zone == Zone.playerBase
+                  ? Colors.blue[700]
+                  : (zone == Zone.enemyBase
+                        ? Colors.red[700]
+                        : Colors.grey[700]),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    zone == Zone.middle ? Icons.swap_horiz : Icons.castle,
+                    color: Colors.white,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Combat at: ${zone == Zone.playerBase ? '🛡️ YOUR BASE' : (zone == Zone.enemyBase ? '🏰 ENEMY BASE' : '⚔️ MIDDLE')}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Tick progress bar
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
+              color: Colors.grey[900],
+              child: Column(
+                children: [
+                  Text(
+                    'TICK $currentTick / 5',
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(5, (index) {
+                      final tickNum = index + 1;
+                      final isPast = tickNum < currentTick;
+                      final isCurrent = tickNum == currentTick;
+
+                      return AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        margin: const EdgeInsets.symmetric(horizontal: 6),
+                        width: isCurrent ? 36 : 28,
+                        height: isCurrent ? 36 : 28,
+                        decoration: BoxDecoration(
+                          color: isCurrent
+                              ? Colors.orange
+                              : (isPast ? Colors.green : Colors.grey[700]),
+                          shape: BoxShape.circle,
+                          border: isCurrent
+                              ? Border.all(color: Colors.white, width: 3)
+                              : null,
+                          boxShadow: isCurrent
+                              ? [
+                                  BoxShadow(
+                                    color: Colors.orange.withAlpha(150),
+                                    blurRadius: 12,
+                                    spreadRadius: 2,
+                                  ),
+                                ]
+                              : null,
+                        ),
+                        child: Center(
+                          child: Text(
+                            '$tickNum',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: isCurrent ? 16 : 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
+                  ),
+                ],
+              ),
+            ),
+
+            // Main combat area
+            Expanded(
+              child: Row(
+                children: [
+                  // Player side (left)
+                  Expanded(
+                    child: Container(
+                      margin: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.blue[900]!.withAlpha(150),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.blue[400]!, width: 2),
+                      ),
+                      child: Column(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.blue[700],
+                              borderRadius: const BorderRadius.only(
+                                topLeft: Radius.circular(10),
+                                topRight: Radius.circular(10),
+                              ),
+                            ),
+                            child: const Center(
+                              child: Text(
+                                '🛡️ YOUR CARDS',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                _buildZoomCard(playerFront, 'FRONT', true),
+                                const SizedBox(height: 12),
+                                _buildZoomCard(playerBack, 'BACK', true),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  // VS separator
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 20,
+                      horizontal: 8,
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.red[700],
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.red.withAlpha(150),
+                                blurRadius: 12,
+                              ),
+                            ],
+                          ),
+                          child: const Text(
+                            'VS',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Opponent side (right)
+                  Expanded(
+                    child: Container(
+                      margin: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.red[900]!.withAlpha(150),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.red[400]!, width: 2),
+                      ),
+                      child: Column(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.red[700],
+                              borderRadius: const BorderRadius.only(
+                                topLeft: Radius.circular(10),
+                                topRight: Radius.circular(10),
+                              ),
+                            ),
+                            child: const Center(
+                              child: Text(
+                                '⚔️ ENEMY CARDS',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                _buildZoomCard(opponentFront, 'FRONT', false),
+                                const SizedBox(height: 12),
+                                _buildZoomCard(opponentBack, 'BACK', false),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Combat details
+            if (_matchManager.currentTickDetails.isNotEmpty)
+              Container(
+                padding: const EdgeInsets.all(12),
+                color: Colors.grey[850],
+                child: Column(
+                  children: [
+                    const Text(
+                      'COMBAT LOG',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      alignment: WrapAlignment.center,
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: _matchManager.currentTickDetails.map((detail) {
+                        final isDestroyed = detail.contains('DESTROYED');
+                        final isHit = detail.contains('Hit');
+                        return Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isDestroyed
+                                ? Colors.red[800]
+                                : (isHit
+                                      ? Colors.orange[800]
+                                      : Colors.grey[700]),
+                            borderRadius: BorderRadius.circular(8),
+                            border: isDestroyed
+                                ? Border.all(color: Colors.red[300]!, width: 1)
+                                : null,
+                          ),
+                          child: Text(
+                            detail,
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: isDestroyed
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                ),
+              ),
+
+            // Skip button
+            Container(
+              padding: const EdgeInsets.all(12),
+              color: Colors.black,
+              child: ElevatedButton.icon(
+                onPressed: () => _matchManager.skipToEnd(),
+                icon: const Icon(Icons.fast_forward),
+                label: const Text('SKIP COMBAT (ENTER)'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red[700],
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Build a single card display for the combat zoom overlay
+  Widget _buildZoomCard(GameCard? card, String position, bool isPlayer) {
+    if (card == null) {
+      return Container(
+        width: 120,
+        height: 140,
+        decoration: BoxDecoration(
+          color: Colors.grey[800]!.withAlpha(100),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: Colors.grey[600]!,
+            width: 1,
+            style: BorderStyle.solid,
+          ),
+        ),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.block, color: Colors.grey[500], size: 32),
+              const SizedBox(height: 4),
+              Text(
+                position,
+                style: TextStyle(color: Colors.grey[500], fontSize: 12),
+              ),
+              Text(
+                'Empty',
+                style: TextStyle(color: Colors.grey[600], fontSize: 10),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final isAlive = card.isAlive;
+    final healthPercent = card.currentHealth / card.health;
+    final cardColor = isPlayer ? Colors.blue : Colors.red;
+
+    return Opacity(
+      opacity: isAlive ? 1.0 : 0.4,
+      child: Container(
+        width: 120,
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [cardColor[800]!, cardColor[900]!],
+          ),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isAlive ? cardColor[400]! : Colors.grey[600]!,
+            width: 2,
+          ),
+          boxShadow: isAlive
+              ? [
+                  BoxShadow(
+                    color: cardColor.withAlpha(100),
+                    blurRadius: 8,
+                    spreadRadius: 1,
+                  ),
+                ]
+              : null,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Position label
+            Text(
+              position,
+              style: TextStyle(
+                color: Colors.white.withAlpha(180),
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+
+            // Card name
+            Text(
+              card.name,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+
+            const SizedBox(height: 6),
+
+            // Health bar
+            Stack(
+              children: [
+                Container(
+                  height: 16,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[800],
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                FractionallySizedBox(
+                  widthFactor: healthPercent.clamp(0.0, 1.0),
+                  child: Container(
+                    height: 16,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: healthPercent > 0.5
+                            ? [Colors.green[600]!, Colors.green[400]!]
+                            : (healthPercent > 0.25
+                                  ? [Colors.orange[600]!, Colors.orange[400]!]
+                                  : [Colors.red[600]!, Colors.red[400]!]),
+                      ),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  height: 16,
+                  child: Center(
+                    child: Text(
+                      '${card.currentHealth}/${card.health}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        shadows: [Shadow(color: Colors.black, blurRadius: 2)],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 4),
+
+            // Stats row
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _buildZoomStat('⚔️', '${card.damage}'),
+                _buildZoomStat('⏱️', 'T${card.tick}'),
+              ],
+            ),
+
+            // Terrain
+            if (card.element != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  '🏔️ ${card.element}',
+                  style: TextStyle(
+                    color: Colors.white.withAlpha(180),
+                    fontSize: 9,
+                  ),
+                ),
+              ),
+
+            // Dead indicator
+            if (!isAlive)
+              const Padding(
+                padding: EdgeInsets.only(top: 4),
+                child: Text(
+                  '💀 DESTROYED',
+                  style: TextStyle(
+                    color: Colors.red,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildZoomStat(String icon, String value) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(icon, style: const TextStyle(fontSize: 12)),
+        const SizedBox(width: 2),
+        Text(
+          value,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
       ],
     );
   }
