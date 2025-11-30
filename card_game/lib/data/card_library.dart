@@ -371,7 +371,7 @@ GameCard tidalLeviathan() => GameCard(
   name: 'Tidal Leviathan',
   damage: 10,
   health: 28,
-  tick: 6,
+  tick: 5,
   moveSpeed: 0, // Stationary - legendary tank holds the line
   element: 'Lake',
   abilities: const ['shield_3', 'regenerate'], // Massive tank
@@ -389,6 +389,20 @@ GameCard ancientTreant() => GameCard(
   moveSpeed: 0, // Stationary - legendary tree holds position
   element: 'Woods',
   abilities: const ['regen_2', 'thorns_3'], // Heals and reflects damage
+  cost: 5,
+  rarity: 4, // Legendary
+);
+
+/// Neutral Champion - Shadow Assassin (stealth)
+GameCard shadowAssassin() => GameCard(
+  id: 'legendary_neutral_shadow_assassin',
+  name: 'Shadow Assassin',
+  damage: 11,
+  health: 7,
+  tick: 2,
+  moveSpeed: 2, // Fast, fragile assassin
+  element: null, // Neutral
+  abilities: const ['stealth_pass'],
   cost: 5,
   rarity: 4, // Legendary
 );
@@ -524,6 +538,7 @@ List<GameCard> buildFullCardPool() {
   cards.add(sunfireWarlord());
   cards.add(tidalLeviathan());
   cards.add(ancientTreant());
+  cards.add(shadowAssassin());
 
   return cards;
 }

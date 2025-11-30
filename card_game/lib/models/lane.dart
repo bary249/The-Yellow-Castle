@@ -329,6 +329,9 @@ class Lane {
     // movement (same Zone for both sides) are immediately locked and
     // will not advance this turn. They must resolve combat where they
     // are instead of walking past each other.
+    //
+    // Exception: cards with 'stealth_pass' in the middle can slip out
+    // and are not movement-locked by sharing the middle tile.
     for (final zone in Zone.values) {
       final playersHere = playerPos.keys
           .where((card) => playerPos[card] == zone)
@@ -337,8 +340,20 @@ class Lane {
           .where((card) => opponentPos[card] == zone)
           .toList();
       if (playersHere.isNotEmpty && opponentsHere.isNotEmpty) {
-        locked.addAll(playersHere);
-        locked.addAll(opponentsHere);
+        for (final card in playersHere) {
+          final isStealthMiddle =
+              zone == Zone.middle && card.abilities.contains('stealth_pass');
+          if (!isStealthMiddle) {
+            locked.add(card);
+          }
+        }
+        for (final card in opponentsHere) {
+          final isStealthMiddle =
+              zone == Zone.middle && card.abilities.contains('stealth_pass');
+          if (!isStealthMiddle) {
+            locked.add(card);
+          }
+        }
       }
     }
 
@@ -413,8 +428,11 @@ class Lane {
           // - Opponent may move into an occupied playerBase.
           final isEnteringEnemyBase = isPlayer && next == Zone.enemyBase;
           final isEnteringPlayerBase = !isPlayer && next == Zone.playerBase;
+          final hasStealthPass = card.abilities.contains('stealth_pass');
+          final ignoresMiddleBlock = hasStealthPass && next == Zone.middle;
           if (enemyAt[next]!.isNotEmpty &&
-              !(isEnteringEnemyBase || isEnteringPlayerBase)) {
+              !(isEnteringEnemyBase || isEnteringPlayerBase) &&
+              !ignoresMiddleBlock) {
             intended[card] = zone;
             return;
           }
@@ -501,10 +519,25 @@ class Lane {
       });
 
       // Lock any cards sharing a tile with enemies
+      // Stealth units ('stealth_pass') in the middle are not movement-locked
+      // here so they can continue slipping through in later steps, but they
+      // are still present for combat resolution once movement is done.
       for (final z in Zone.values) {
         if (newPlayerAt[z]!.isNotEmpty && newOpponentAt[z]!.isNotEmpty) {
-          locked.addAll(newPlayerAt[z]!);
-          locked.addAll(newOpponentAt[z]!);
+          for (final card in newPlayerAt[z]!) {
+            final isStealthMiddle =
+                z == Zone.middle && card.abilities.contains('stealth_pass');
+            if (!isStealthMiddle) {
+              locked.add(card);
+            }
+          }
+          for (final card in newOpponentAt[z]!) {
+            final isStealthMiddle =
+                z == Zone.middle && card.abilities.contains('stealth_pass');
+            if (!isStealthMiddle) {
+              locked.add(card);
+            }
+          }
         }
       }
     }
