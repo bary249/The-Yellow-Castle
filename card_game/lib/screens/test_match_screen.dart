@@ -252,6 +252,254 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     }
   }
 
+  Color _getRarityFillColor(GameCard card) {
+    switch (card.rarity) {
+      case 1:
+        return Colors.grey[200]!; // Common
+      case 2:
+        return Colors.lightBlue[100]!; // Rare
+      case 3:
+        return Colors.deepPurple[100]!; // Epic
+      case 4:
+        return Colors.orange[100]!; // Legendary
+      default:
+        return Colors.grey[200]!;
+    }
+  }
+
+  Color _getRarityBorderColor(GameCard card) {
+    switch (card.rarity) {
+      case 1:
+        return Colors.grey[500]!;
+      case 2:
+        return Colors.lightBlue[400]!;
+      case 3:
+        return Colors.deepPurple[400]!;
+      case 4:
+        return Colors.orange[400]!;
+      default:
+        return Colors.grey[500]!;
+    }
+  }
+
+  String _rarityLabel(int rarity) {
+    switch (rarity) {
+      case 1:
+        return 'Common';
+      case 2:
+        return 'Rare';
+      case 3:
+        return 'Epic';
+      case 4:
+        return 'Legendary';
+      default:
+        return 'Unknown';
+    }
+  }
+
+  Widget _buildStatIcon(IconData icon, int value, {double size = 10}) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: size, color: Colors.grey[800]),
+        const SizedBox(width: 1),
+        Text('$value', style: TextStyle(fontSize: size - 2)),
+      ],
+    );
+  }
+
+  IconData _abilityIconData(String ability) {
+    if (ability.startsWith('shield')) return Icons.shield;
+    if (ability.startsWith('fury')) return Icons.whatshot;
+    if (ability.startsWith('regen') || ability.startsWith('regenerate')) {
+      return Icons.autorenew;
+    }
+    if (ability.startsWith('heal')) return Icons.healing;
+    if (ability.startsWith('stack_buff')) return Icons.trending_up;
+    if (ability.startsWith('stack_debuff')) return Icons.trending_down;
+    if (ability == 'cleave') return Icons.all_inclusive;
+    if (ability.startsWith('thorns')) return Icons.grass;
+    if (ability == 'conceal_back') return Icons.visibility_off;
+    if (ability == 'stealth_pass') return Icons.nightlight_round;
+    if (ability == 'paratrooper') return Icons.flight_takeoff;
+    return Icons.star;
+  }
+
+  String _abilityDescription(String ability) {
+    switch (ability) {
+      case 'shield_1':
+        return 'Takes 1 less damage from each hit.';
+      case 'shield_2':
+        return 'Takes 2 less damage from each hit.';
+      case 'shield_3':
+        return 'Takes 3 less damage from each hit.';
+      case 'fury_1':
+        return '+1 damage when attacking.';
+      case 'fury_2':
+        return '+2 damage when attacking.';
+      case 'heal_ally_2':
+        return 'Heals an ally in lane for 2 HP each tick.';
+      case 'regen_1':
+        return 'Regenerates 1 HP each tick.';
+      case 'regen_2':
+        return 'Regenerates 2 HP each tick.';
+      case 'regenerate':
+        return 'Powerful regeneration over time.';
+      case 'stack_buff_damage_2':
+        return 'Buffs allies in stack with +2 damage.';
+      case 'stack_debuff_enemy_damage_2':
+        return 'Debuffs enemies in stack by -2 damage.';
+      case 'cleave':
+        return 'Hits multiple enemies in lane.';
+      case 'thorns_3':
+        return 'Reflects 3 damage back when hit.';
+      case 'conceal_back':
+        return 'Hides the back card in this stack from the enemy.';
+      case 'stealth_pass':
+        return 'Can move through enemies in the middle lane.';
+      case 'paratrooper':
+        return 'Can be staged directly onto the middle row.';
+      default:
+        return ability;
+    }
+  }
+
+  Widget _buildAbilityChip(String ability) {
+    final icon = _abilityIconData(ability);
+    return Chip(
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+      avatar: Icon(icon, size: 14),
+      label: Text(
+        _abilityDescription(ability),
+        style: const TextStyle(fontSize: 11),
+      ),
+    );
+  }
+
+  void _showCardDetails(GameCard card) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          contentPadding: const EdgeInsets.all(12),
+          content: Container(
+            width: 260,
+            decoration: BoxDecoration(
+              color: _getRarityFillColor(card),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: _getRarityBorderColor(card), width: 2),
+            ),
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        card.name,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      iconSize: 18,
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    if (card.element != null)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[800],
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          card.element!,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                          ),
+                        ),
+                      )
+                    else
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[600],
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text(
+                          'Neutral',
+                          style: TextStyle(color: Colors.white, fontSize: 11),
+                        ),
+                      ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Rarity: ${_rarityLabel(card.rarity)}',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _buildStatIcon(Icons.flash_on, card.damage, size: 14),
+                    _buildStatIcon(Icons.favorite, card.health, size: 14),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _buildStatIcon(Icons.timer, card.tick, size: 14),
+                    _buildStatIcon(
+                      Icons.directions_run,
+                      card.moveSpeed,
+                      size: 14,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                if (card.abilities.isNotEmpty) ...[
+                  const Text(
+                    'Abilities',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 4),
+                  Wrap(
+                    spacing: 4,
+                    runSpacing: 2,
+                    children: card.abilities
+                        .map((a) => _buildAbilityChip(a))
+                        .toList(),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   /// Listen to Firebase match document updates
   void _listenToMatchUpdates() {
     if (widget.onlineMatchId == null) return;
@@ -2059,149 +2307,145 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                         labelColor = Colors.grey[600]!;
                       }
 
-                      return Stack(
-                        children: [
-                          Container(
-                            margin: const EdgeInsets.symmetric(vertical: 1),
-                            padding: const EdgeInsets.all(3),
-                            decoration: BoxDecoration(
-                              color: cardColor,
-                              borderRadius: BorderRadius.circular(4),
-                              border: isStaged
-                                  ? Border.all(color: Colors.amber, width: 2)
-                                  : (isFrontCard
-                                        ? Border.all(
-                                            color: isOpponent
-                                                ? Colors.red
-                                                : Colors.blue,
-                                            width: 2,
-                                          )
-                                        : (isConcealed
-                                              ? Border.all(
-                                                  color: Colors.grey[600]!,
-                                                  width: 1,
-                                                )
-                                              : Border.all(
-                                                  color: isOpponent
-                                                      ? Colors.red[300]!
-                                                      : Colors.blue[300]!,
-                                                  width: 1,
-                                                ))),
-                            ),
-                            child: isConcealed
-                                // Show hidden card placeholder
-                                ? Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.center,
-                                    children: [
-                                      Text(
-                                        positionLabel ?? '',
-                                        style: TextStyle(
-                                          fontSize: 7,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.grey[600],
-                                        ),
+                      final rarityBorder = _getRarityBorderColor(card);
+
+                      return GestureDetector(
+                        onTap:
+                            isStaged &&
+                                match.currentPhase != MatchPhase.combatPhase
+                            ? () => _removeCardFromTile(row, col, card)
+                            : null,
+                        onLongPress: () => _showCardDetails(card),
+                        child: Stack(
+                          children: [
+                            Container(
+                              margin: const EdgeInsets.symmetric(vertical: 1),
+                              padding: const EdgeInsets.all(3),
+                              decoration: BoxDecoration(
+                                color: cardColor,
+                                borderRadius: BorderRadius.circular(4),
+                                border: isStaged
+                                    ? Border.all(color: Colors.amber, width: 2)
+                                    : Border.all(
+                                        color: rarityBorder,
+                                        width: isFrontCard ? 2 : 1,
                                       ),
-                                      const Text(
-                                        '🔮 Hidden',
-                                        style: TextStyle(
-                                          fontSize: 9,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.white,
+                              ),
+                              child: isConcealed
+                                  // Show hidden card placeholder
+                                  ? Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.center,
+                                      children: [
+                                        Text(
+                                          positionLabel ?? '',
+                                          style: TextStyle(
+                                            fontSize: 7,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.grey[600],
+                                          ),
                                         ),
-                                      ),
-                                    ],
-                                  )
-                                // Show normal card info with position label
-                                : Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      // Position label row
-                                      if (positionLabel != null)
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 3,
-                                            vertical: 1,
+                                        const Text(
+                                          '🔮 Hidden',
+                                          style: TextStyle(
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.white,
                                           ),
-                                          margin: const EdgeInsets.only(
-                                            bottom: 2,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: labelColor.withValues(
-                                              alpha: 0.2,
+                                        ),
+                                      ],
+                                    )
+                                  // Show normal card info with position label
+                                  : Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        // Position label row
+                                        if (positionLabel != null)
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 3,
+                                              vertical: 1,
                                             ),
-                                            borderRadius: BorderRadius.circular(
-                                              3,
+                                            margin: const EdgeInsets.only(
+                                              bottom: 2,
                                             ),
-                                          ),
-                                          child: Text(
-                                            positionLabel,
-                                            style: TextStyle(
-                                              fontSize: 7,
-                                              fontWeight: FontWeight.bold,
-                                              color: labelColor,
+                                            decoration: BoxDecoration(
+                                              color: labelColor.withValues(
+                                                alpha: 0.2,
+                                              ),
+                                              borderRadius:
+                                                  BorderRadius.circular(3),
+                                            ),
+                                            child: Text(
+                                              positionLabel,
+                                              style: TextStyle(
+                                                fontSize: 7,
+                                                fontWeight: FontWeight.bold,
+                                                color: labelColor,
+                                              ),
                                             ),
                                           ),
+                                        Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            _buildStatIcon(
+                                              Icons.flash_on,
+                                              card.damage,
+                                              size: 10,
+                                            ),
+                                            const SizedBox(width: 2),
+                                            _buildStatIcon(
+                                              Icons.favorite,
+                                              card.currentHealth,
+                                              size: 10,
+                                            ),
+                                            const SizedBox(width: 2),
+                                            _buildStatIcon(
+                                              Icons.timer,
+                                              card.tick,
+                                              size: 10,
+                                            ),
+                                            const SizedBox(width: 2),
+                                            _buildStatIcon(
+                                              Icons.directions_run,
+                                              card.moveSpeed,
+                                              size: 10,
+                                            ),
+                                          ],
                                         ),
-                                      Text(
-                                        card.name,
-                                        style: const TextStyle(
-                                          fontSize: 9,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Text(
-                                            '⚔${card.damage}',
-                                            style: const TextStyle(fontSize: 8),
-                                          ),
-                                          const SizedBox(width: 3),
-                                          Text(
-                                            '❤${card.currentHealth}',
-                                            style: const TextStyle(fontSize: 8),
-                                          ),
-                                          const SizedBox(width: 3),
-                                          Text(
-                                            '🚀${card.moveSpeed}',
-                                            style: const TextStyle(fontSize: 8),
-                                          ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                          ),
-                          // X button to remove staged cards
-                          if (isStaged &&
-                              match.currentPhase != MatchPhase.combatPhase)
-                            Positioned(
-                              top: 0,
-                              right: 0,
-                              child: GestureDetector(
-                                onTap: () =>
-                                    _removeCardFromTile(row, col, card),
-                                child: Container(
-                                  padding: const EdgeInsets.all(2),
-                                  decoration: BoxDecoration(
-                                    color: Colors.red,
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: Colors.white,
-                                      width: 1,
+                                      ],
                                     ),
-                                  ),
-                                  child: const Icon(
-                                    Icons.close,
-                                    size: 10,
-                                    color: Colors.white,
+                            ),
+                            // X button to remove staged cards
+                            if (isStaged &&
+                                match.currentPhase != MatchPhase.combatPhase)
+                              Positioned(
+                                top: 0,
+                                right: 0,
+                                child: GestureDetector(
+                                  onTap: () =>
+                                      _removeCardFromTile(row, col, card),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.red,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: Colors.white,
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: const Icon(
+                                      Icons.close,
+                                      size: 10,
+                                      color: Colors.white,
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                        ],
+                          ],
+                        ),
                       );
                     }).toList(),
                   ),
@@ -2429,21 +2673,23 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                       final card = availableCards[index];
                       final isSelected = _selectedCard == card;
 
+                      final baseFill = _getRarityFillColor(card);
+                      final baseBorder = _getRarityBorderColor(card);
+
                       return GestureDetector(
                         onTap: () {
                           setState(() {
                             _selectedCard = isSelected ? null : card;
                           });
                         },
+                        onLongPress: () => _showCardDetails(card),
                         child: Container(
                           width: 90,
                           margin: const EdgeInsets.symmetric(horizontal: 4),
                           decoration: BoxDecoration(
-                            color: isSelected
-                                ? Colors.green[200]
-                                : Colors.white,
+                            color: baseFill,
                             border: Border.all(
-                              color: isSelected ? Colors.green : Colors.grey,
+                              color: isSelected ? Colors.green : baseBorder,
                               width: isSelected ? 3 : 1,
                             ),
                             borderRadius: BorderRadius.circular(8),
@@ -2476,33 +2722,59 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                 ),
+                                const SizedBox(height: 2),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    _buildStatIcon(
+                                      Icons.flash_on,
+                                      card.damage,
+                                      size: 10,
+                                    ),
+                                    const SizedBox(width: 2),
+                                    _buildStatIcon(
+                                      Icons.favorite,
+                                      card.health,
+                                      size: 10,
+                                    ),
+                                  ],
+                                ),
                                 const SizedBox(height: 1),
-                                Text(
-                                  'HP: ${card.health}',
-                                  style: const TextStyle(fontSize: 8),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    _buildStatIcon(
+                                      Icons.timer,
+                                      card.tick,
+                                      size: 10,
+                                    ),
+                                    const SizedBox(width: 2),
+                                    _buildStatIcon(
+                                      Icons.directions_run,
+                                      card.moveSpeed,
+                                      size: 10,
+                                    ),
+                                  ],
                                 ),
-                                Text(
-                                  'DMG: ${card.damage}',
-                                  style: const TextStyle(fontSize: 8),
-                                ),
-                                Text(
-                                  'Tick: ${card.tick}  Spd: ${card.moveSpeed}',
-                                  style: const TextStyle(fontSize: 8),
-                                ),
-                                if (card.element != null)
-                                  Text(
-                                    'Elem: ${card.element}',
-                                    style: const TextStyle(fontSize: 7),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
+                                if (card.abilities.isNotEmpty) ...[
+                                  const SizedBox(height: 1),
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: card.abilities
+                                        .map<Widget>(
+                                          (a) => Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 1,
+                                            ),
+                                            child: Icon(
+                                              _abilityIconData(a),
+                                              size: 9,
+                                            ),
+                                          ),
+                                        )
+                                        .toList(),
                                   ),
-                                if (card.abilities.isNotEmpty)
-                                  Text(
-                                    card.abilities.join(', '),
-                                    style: const TextStyle(fontSize: 6),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
+                                ],
                                 if (isSelected)
                                   const Padding(
                                     padding: EdgeInsets.only(top: 2),
