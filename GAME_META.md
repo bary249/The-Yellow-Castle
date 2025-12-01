@@ -623,7 +623,7 @@ This system is **primarily for single-player** (Player vs AI).
 | Leader | Terrain | Playstyle | Base Ability |
 |--------|---------|-----------|--------------|
 | Saladin | Desert | Counter | Desert Wind – Counter-attack deals double damage this turn |
-| Richard the Lionheart | Woods/Lake | Chivalry | Crusader's Charge – All units gain +2 damage and attack first |
+| Richard the Lionheart | Woods/Lake | Chivalry | Crusader's Charge – All units gain +2 damage and -1 tick this turn|
 | Joan of Arc | Woods | Faith | Divine Inspiration – Heal all units to full HP |
 
 ### Modern Era
