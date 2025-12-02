@@ -1,6 +1,9 @@
 import '../models/card.dart';
 import '../models/lane.dart';
 
+/// Log importance levels
+enum LogLevel { verbose, normal, important }
+
 /// Detailed battle log entry
 class BattleLogEntry {
   final int tick;
@@ -8,6 +11,7 @@ class BattleLogEntry {
   final String action;
   final String details;
   final bool isImportant;
+  final LogLevel level;
 
   // Combat details for enhanced UI display
   final int? damageDealt;
@@ -23,6 +27,7 @@ class BattleLogEntry {
     required this.action,
     required this.details,
     this.isImportant = false,
+    this.level = LogLevel.normal,
     this.damageDealt,
     this.attackerName,
     this.targetName,
@@ -50,27 +55,43 @@ class BattleLogEntry {
 class CombatResolver {
   final List<BattleLogEntry> combatLog = [];
 
-  // Per-lane context for zone-based terrain attunement buffs.
+  /// Get filtered logs based on minimum level
+  List<BattleLogEntry> getFilteredLogs({LogLevel minLevel = LogLevel.normal}) {
+    return combatLog.where((log) => log.level.index >= minLevel.index).toList();
+  }
+
+  /// Get only important logs (kills, abilities, crystal damage)
+  List<BattleLogEntry> get importantLogs =>
+      getFilteredLogs(minLevel: LogLevel.important);
+
+  // Per-lane context for combat
   Zone _currentZone = Zone.middle;
-  String? _playerBaseElement; // Treated as terrain tag for the player's base
-  String?
-  _opponentBaseElement; // Treated as terrain tag for the opponent's base
   int _playerDamageBoost =
       0; // Bonus damage for player cards (from hero ability)
 
+  // Lane-wide buffs applied at combat start (from inspire, fortify, command, rally)
+  int _playerLaneDamageBonus = 0;
+  int _playerLaneShieldBonus = 0;
+  int _opponentLaneDamageBonus = 0;
+  int _opponentLaneShieldBonus = 0;
+
+  // Current tile terrain for terrain attunement buffs
+  String? _currentTileTerrain;
+
   /// Set contextual data for the current lane before processing ticks.
-  /// This allows us to apply small buffs when fighting in an attuned base zone.
+  /// This allows us to apply terrain buffs when card element matches tile terrain.
   void setLaneContext({
     required Zone zone,
-    String? playerBaseElement,
-    String? opponentBaseElement,
+    String? tileTerrain,
     int playerDamageBoost = 0,
   }) {
     _currentZone = zone;
-    _playerBaseElement = playerBaseElement;
-    _opponentBaseElement = opponentBaseElement;
+    _currentTileTerrain = tileTerrain;
     _playerDamageBoost = playerDamageBoost;
   }
+
+  /// Get current tile terrain for display
+  String? get currentTileTerrain => _currentTileTerrain;
 
   /// Base damage calculator.
   /// Card-vs-card element/terrain matchups are disabled; we start from
@@ -83,6 +104,9 @@ class CombatResolver {
   /// Returns true if player won the lane
   bool? resolveLane(Lane lane, {String? customLaneName}) {
     final laneName = customLaneName ?? _getLaneName(lane.position);
+
+    // Calculate lane-wide buffs from abilities at combat start
+    _calculateLaneBuffs(lane, laneName);
 
     // Log lane start
     combatLog.add(
@@ -110,8 +134,142 @@ class CombatResolver {
       }
     }
 
+    // Reset lane buffs for next lane
+    _resetLaneBuffs();
+
     // Determine winner
     return lane.playerWon;
+  }
+
+  /// Public method to calculate lane buffs (for use by MatchManager)
+  void calculateLaneBuffsPublic(Lane lane, String laneName) {
+    _calculateLaneBuffs(lane, laneName);
+  }
+
+  /// Public method to reset lane buffs after combat (for use by MatchManager)
+  void resetLaneBuffsPublic() {
+    _resetLaneBuffs();
+  }
+
+  /// Calculate lane-wide buffs from inspire, fortify, command, rally abilities
+  void _calculateLaneBuffs(Lane lane, String laneName) {
+    _playerLaneDamageBonus = 0;
+    _playerLaneShieldBonus = 0;
+    _opponentLaneDamageBonus = 0;
+    _opponentLaneShieldBonus = 0;
+
+    // Check player stack for buff abilities
+    _applyStackBuffs(lane.playerStack, true, laneName);
+    // Check opponent stack for buff abilities
+    _applyStackBuffs(lane.opponentStack, false, laneName);
+  }
+
+  /// Apply buffs from a stack's cards
+  void _applyStackBuffs(CardStack stack, bool isPlayer, String laneName) {
+    final cards = [stack.topCard, stack.bottomCard].whereType<GameCard>();
+
+    for (final card in cards) {
+      for (final ability in card.abilities) {
+        // inspire_X: +X damage to all allies in lane
+        if (ability.startsWith('inspire_')) {
+          final value = int.tryParse(ability.split('_').last) ?? 0;
+          if (isPlayer) {
+            _playerLaneDamageBonus += value;
+          } else {
+            _opponentLaneDamageBonus += value;
+          }
+          combatLog.add(
+            BattleLogEntry(
+              tick: 0,
+              laneDescription: laneName,
+              action: '🎺 ${card.name} INSPIRE',
+              details:
+                  '+$value damage to all ${isPlayer ? "player" : "AI"} units in lane',
+              level: LogLevel.important,
+              isImportant: true,
+            ),
+          );
+        }
+
+        // fortify_X: +X shield to all allies in lane
+        if (ability.startsWith('fortify_')) {
+          final value = int.tryParse(ability.split('_').last) ?? 0;
+          if (isPlayer) {
+            _playerLaneShieldBonus += value;
+          } else {
+            _opponentLaneShieldBonus += value;
+          }
+          combatLog.add(
+            BattleLogEntry(
+              tick: 0,
+              laneDescription: laneName,
+              action: '🛡️ ${card.name} FORTIFY',
+              details:
+                  '+$value shield to all ${isPlayer ? "player" : "AI"} units in lane',
+              level: LogLevel.important,
+              isImportant: true,
+            ),
+          );
+        }
+
+        // command_X: +X damage AND +X shield to all allies in lane
+        if (ability.startsWith('command_')) {
+          final value = int.tryParse(ability.split('_').last) ?? 0;
+          if (isPlayer) {
+            _playerLaneDamageBonus += value;
+            _playerLaneShieldBonus += value;
+          } else {
+            _opponentLaneDamageBonus += value;
+            _opponentLaneShieldBonus += value;
+          }
+          combatLog.add(
+            BattleLogEntry(
+              tick: 0,
+              laneDescription: laneName,
+              action: '⭐ ${card.name} COMMAND',
+              details:
+                  '+$value damage and +$value shield to all ${isPlayer ? "player" : "AI"} units in lane',
+              level: LogLevel.important,
+              isImportant: true,
+            ),
+          );
+        }
+
+        // rally_X: +X damage to adjacent ally (the other card in stack)
+        if (ability.startsWith('rally_')) {
+          final value = int.tryParse(ability.split('_').last) ?? 0;
+          // Rally only affects the other card in the same stack
+          final otherCard = stack.topCard == card
+              ? stack.bottomCard
+              : stack.topCard;
+          if (otherCard != null) {
+            if (isPlayer) {
+              _playerLaneDamageBonus += value;
+            } else {
+              _opponentLaneDamageBonus += value;
+            }
+            combatLog.add(
+              BattleLogEntry(
+                tick: 0,
+                laneDescription: laneName,
+                action: '📣 ${card.name} RALLY',
+                details: '+$value damage to ${otherCard.name}',
+                level: LogLevel.important,
+                isImportant: true,
+              ),
+            );
+          }
+        }
+      }
+    }
+  }
+
+  /// Reset lane buffs after combat
+  void _resetLaneBuffs() {
+    _playerLaneDamageBonus = 0;
+    _playerLaneShieldBonus = 0;
+    _opponentLaneDamageBonus = 0;
+    _opponentLaneShieldBonus = 0;
   }
 
   String _getLaneName(LanePosition position) {
@@ -136,7 +294,11 @@ class CombatResolver {
     final playerCard = lane.playerStack.activeCard;
     final opponentCard = lane.opponentStack.activeCard;
 
-    // Log tick start
+    // Also check for ranged attackers in back position
+    final playerRangedBack = _getRangedBackCard(lane.playerStack);
+    final opponentRangedBack = _getRangedBackCard(lane.opponentStack);
+
+    // Log tick start (verbose - only shown in detailed mode)
     if (playerCard != null || opponentCard != null) {
       combatLog.add(
         BattleLogEntry(
@@ -144,6 +306,7 @@ class CombatResolver {
           laneDescription: laneName,
           action: '⏱️ Tick $tick',
           details: _getTickStatus(playerCard, opponentCard),
+          level: LogLevel.verbose,
         ),
       );
     }
@@ -153,14 +316,24 @@ class CombatResolver {
         playerCard != null && _shouldActOnTick(playerCard.tick, tick);
     final opponentActs =
         opponentCard != null && _shouldActOnTick(opponentCard.tick, tick);
+    final playerRangedActs =
+        playerRangedBack != null &&
+        _shouldActOnTick(playerRangedBack.tick, tick);
+    final opponentRangedActs =
+        opponentRangedBack != null &&
+        _shouldActOnTick(opponentRangedBack.tick, tick);
 
-    if (!playerActs && !opponentActs) {
+    if (!playerActs &&
+        !opponentActs &&
+        !playerRangedActs &&
+        !opponentRangedActs) {
       combatLog.add(
         BattleLogEntry(
           tick: tick,
           laneDescription: laneName,
           action: '⏸️ No Actions',
           details: 'No cards act this tick',
+          level: LogLevel.verbose,
         ),
       );
       return;
@@ -170,12 +343,29 @@ class CombatResolver {
     final playerAliveBeforeTick = playerCard?.isAlive ?? false;
     final opponentAliveBeforeTick = opponentCard?.isAlive ?? false;
 
-    // Simultaneous attacks - if a card is alive when their tick arrives,
-    // they attack even if they will be killed on that same tick.
+    // Check for first_strike - these units attack FIRST and can prevent counter-attack
+    final playerHasFirstStrike =
+        playerCard?.abilities.contains('first_strike') ?? false;
+    final opponentHasFirstStrike =
+        opponentCard?.abilities.contains('first_strike') ?? false;
+
+    // FIRST STRIKE PHASE: Units with first_strike attack before others
     if (playerActs &&
+        playerHasFirstStrike &&
         opponentCard != null &&
         playerAliveBeforeTick &&
         opponentAliveBeforeTick) {
+      // Log first strike BEFORE the attack
+      combatLog.add(
+        BattleLogEntry(
+          tick: tick,
+          laneDescription: laneName,
+          action: '⚡ FIRST STRIKE',
+          details: '${playerCard.name} strikes first!',
+          level: LogLevel.important,
+          isImportant: true,
+        ),
+      );
       _performAttack(
         playerCard,
         opponentCard,
@@ -184,14 +374,26 @@ class CombatResolver {
         lane.opponentStack,
         laneName,
         true,
-        checkAliveBeforeAttack: false, // Skip alive check for simultaneous
+        checkAliveBeforeAttack: false,
       );
     }
 
     if (opponentActs &&
+        opponentHasFirstStrike &&
         playerCard != null &&
         playerAliveBeforeTick &&
         opponentAliveBeforeTick) {
+      // Log first strike BEFORE the attack
+      combatLog.add(
+        BattleLogEntry(
+          tick: tick,
+          laneDescription: laneName,
+          action: '⚡ FIRST STRIKE',
+          details: '${opponentCard.name} strikes first!',
+          level: LogLevel.important,
+          isImportant: true,
+        ),
+      );
       _performAttack(
         opponentCard,
         playerCard,
@@ -200,9 +402,91 @@ class CombatResolver {
         lane.playerStack,
         laneName,
         false,
-        checkAliveBeforeAttack: false, // Skip alive check for simultaneous
+        checkAliveBeforeAttack: false,
       );
     }
+
+    // Re-check alive status after first strike phase
+    final playerStillAlive = playerCard?.isAlive ?? false;
+    final opponentStillAlive = opponentCard?.isAlive ?? false;
+
+    // NORMAL ATTACK PHASE: Non-first-strike units attack (only if still alive)
+    if (playerActs &&
+        !playerHasFirstStrike &&
+        opponentCard != null &&
+        playerStillAlive &&
+        opponentStillAlive) {
+      _performAttack(
+        playerCard,
+        opponentCard,
+        tick,
+        lane.playerStack,
+        lane.opponentStack,
+        laneName,
+        true,
+        checkAliveBeforeAttack: false,
+      );
+    }
+
+    if (opponentActs &&
+        !opponentHasFirstStrike &&
+        playerCard != null &&
+        playerStillAlive &&
+        opponentStillAlive) {
+      _performAttack(
+        opponentCard,
+        playerCard,
+        tick,
+        lane.opponentStack,
+        lane.playerStack,
+        laneName,
+        false,
+        checkAliveBeforeAttack: false,
+      );
+    }
+
+    // RANGED ATTACK PHASE: Back cards with 'ranged' ability also attack
+    if (playerRangedActs && opponentCard != null && opponentCard.isAlive) {
+      _performAttack(
+        playerRangedBack,
+        opponentCard,
+        tick,
+        lane.playerStack,
+        lane.opponentStack,
+        laneName,
+        true,
+        checkAliveBeforeAttack: true,
+        isRangedAttack: true,
+      );
+    }
+
+    if (opponentRangedActs && playerCard != null && playerCard.isAlive) {
+      _performAttack(
+        opponentRangedBack,
+        playerCard,
+        tick,
+        lane.opponentStack,
+        lane.playerStack,
+        laneName,
+        false,
+        checkAliveBeforeAttack: true,
+        isRangedAttack: true,
+      );
+    }
+  }
+
+  /// Get a back card that has 'ranged' ability and is not the active card
+  GameCard? _getRangedBackCard(CardStack stack) {
+    final bottom = stack.bottomCard;
+    if (bottom != null &&
+        bottom.isAlive &&
+        bottom.abilities.contains('ranged') &&
+        stack.topCard != null &&
+        stack.topCard!.isAlive) {
+      // Only return if there's a front card (ranged fires from behind)
+      return bottom;
+    }
+    return null;
   }
 
   String _getTickStatus(GameCard? playerCard, GameCard? opponentCard) {
@@ -232,6 +516,7 @@ class CombatResolver {
     String laneName,
     bool isPlayerAttacking, {
     bool checkAliveBeforeAttack = true,
+    bool isRangedAttack = false,
   }) {
     // Check alive status only if requested (skip for simultaneous attacks)
     if (checkAliveBeforeAttack && (!attacker.isAlive || !target.isAlive))
@@ -249,25 +534,15 @@ class CombatResolver {
       }
     }
 
-    // 1) Zone attunement buff when fighting in a base zone whose terrain
-    // matches the attacker. Either base can grant this if its terrain matches.
-    final isInPlayerBase = _currentZone == Zone.playerBase;
-    final isInOpponentBase = _currentZone == Zone.enemyBase;
-
-    // Attacker gets +1 if they are in the player base and match its terrain.
-    if (isInPlayerBase &&
-        _playerBaseElement != null &&
-        attacker.element == _playerBaseElement) {
+    // 1) Terrain attunement buff: +1 damage when card element matches tile terrain
+    // This applies to ANY tile (base or middle), not just bases
+    final tileTerrain = _currentTileTerrain;
+    final attackerElement = attacker.element;
+    if (tileTerrain != null &&
+        attackerElement != null &&
+        attackerElement.toLowerCase() == tileTerrain.toLowerCase()) {
       damage += 1;
-      _append(' (+1 terrain buff @ player base)');
-    }
-
-    // Attacker also gets +1 if they are in the opponent base and match its terrain.
-    if (isInOpponentBase &&
-        _opponentBaseElement != null &&
-        attacker.element == _opponentBaseElement) {
-      damage += 1;
-      _append(' (+1 terrain buff @ enemy base)');
+      _append(' (+1 $tileTerrain terrain)');
     }
 
     // 2) Hero ability damage boost (player only).
@@ -276,63 +551,96 @@ class CombatResolver {
       _append(' (+$_playerDamageBoost hero boost)');
     }
 
-    // 3) Fury: flat +2 damage for this attacker.
-    if (attacker.abilities.contains('fury_2')) {
-      damage += 2;
-      _append(' (+2 fury)');
+    // 3) Lane-wide damage bonus from inspire/command/rally abilities
+    final laneDamageBonus = isPlayerAttacking
+        ? _playerLaneDamageBonus
+        : _opponentLaneDamageBonus;
+    if (laneDamageBonus > 0) {
+      damage += laneDamageBonus;
+      _append(' (+$laneDamageBonus lane buff)');
     }
 
-    // 3) Stack buff: if a DIFFERENT card in the same stack has stack_buff_damage_2.
-    bool _stackHasBuff(CardStack stack) {
+    // 4) Fury abilities: fury_1 = +1, fury_2 = +2
+    for (final ability in attacker.abilities) {
+      if (ability.startsWith('fury_')) {
+        final furyValue = int.tryParse(ability.split('_').last) ?? 0;
+        if (furyValue > 0) {
+          damage += furyValue;
+          _append(' (+$furyValue fury)');
+        }
+      }
+    }
+
+    // 5) Stack buff: if a DIFFERENT card in the same stack has stack_buff_damage_X.
+    int _getStackBuffDamage(CardStack stack) {
+      int buff = 0;
       final top = stack.topCard;
       final bottom = stack.bottomCard;
-      if (top != null &&
-          top != attacker &&
-          top.abilities.contains('stack_buff_damage_2')) {
-        return true;
+      for (final card in [top, bottom].whereType<GameCard>()) {
+        if (card != attacker) {
+          for (final ability in card.abilities) {
+            if (ability.startsWith('stack_buff_damage_')) {
+              buff += int.tryParse(ability.split('_').last) ?? 0;
+            }
+          }
+        }
       }
-      if (bottom != null &&
-          bottom != attacker &&
-          bottom.abilities.contains('stack_buff_damage_2')) {
-        return true;
-      }
-      return false;
+      return buff;
     }
 
-    if (_stackHasBuff(attackerStack)) {
-      damage += 2;
-      _append(' (+2 stack buff)');
+    final stackBuff = _getStackBuffDamage(attackerStack);
+    if (stackBuff > 0) {
+      damage += stackBuff;
+      _append(' (+$stackBuff stack buff)');
     }
 
-    // 4) Debuff from defending stack: reduce incoming damage by 2 (min 1).
-    bool _stackHasDebuff(CardStack stack) {
+    // 6) Debuff from defending stack: stack_debuff_enemy_damage_X
+    int _getStackDebuff(CardStack stack) {
+      int debuff = 0;
       final top = stack.topCard;
       final bottom = stack.bottomCard;
-      if (top != null &&
-          top.abilities.contains('stack_debuff_enemy_damage_2')) {
-        return true;
+      for (final card in [top, bottom].whereType<GameCard>()) {
+        for (final ability in card.abilities) {
+          if (ability.startsWith('stack_debuff_enemy_damage_')) {
+            debuff += int.tryParse(ability.split('_').last) ?? 0;
+          }
+        }
       }
-      if (bottom != null &&
-          bottom.abilities.contains('stack_debuff_enemy_damage_2')) {
-        return true;
-      }
-      return false;
+      return debuff;
     }
 
-    if (_stackHasDebuff(targetStack)) {
-      final reduced = (damage - 2).clamp(1, 9999);
+    final stackDebuff = _getStackDebuff(targetStack);
+    if (stackDebuff > 0) {
+      final reduced = (damage - stackDebuff).clamp(1, 9999);
       if (reduced != damage) {
         damage = reduced;
-        _append(' (-2 stack debuff)');
+        _append(' (-$stackDebuff stack debuff)');
       }
     }
 
-    // 5) Shield on the target: reduce damage by 2 (min 1).
-    if (target.abilities.contains('shield_2')) {
-      final reduced = (damage - 2).clamp(1, 9999);
+    // 7) Lane-wide shield bonus from fortify/command abilities
+    final laneShieldBonus = isPlayerAttacking
+        ? _opponentLaneShieldBonus
+        : _playerLaneShieldBonus;
+    if (laneShieldBonus > 0) {
+      final reduced = (damage - laneShieldBonus).clamp(1, 9999);
       if (reduced != damage) {
         damage = reduced;
-        _append(' (-2 shield)');
+        _append(' (-$laneShieldBonus lane shield)');
+      }
+    }
+
+    // 8) Shield abilities on target: shield_1 = -1, shield_2 = -2, shield_3 = -3
+    for (final ability in target.abilities) {
+      if (ability.startsWith('shield_')) {
+        final shieldValue = int.tryParse(ability.split('_').last) ?? 0;
+        if (shieldValue > 0) {
+          final reduced = (damage - shieldValue).clamp(1, 9999);
+          if (reduced != damage) {
+            damage = reduced;
+            _append(' (-$shieldValue shield)');
+          }
+        }
       }
     }
 
@@ -344,14 +652,20 @@ class CombatResolver {
 
     // Log the attack with detailed combat info
     final result = targetDied ? '💀 DESTROYED' : '✓ Hit';
+    final rangedLabel = isRangedAttack ? '🏹 RANGED ' : '';
+    // Kills and ability triggers are important, regular hits are normal
+    final hasAbilityNote = note.isNotEmpty;
     combatLog.add(
       BattleLogEntry(
         tick: tick,
         laneDescription: laneName,
-        action: '$attackerSide ${attacker.name} → ${target.name}',
+        action: '$rangedLabel$attackerSide ${attacker.name} → ${target.name}',
         details:
             '$damage damage dealt | HP: $hpBefore → $hpAfter | $result$note',
-        isImportant: targetDied,
+        isImportant: targetDied || hasAbilityNote,
+        level: targetDied
+            ? LogLevel.important
+            : (hasAbilityNote ? LogLevel.normal : LogLevel.verbose),
         // Enhanced combat details for UI
         damageDealt: damage,
         attackerName: attacker.name,

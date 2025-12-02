@@ -6,7 +6,104 @@
 
 ---
 
-## 🎯 Current Sprint: Hero System & 3×3 Board
+## � CAMPAIGN MODE IMPLEMENTATION PLAN
+
+> **Strategy**: Build ONE complete campaign first (Napoleon), then replicate for other leaders.
+
+### Phase 1: Napoleon's Starter Deck & Cards ✅
+- [x] Design Napoleon's 25-card starter deck (historically themed units)
+  - Common: Voltigeur ×3, Fusilier ×3, Line Infantry ×3, Field Cannon ×2, Sapper ×2, Drummer Boy ×3
+  - Rare: Grenadier ×3, Hussar ×3, Cuirassier ×3
+- [x] Design 18 advanced cards Napoleon can acquire during campaign
+  - Rare: Young Guard, Chasseur à Cheval, Horse Artillery
+  - Epic: Old Guard, Marshal Ney, Grand Battery, Polish Lancer, Imperial Eagle
+  - Legendary: Napoleon's Guard
+- [x] Identify and implement new abilities:
+  - `first_strike` - Attack first in same tick, can prevent counter-attack
+  - `ranged` - Can attack from back position
+  - `fortify_X` - +X Shield to all allies in lane
+  - `inspire_X` - +X damage to all allies in lane
+  - `rally_X` - +X damage to adjacent ally
+  - `command_X` - +X damage and +X shield to all allies in lane
+  - `fury_X` and `shield_X` now support any value (not just 1 or 2)
+  - `far_attack` - Attacks enemies at OTHER tiles in same lane (disabled if contested)
+  - (Future: `cross_attack` - Attacks enemies in different lanes)
+- [x] Test all cards in simulation mode (--napoleon flag)
+- [x] Added Siege Cannon (Epic) - far_attack, 12 dmg, tick 5, stationary
+
+### Phase 2: Rival Cards & Bosses
+- [x] Design Act 1 enemy deck (Austrian forces) - 7 card types, 25 cards
+  - Austrian Jäger (fast skirmisher), Austrian Infantry, Austrian Grenadier (shield_1)
+  - Austrian Hussar, Austrian Cuirassier (shield_1), Austrian Cannon (ranged)
+  - Austrian Officer (inspire_1)
+- [ ] Design Act 1 Boss: Austrian General (unique ability)
+- [ ] Design Act 2 enemy deck (Mamluk forces) - 10-15 cards
+- [ ] Design Act 2 Boss: Mamluk Cavalry (unique ability)
+- [ ] Design Act 3 enemy deck (Coalition forces) - 10-15 cards
+- [ ] Design Act 3 Boss: Coalition Forces (unique ability + enrage)
+- [ ] Code boss abilities into game logic
+- [ ] Test all enemy cards and bosses
+
+### Phase 3: Items System
+- [ ] Design 20 items with varied effects
+- [ ] Create `Item` model (id, name, description, effect, rarity)
+- [ ] Create `ItemLibrary` with all items
+- [ ] Implement item effects in game logic
+- [ ] Create item UI (inventory, equip, display)
+- [ ] Test all item effects
+
+### Phase 4: Leader Progression Tree
+- [x] Create `LeaderUpgradeTree` model (`napoleon_progression.dart`)
+- [x] Design Napoleon's 3-branch upgrade tree (Military/Economic/Leadership)
+- [x] Create upgrade tree UI (`progression_screen.dart`)
+- [ ] Implement upgrade effects (starter deck buffs, new cards, new items, abilities)
+- [ ] Implement Legacy Points earning/spending
+- [ ] Test all upgrades
+
+### Phase 5: Campaign Map & Path Selection
+- [x] Create `CampaignState` model (nodes, paths, current position, gold, health)
+- [x] Create `CampaignNode` model (type, difficulty, rewards)
+- [x] Implement path generation algorithm (8 rows: start → battles → elite → battles → boss)
+- [x] Create campaign map UI (Slay the Spire style)
+- [x] Implement node types: Battle, Elite, Shop, Rest, Event, Boss
+- [x] Basic navigation and node completion
+- [x] Connect battles to actual enemy decks (Act 1 Austrian deck)
+- [ ] Test path generation and navigation
+
+### Phase 6: Shops & Rest Sites
+- [x] Create Card Shop UI and logic (`shop_items.dart`, `campaign_map_screen.dart`)
+- [x] Create Item Shop UI and logic (consumables + relics)
+- [x] Implement shop inventory generation (rarity by act)
+- [x] Create Rest Site UI (heal option)
+- [ ] Implement card upgrade system
+- [x] Implement card removal system (Discharge Papers consumable)
+- [ ] Test all shop/rest functionality
+
+### Phase 7: Act Achievements (Monuments)
+- [ ] Create `Achievement` model
+- [ ] Implement Napoleon's 3 achievements:
+  - Artillery Master (Act 1)
+  - Rosetta Stone (Act 2)
+  - Emperor of the French (Act 3)
+- [ ] Apply achievement buffs during campaign
+- [ ] Create achievement unlock UI/animation
+- [ ] Test achievement effects
+
+### Phase 8: Full Campaign Integration
+- [ ] Create `Campaign` model (leader, act, deck, items, gold, achievements)
+- [ ] Implement campaign save/load system
+- [ ] Create pre-campaign setup screen (special cards + item selection)
+- [ ] Wire all systems together (map → battle → rewards → map)
+- [ ] Full playtest of Napoleon campaign (all 3 acts)
+- [ ] Balance tuning
+
+### Phase 9: Replicate for Other Leaders
+- [ ] Create template system for easy leader creation
+- [ ] Implement remaining 12 leaders (decks, enemies, bosses, achievements)
+
+---
+
+## �� Current Sprint: Hero System & 3×3 Board
 
 ### Hero System ✅
 - [x] Create `GameHero` model with terrain affinities and abilities

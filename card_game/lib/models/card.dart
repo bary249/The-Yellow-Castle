@@ -82,6 +82,37 @@ class GameCard {
   String toString() =>
       '$name (HP: $currentHealth/$health, DMG: $damage, Tick: $tick, Speed: $moveSpeed)';
 
+  /// Serialize to JSON for saving
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'damage': damage,
+    'health': health,
+    'tick': tick,
+    'moveSpeed': moveSpeed,
+    'element': element,
+    'family': family,
+    'abilities': abilities,
+    'cost': cost,
+    'rarity': rarity,
+    'currentHealth': currentHealth,
+  };
+
+  /// Create from JSON
+  factory GameCard.fromJson(Map<String, dynamic> json) => GameCard(
+    id: json['id'] as String,
+    name: json['name'] as String,
+    damage: json['damage'] as int,
+    health: json['health'] as int,
+    tick: json['tick'] as int,
+    moveSpeed: json['moveSpeed'] as int? ?? 1,
+    element: json['element'] as String?,
+    family: json['family'] as String?,
+    abilities: List<String>.from(json['abilities'] ?? []),
+    cost: json['cost'] as int? ?? 0,
+    rarity: json['rarity'] as int? ?? 1,
+  )..currentHealth = json['currentHealth'] as int? ?? json['health'] as int;
+
   /// Factory method for creating test cards
   factory GameCard.test({
     String? id,

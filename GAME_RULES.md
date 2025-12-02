@@ -205,11 +205,12 @@ For each **tick** in each lane:
 ### 7.1 Base Damage
 - Each attack starts from the attacker’s **Damage stat**.
 
-### 7.2 Terrain & Zone Attunement (Simplified Player View)
-- Cards and bases may have **terrain tags** (e.g. Marsh, Woods, Lake, Desert).
-- There is **no card-vs-card rock-paper-scissors** in the current implementation.
-- Terrain only matters via **zone attunement**:
-  - When combat happens in a **base zone** (either your base or the enemy base), if your card’s terrain matches that base’s terrain, that attack gets a **small bonus** to its damage.
+### 7.2 Terrain Attunement
+- Each tile on the board has a **terrain type** (Woods, Lake, Desert, or Marsh).
+- Cards may have an **element** that matches a terrain type.
+- **Terrain Buff**: When a card's element matches the tile's terrain where combat is happening, that card gets **+1 damage**.
+- This applies to **ANY tile** - base tiles AND middle tiles.
+- Example: A "Woods" element card fighting on a "Woods" terrain tile gets +1 damage bonus.
 
 ### 7.3 Abilities Reference
 
@@ -241,10 +242,11 @@ Each lane tracks how far you've pushed toward the enemy crystal.
 
 ### 8.2 Combat Location
 - Combat happens **at the zone position**:
-  - Zone at Middle → combat at middle (neutral terrain)
-  - Zone at Enemy Base → combat at enemy base (enemy's terrain buffs apply)
-  - Zone at Your Base → combat at your base (your terrain buffs apply)
+  - Zone at Middle → combat at middle tile
+  - Zone at Enemy Base → combat at enemy base tile
+  - Zone at Your Base → combat at your base tile
 - Cards from both sides **advance toward the zone** to fight.
+- **Terrain buffs apply based on the tile's terrain**, not the zone type.
 
 ### 8.3 Zone Movement
 - After combat in a lane:

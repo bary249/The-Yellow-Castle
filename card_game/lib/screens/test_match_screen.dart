@@ -19,8 +19,19 @@ import '../services/deck_storage_service.dart';
 class TestMatchScreen extends StatefulWidget {
   final GameHero? selectedHero;
   final String? onlineMatchId; // If provided, plays online multiplayer
+  final bool
+  forceCampaignDeck; // If true, use hero's campaign deck instead of saved deck
+  final Deck? enemyDeck; // Custom enemy deck (for campaign battles)
+  final int campaignAct; // Current campaign act (1, 2, or 3)
 
-  const TestMatchScreen({super.key, this.selectedHero, this.onlineMatchId});
+  const TestMatchScreen({
+    super.key,
+    this.selectedHero,
+    this.onlineMatchId,
+    this.forceCampaignDeck = false,
+    this.enemyDeck,
+    this.campaignAct = 1,
+  });
 
   @override
   State<TestMatchScreen> createState() => _TestMatchScreenState();
@@ -322,27 +333,65 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     if (ability == 'conceal_back') return Icons.visibility_off;
     if (ability == 'stealth_pass') return Icons.nightlight_round;
     if (ability == 'paratrooper') return Icons.flight_takeoff;
+    // New Napoleon abilities
+    if (ability == 'first_strike') return Icons.bolt;
+    if (ability == 'ranged') return Icons.gps_fixed;
+    if (ability == 'far_attack') return Icons.radar;
+    if (ability == 'cross_attack') return Icons.swap_horiz;
+    if (ability.startsWith('inspire')) return Icons.music_note;
+    if (ability.startsWith('fortify')) return Icons.security;
+    if (ability.startsWith('rally')) return Icons.campaign;
+    if (ability.startsWith('command')) return Icons.military_tech;
     return Icons.star;
   }
 
+  /// Get a human-readable description for an ability
   String _abilityDescription(String ability) {
+    // Handle parameterized abilities (e.g., fury_1, shield_2, inspire_1)
+    if (ability.startsWith('shield_')) {
+      final value = ability.split('_').last;
+      return 'Takes $value less damage from each hit.';
+    }
+    if (ability.startsWith('fury_')) {
+      final value = ability.split('_').last;
+      return '+$value damage when attacking.';
+    }
+    if (ability.startsWith('inspire_')) {
+      final value = ability.split('_').last;
+      return '+$value damage to ALL allies in this lane.';
+    }
+    if (ability.startsWith('fortify_')) {
+      final value = ability.split('_').last;
+      return '+$value shield to ALL allies in this lane.';
+    }
+    if (ability.startsWith('rally_')) {
+      final value = ability.split('_').last;
+      return '+$value damage to adjacent ally in stack.';
+    }
+    if (ability.startsWith('command_')) {
+      final value = ability.split('_').last;
+      return '+$value damage AND +$value shield to all allies in lane.';
+    }
+    if (ability.startsWith('regen_')) {
+      final value = ability.split('_').last;
+      return 'Regenerates $value HP each tick.';
+    }
+    if (ability.startsWith('thorns_')) {
+      final value = ability.split('_').last;
+      return 'Reflects $value damage back when hit.';
+    }
+
     switch (ability) {
-      case 'shield_1':
-        return 'Takes 1 less damage from each hit.';
-      case 'shield_2':
-        return 'Takes 2 less damage from each hit.';
-      case 'shield_3':
-        return 'Takes 3 less damage from each hit.';
-      case 'fury_1':
-        return '+1 damage when attacking.';
-      case 'fury_2':
-        return '+2 damage when attacking.';
+      case 'first_strike':
+        return 'Attacks FIRST in the same tick. Can kill before enemy counterattacks.';
+      case 'ranged':
+        return 'Can attack from the back position in a stack.';
+      case 'far_attack':
+        return 'Attacks enemies at OTHER tiles in same lane. Disabled if contested.';
+      case 'cross_attack':
+        return 'Attacks enemies in different lanes from the back.';
       case 'heal_ally_2':
         return 'Heals an ally in lane for 2 HP each tick.';
-      case 'regen_1':
-        return 'Regenerates 1 HP each tick.';
-      case 'regen_2':
-        return 'Regenerates 2 HP each tick.';
       case 'regenerate':
         return 'Powerful regeneration over time.';
       case 'stack_buff_damage_2':
@@ -351,8 +400,6 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         return 'Debuffs enemies in stack by -2 damage.';
       case 'cleave':
         return 'Hits multiple enemies in lane.';
-      case 'thorns_3':
-        return 'Reflects 3 damage back when hit.';
       case 'conceal_back':
         return 'Hides the back card in this stack from the enemy.';
       case 'stealth_pass':
@@ -360,21 +407,98 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       case 'paratrooper':
         return 'Can be staged directly onto the middle row.';
       default:
-        return ability;
+        return ability; // Return raw ability name if unknown
     }
   }
 
-  Widget _buildAbilityChip(String ability) {
+  /// Build a row showing ability name and description
+  Widget _buildAbilityRow(String ability) {
     final icon = _abilityIconData(ability);
-    return Chip(
-      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
-      avatar: Icon(icon, size: 14),
-      label: Text(
-        _abilityDescription(ability),
-        style: const TextStyle(fontSize: 11),
+    final description = _abilityDescription(ability);
+    final displayName = _abilityDisplayName(ability);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 16, color: Colors.amber[700]),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  displayName,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  description,
+                  style: TextStyle(fontSize: 11, color: Colors.grey[700]),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
+  }
+
+  /// Get a display-friendly name for an ability
+  String _abilityDisplayName(String ability) {
+    // Convert ability code to readable name
+    if (ability.startsWith('shield_'))
+      return 'Shield ${ability.split('_').last}';
+    if (ability.startsWith('fury_')) return 'Fury ${ability.split('_').last}';
+    if (ability.startsWith('inspire_'))
+      return 'Inspire ${ability.split('_').last}';
+    if (ability.startsWith('fortify_'))
+      return 'Fortify ${ability.split('_').last}';
+    if (ability.startsWith('rally_')) return 'Rally ${ability.split('_').last}';
+    if (ability.startsWith('command_'))
+      return 'Command ${ability.split('_').last}';
+    if (ability.startsWith('regen_')) return 'Regen ${ability.split('_').last}';
+    if (ability.startsWith('thorns_'))
+      return 'Thorns ${ability.split('_').last}';
+
+    switch (ability) {
+      case 'first_strike':
+        return 'First Strike';
+      case 'ranged':
+        return 'Ranged';
+      case 'far_attack':
+        return 'Far Attack';
+      case 'cross_attack':
+        return 'Cross Attack';
+      case 'heal_ally_2':
+        return 'Heal Ally';
+      case 'regenerate':
+        return 'Regenerate';
+      case 'stack_buff_damage_2':
+        return 'Stack Buff';
+      case 'stack_debuff_enemy_damage_2':
+        return 'Stack Debuff';
+      case 'cleave':
+        return 'Cleave';
+      case 'conceal_back':
+        return 'Conceal';
+      case 'stealth_pass':
+        return 'Stealth';
+      case 'paratrooper':
+        return 'Paratrooper';
+      default:
+        // Convert snake_case to Title Case
+        return ability
+            .split('_')
+            .map(
+              (w) =>
+                  w.isNotEmpty ? '${w[0].toUpperCase()}${w.substring(1)}' : '',
+            )
+            .join(' ');
+    }
   }
 
   void _showCardDetails(GameCard card) {
@@ -483,14 +607,8 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                     'Abilities',
                     style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
                   ),
-                  const SizedBox(height: 4),
-                  Wrap(
-                    spacing: 4,
-                    runSpacing: 2,
-                    children: card.abilities
-                        .map((a) => _buildAbilityChip(a))
-                        .toList(),
-                  ),
+                  const SizedBox(height: 6),
+                  ...card.abilities.map((a) => _buildAbilityRow(a)),
                 ],
               ],
             ),
@@ -585,10 +703,35 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       opponentHero = HeroLibrary.saladin();
     }
 
-    // Use saved deck if available, otherwise use starter deck
-    final playerDeck = _savedDeck != null && _savedDeck!.isNotEmpty
-        ? Deck.fromCards(playerId: id, cards: _savedDeck!)
-        : Deck.starter(playerId: id);
+    // Determine which deck to use
+    debugPrint(
+      'forceCampaignDeck: ${widget.forceCampaignDeck}, hero: ${playerHero.name}',
+    );
+    final Deck playerDeck;
+    final isNapoleon = playerHero.name.toLowerCase().contains('napoleon');
+    if (widget.forceCampaignDeck) {
+      // Campaign mode: always use hero's campaign deck
+      if (isNapoleon) {
+        playerDeck = Deck.napoleon(playerId: id);
+        debugPrint('🎖️ CAMPAIGN MODE: Using Napoleon starter deck (25 cards)');
+      } else {
+        playerDeck = Deck.starter(playerId: id);
+        debugPrint(
+          '🎖️ CAMPAIGN MODE: Using starter deck for ${playerHero.name}',
+        );
+      }
+    } else if (_savedDeck != null && _savedDeck!.isNotEmpty) {
+      // Use saved deck if available
+      playerDeck = Deck.fromCards(playerId: id, cards: _savedDeck!);
+      debugPrint('Using saved deck (${_savedDeck!.length} cards)');
+    } else if (isNapoleon) {
+      // Default to Napoleon's deck for Napoleon hero
+      playerDeck = Deck.napoleon(playerId: id);
+      debugPrint('Using Napoleon starter deck (25 cards)');
+    } else {
+      playerDeck = Deck.starter(playerId: id);
+      debugPrint('Using generic starter deck');
+    }
 
     // Determine opponent name and deck
     final opponentNameFinal = _isOnlineMode
@@ -596,11 +739,49 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         : 'AI Opponent';
     final opponentIdFinal = _isOnlineMode ? (_opponentId ?? 'opponent') : 'ai';
 
-    debugPrint('Match started!');
+    debugPrint('========== MATCH STARTING ==========');
     debugPrint(
       'Player hero: ${playerHero.name} (${playerHero.abilityDescription})',
     );
     debugPrint('Opponent hero: ${opponentHero.name}');
+    debugPrint('Deck name: ${playerDeck.name}');
+    debugPrint('Deck cards (${playerDeck.cards.length}):');
+    for (final card in playerDeck.cards) {
+      debugPrint(
+        '  - ${card.name} (${card.element}, DMG:${card.damage}, HP:${card.health})',
+      );
+    }
+    debugPrint('====================================');
+
+    // Determine enemy deck - use provided deck, or act-specific deck for campaign
+    final Deck opponentDeck;
+    if (widget.enemyDeck != null) {
+      opponentDeck = widget.enemyDeck!;
+      debugPrint(
+        '🎖️ CAMPAIGN: Using provided enemy deck: ${opponentDeck.name}',
+      );
+    } else if (widget.forceCampaignDeck) {
+      // Campaign mode without specific deck - use act-based deck
+      switch (widget.campaignAct) {
+        case 1:
+          opponentDeck = Deck.act1Enemy(playerId: opponentIdFinal);
+          debugPrint('🎖️ CAMPAIGN ACT 1: Using Austrian Forces deck');
+          break;
+        case 2:
+          // TODO: Add Act 2 deck (Egyptian Campaign)
+          opponentDeck = Deck.act1Enemy(playerId: opponentIdFinal);
+          debugPrint('🎖️ CAMPAIGN ACT 2: Using placeholder deck');
+          break;
+        default:
+          opponentDeck = Deck.starter(playerId: opponentIdFinal);
+      }
+    } else {
+      opponentDeck = Deck.starter(playerId: opponentIdFinal);
+    }
+
+    debugPrint(
+      'Enemy deck: ${opponentDeck.name} (${opponentDeck.cards.length} cards)',
+    );
 
     _matchManager.startMatch(
       playerId: id,
@@ -608,7 +789,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       playerDeck: playerDeck,
       opponentId: opponentIdFinal,
       opponentName: opponentNameFinal,
-      opponentDeck: Deck.starter(playerId: opponentIdFinal),
+      opponentDeck: opponentDeck,
       opponentIsAI: !_isOnlineMode,
       playerAttunedElement: playerHero.terrainAffinities.first,
       opponentAttunedElement: opponentHero.terrainAffinities.first,
@@ -1055,18 +1236,21 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
 
   Widget _buildGameOver(MatchState match) {
     final winner = match.winner;
+    final playerWon = winner?.id == match.player.id;
+    final isCampaignMode = widget.forceCampaignDeck;
+
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
-            winner?.id == match.player.id ? Icons.emoji_events : Icons.close,
+            playerWon ? Icons.emoji_events : Icons.close,
             size: 100,
-            color: winner?.id == match.player.id ? Colors.amber : Colors.red,
+            color: playerWon ? Colors.amber : Colors.red,
           ),
           const SizedBox(height: 20),
           Text(
-            winner?.id == match.player.id ? 'Victory!' : 'Defeat',
+            playerWon ? 'Victory!' : 'Defeat',
             style: Theme.of(context).textTheme.headlineLarge,
           ),
           const SizedBox(height: 10),
@@ -1076,6 +1260,39 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
           Text('Opponent Crystal: ${match.opponent.crystalHP} HP'),
           const SizedBox(height: 20),
           Text('Total Turns: ${match.turnNumber}'),
+          const SizedBox(height: 30),
+          // Continue button - returns result to campaign
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.pop(context, {
+                'won': playerWon,
+                'crystalDamage': 50 - match.player.crystalHP,
+                'turnsPlayed': match.turnNumber,
+              });
+            },
+            icon: Icon(
+              isCampaignMode
+                  ? (playerWon ? Icons.arrow_forward : Icons.replay)
+                  : Icons.home,
+            ),
+            label: Text(
+              isCampaignMode
+                  ? (playerWon ? 'Continue Campaign' : 'Return to Map')
+                  : 'Return to Menu',
+            ),
+            style: ElevatedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+              backgroundColor: playerWon ? Colors.amber : Colors.grey,
+            ),
+          ),
+          if (!isCampaignMode) ...[
+            const SizedBox(height: 12),
+            TextButton.icon(
+              onPressed: _startNewMatch,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Play Again'),
+            ),
+          ],
         ],
       ),
     );
@@ -1193,9 +1410,25 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
 
   /// Build the combat banner with detailed tick info
   Widget _buildCombatBanner() {
+    final match = _matchManager.currentMatch;
+    final currentLane = _matchManager.currentCombatLane;
+
+    // Get terrain for current combat tile
+    String? terrain;
+    if (match != null && currentLane != null) {
+      final col = currentLane.index;
+      final lane = match.lanes[col];
+      final row = lane.currentZone == Zone.playerBase
+          ? 2
+          : lane.currentZone == Zone.enemyBase
+          ? 0
+          : 1;
+      terrain = match.board.getTile(row, col).terrain;
+    }
+
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [Colors.red[700]!, Colors.orange[600]!],
@@ -1204,87 +1437,167 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Combat header
+          // Combat header with terrain
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               const Icon(Icons.flash_on, color: Colors.white, size: 20),
               const SizedBox(width: 6),
-              Text(
-                _matchManager.currentCombatLane != null
-                    ? '⚔️ ${_matchManager.currentCombatLane!.name.toUpperCase()} LANE ⚔️'
-                    : '⚔️ COMBAT IN PROGRESS ⚔️',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1,
-                ),
+              Column(
+                children: [
+                  Text(
+                    currentLane != null
+                        ? '⚔️ ${currentLane.name.toUpperCase()} LANE ⚔️'
+                        : '⚔️ COMBAT IN PROGRESS ⚔️',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1,
+                    ),
+                  ),
+                  if (terrain != null) ...[
+                    const SizedBox(height: 2),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _getTerrainColor(terrain).withValues(alpha: 0.7),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _getTerrainIcon(terrain),
+                            color: Colors.white,
+                            size: 12,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            terrain.toUpperCase(),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
               ),
               const SizedBox(width: 6),
               const Icon(Icons.flash_on, color: Colors.white, size: 20),
             ],
           ),
 
-          // Tick info
+          // Tick info with better formatting
           if (_matchManager.currentTickInfo != null) ...[
-            const SizedBox(height: 6),
+            const SizedBox(height: 8),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
               decoration: BoxDecoration(
-                color: Colors.black38,
+                color: Colors.black54,
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
                 _matchManager.currentTickInfo!,
                 style: const TextStyle(
                   color: Colors.white,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
                 ),
                 textAlign: TextAlign.center,
               ),
             ),
           ],
 
-          // Detailed combat results
+          // Detailed combat results with better styling
           if (_matchManager.currentTickDetails.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Wrap(
-              alignment: WrapAlignment.center,
-              spacing: 8,
-              runSpacing: 4,
-              children: _matchManager.currentTickDetails.map((detail) {
-                final isDestroyed = detail.contains('DESTROYED');
-                return Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 3,
+            const SizedBox(height: 6),
+            ...(_matchManager.currentTickDetails.map((detail) {
+              final isDestroyed = detail.contains('DESTROYED');
+              final isAbility =
+                  detail.contains('FIRST STRIKE') ||
+                  detail.contains('INSPIRE') ||
+                  detail.contains('FORTIFY') ||
+                  detail.contains('COMMAND') ||
+                  detail.contains('RALLY');
+              final isTerrain = detail.contains('terrain');
+
+              return Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(bottom: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: isDestroyed
+                      ? Colors.red[900]
+                      : isAbility
+                      ? Colors.purple[800]
+                      : isTerrain
+                      ? Colors.green[800]
+                      : Colors.black38,
+                  borderRadius: BorderRadius.circular(6),
+                  border: isDestroyed
+                      ? Border.all(color: Colors.red[300]!, width: 2)
+                      : isAbility
+                      ? Border.all(color: Colors.purple[300]!, width: 1)
+                      : null,
+                ),
+                child: Text(
+                  detail,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: isDestroyed || isAbility
+                        ? FontWeight.bold
+                        : FontWeight.normal,
                   ),
-                  decoration: BoxDecoration(
-                    color: isDestroyed ? Colors.red[900] : Colors.black26,
-                    borderRadius: BorderRadius.circular(6),
-                    border: isDestroyed
-                        ? Border.all(color: Colors.red[300]!, width: 1)
-                        : null,
-                  ),
-                  child: Text(
-                    detail,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 11,
-                      fontWeight: isDestroyed
-                          ? FontWeight.bold
-                          : FontWeight.normal,
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
+                  textAlign: TextAlign.center,
+                ),
+              );
+            })),
           ],
         ],
       ),
     );
+  }
+
+  Color _getTerrainColor(String terrain) {
+    switch (terrain.toLowerCase()) {
+      case 'woods':
+        return Colors.green[700]!;
+      case 'lake':
+        return Colors.blue[700]!;
+      case 'desert':
+        return Colors.orange[700]!;
+      case 'marsh':
+        return Colors.teal[700]!;
+      default:
+        return Colors.grey[700]!;
+    }
+  }
+
+  IconData _getTerrainIcon(String terrain) {
+    switch (terrain.toLowerCase()) {
+      case 'woods':
+        return Icons.park;
+      case 'lake':
+        return Icons.water;
+      case 'desert':
+        return Icons.wb_sunny;
+      case 'marsh':
+        return Icons.grass;
+      default:
+        return Icons.landscape;
+    }
   }
 
   /// Build the lane tick clocks showing 1-5 ticks per lane
@@ -1936,32 +2249,42 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            children: [
-              Icon(
-                isOpponent ? Icons.smart_toy : Icons.person,
-                color: isOpponent ? Colors.red : Colors.blue,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                player.name,
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: isOpponent ? Colors.red[700] : Colors.blue[700],
+          Flexible(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  isOpponent ? Icons.smart_toy : Icons.person,
+                  color: isOpponent ? Colors.red : Colors.blue,
+                  size: 18,
                 ),
-              ),
-              // Show hero info
-              if (player.hero != null) ...[
-                const SizedBox(width: 8),
-                Text(
-                  '(${player.hero!.name})',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: isOpponent ? Colors.red[400] : Colors.blue[400],
+                const SizedBox(width: 4),
+                Flexible(
+                  child: Text(
+                    player.name,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: isOpponent ? Colors.red[700] : Colors.blue[700],
+                    ),
                   ),
                 ),
+                // Show hero info
+                if (player.hero != null) ...[
+                  const SizedBox(width: 4),
+                  Flexible(
+                    child: Text(
+                      '(${player.hero!.name})',
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: isOpponent ? Colors.red[400] : Colors.blue[400],
+                      ),
+                    ),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
           Row(
             children: [
@@ -2455,21 +2778,6 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         ),
       ),
     );
-  }
-
-  Color _getTerrainColor(String terrain) {
-    switch (terrain.toLowerCase()) {
-      case 'woods':
-        return Colors.green[700]!;
-      case 'lake':
-        return Colors.blue[700]!;
-      case 'desert':
-        return Colors.orange[700]!;
-      case 'marsh':
-        return Colors.teal[700]!;
-      default:
-        return Colors.grey[600]!;
-    }
   }
 
   Widget _buildBattleLogDrawer() {

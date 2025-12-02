@@ -7,18 +7,39 @@ import 'package:card_game/data/card_library.dart';
 Future<void> main(List<String> args) async {
   const games = 10;
 
-  // For simulations, use terrain-focused decks: Lake Control vs Desert Aggro.
-  final deck1 = Deck(
-    id: 'lake_control',
-    name: 'Lake Control',
-    cards: buildWaterControlDeck(),
-  );
+  // Check command line args for deck type
+  final useNapoleon = args.contains('--napoleon');
 
-  final deck2 = Deck(
-    id: 'desert_aggro',
-    name: 'Desert Aggro',
-    cards: buildFireAggroDeck(),
-  );
+  late final Deck deck1;
+  late final Deck deck2;
+
+  if (useNapoleon) {
+    // Napoleon's starter deck vs Desert Aggro
+    print('🎖️ Testing Napoleon\'s Campaign Deck vs Desert Aggro\n');
+    deck1 = Deck(
+      id: 'napoleon_starter',
+      name: 'Napoleon Starter',
+      cards: buildNapoleonStarterDeck(),
+    );
+    deck2 = Deck(
+      id: 'desert_aggro',
+      name: 'Desert Aggro',
+      cards: buildFireAggroDeck(),
+    );
+  } else {
+    // Default: Lake Control vs Desert Aggro
+    print('🌊 Testing Lake Control vs Desert Aggro\n');
+    deck1 = Deck(
+      id: 'lake_control',
+      name: 'Lake Control',
+      cards: buildWaterControlDeck(),
+    );
+    deck2 = Deck(
+      id: 'desert_aggro',
+      name: 'Desert Aggro',
+      cards: buildFireAggroDeck(),
+    );
+  }
 
   final report = await simulateManyGames(
     count: games,

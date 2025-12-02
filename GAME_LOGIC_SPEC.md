@@ -119,10 +119,16 @@ This document captures the **implemented and intended logic** of the game, mappe
 - The **zone represents where combat happens** (the front line).
 - Players can **only stage cards at their own base** (not at enemy base).
 - Combat happens **at the zone position**:
-  - Zone at `middle` → combat at middle (neutral terrain).
-  - Zone at `enemyBase` → combat at enemy base (enemy's terrain buffs apply).
-  - Zone at `playerBase` → combat at player base (player's terrain buffs apply).
+  - Zone at `middle` → combat at middle tile.
+  - Zone at `enemyBase` → combat at enemy base tile.
+  - Zone at `playerBase` → combat at player base tile.
 - Cards from both sides **advance toward the zone** to fight.
+
+**Terrain Attunement Buff:**
+- Each tile has a terrain type (woods, lake, desert, marsh).
+- When a card's `element` matches the tile's `terrain`, the card gets **+1 damage**.
+- This applies to **ANY tile** (base or middle), not just bases.
+- Example: A "woods" element card fighting on a "woods" terrain tile gets +1 damage.
 
 **CardStack**
 - Conceptually holds up to **2 cards** per side:
@@ -265,12 +271,15 @@ Before resolving a lane, `_resolveLaneAnimated` calls:
 ```dart
 _combatResolver.setLaneContext(
   zone: lane.currentZone,
-  playerBaseElement: currentMatch.player.attunedElement,
-  opponentBaseElement: currentMatch.opponent.attunedElement,
+  tileTerrain: tile.terrain,  // Terrain of the current combat tile
+  playerDamageBoost: playerDamageBoost,
 );
 ```
 
-This allows the damage calculator to know **which zone** we’re in and **which base elements** to compare.
+This allows the damage calculator to know:
+- **Which zone** we’re in (player base, middle, enemy base)
+- **Tile terrain** for terrain attunement buffs
+- **Hero damage boost** if active
 
 ---
 

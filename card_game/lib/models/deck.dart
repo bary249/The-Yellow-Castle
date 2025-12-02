@@ -59,6 +59,26 @@ class Deck {
     );
   }
 
+  /// Create Napoleon's campaign starter deck
+  factory Deck.napoleon({String? playerId}) {
+    final cards = buildNapoleonStarterDeck();
+    return Deck(
+      id: 'napoleon_${playerId ?? "default"}',
+      name: "Napoleon's Army",
+      cards: cards,
+    );
+  }
+
+  /// Create Act 1 enemy deck (Austrian forces - Italian Campaign)
+  factory Deck.act1Enemy({String? playerId}) {
+    final cards = buildAct1EnemyDeck();
+    return Deck(
+      id: 'act1_enemy_${playerId ?? "default"}',
+      name: 'Austrian Forces',
+      cards: cards,
+    );
+  }
+
   /// Create a deck from saved cards (must have 15-25 cards)
   /// Will pad with starter cards if under 25
   factory Deck.fromCards({

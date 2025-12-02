@@ -3,6 +3,7 @@ import '../services/auth_service.dart';
 import 'hero_selection_screen.dart';
 import 'matchmaking_screen.dart';
 import 'deck_editor_screen.dart';
+import 'campaign_select_screen.dart';
 
 /// Main menu screen with Play vs AI and Play Online options
 class MainMenuScreen extends StatefulWidget {
@@ -63,6 +64,12 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
     ).push(MaterialPageRoute(builder: (_) => const DeckEditorScreen()));
   }
 
+  void _playCampaign() {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const CampaignSelectScreen()));
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -110,6 +117,17 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                         ),
                       ),
                       const SizedBox(height: 60),
+
+                      // Campaign button
+                      _buildMenuButton(
+                        icon: Icons.military_tech,
+                        label: 'CAMPAIGN',
+                        sublabel: 'Lead your army to glory!',
+                        color: Colors.orange,
+                        onTap: _playCampaign,
+                      ),
+
+                      const SizedBox(height: 20),
 
                       // Play vs AI button
                       _buildMenuButton(

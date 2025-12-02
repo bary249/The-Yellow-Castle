@@ -343,8 +343,8 @@ class MatchManager {
   Function()? onWaitingForTick;
 
   /// Auto-progress tick delays in milliseconds
-  int tickDelayWithCombat = 2500; // Longer delay when cards fight (2.5s)
-  int tickDelayNoCombat = 800; // Shorter when no action (0.8s)
+  int tickDelayWithCombat = 3500; // Longer delay when cards fight (3.5s)
+  int tickDelayNoCombat = 1200; // Shorter when no action (1.2s)
 
   /// Advance to next tick (called by user action)
   void advanceToNextTick() {
@@ -425,6 +425,9 @@ class MatchManager {
       }
     }
 
+    // Process far_attack cards (siege cannons that attack other lanes)
+    await _processFarAttackCards();
+
     // Check if any cards damaged crystals (winning a lane means attacking crystal)
     _checkCrystalDamage();
 
@@ -462,15 +465,30 @@ class MatchManager {
     laneTickProgress[lane.position] = 0; // Mark lane as starting
 
     // Provide lane/attunement context to the combat resolver so it can
-    // apply base-zone buffs for matching elements and hero damage boosts.
+    // apply terrain buffs when card element matches tile terrain.
     if (_currentMatch != null) {
+      // Get the tile terrain based on current zone
+      final col = lane.position.index;
+      final row = lane.currentZone == Zone.playerBase
+          ? 2
+          : lane.currentZone == Zone.enemyBase
+          ? 0
+          : 1;
+      final tile = _currentMatch!.board.getTile(row, col);
+
       _combatResolver.setLaneContext(
         zone: lane.currentZone,
-        playerBaseElement: _currentMatch!.player.attunedElement,
-        opponentBaseElement: _currentMatch!.opponent.attunedElement,
+        tileTerrain: tile.terrain,
         playerDamageBoost: playerDamageBoost,
       );
     }
+
+    // Calculate lane-wide buffs from inspire, fortify, command, rally abilities
+    // This must be called before processing ticks to apply buffs correctly
+    _combatResolver.calculateLaneBuffsPublic(
+      lane,
+      lane.position.name.toUpperCase(),
+    );
 
     // Initial delay to show combat starting (skip in fast/sim mode)
     if (!fastMode) {
@@ -502,22 +520,45 @@ class MatchManager {
           .toList();
 
       // Build detailed tick info with combat summaries
+      // Include all important events, not just damage
       currentTickDetails = newEntries
-          .where((e) => e.tick == tick && e.damageDealt != null)
-          .map((e) => e.combatSummary)
+          .where(
+            (e) => e.tick == tick && (e.damageDealt != null || e.isImportant),
+          )
+          .map((e) {
+            if (e.damageDealt != null) {
+              return e.combatSummary;
+            }
+            // Format ability/event messages nicely
+            return '${e.action}: ${e.details}';
+          })
           .toList();
 
-      final tickActions = newEntries
-          .where((e) => e.tick == tick && e.action.contains('→'))
-          .map((e) => e.action)
-          .join(' | ');
+      // Build a human-readable tick summary
+      final attacks = newEntries
+          .where((e) => e.tick == tick && e.damageDealt != null)
+          .toList();
+      final kills = attacks.where((e) => e.targetDied == true).toList();
 
-      currentTickInfo = tickActions.isNotEmpty
-          ? 'Tick $tick: $tickActions'
-          : 'Tick $tick: No actions';
+      String tickSummary;
+      if (attacks.isEmpty) {
+        tickSummary = '⏸️ Tick $tick: No attacks this tick';
+      } else if (kills.isNotEmpty) {
+        final killNames = kills.map((e) => e.targetName).join(', ');
+        tickSummary = '💀 Tick $tick: ${killNames} destroyed!';
+      } else {
+        final totalDamage = attacks.fold<int>(
+          0,
+          (sum, e) => sum + (e.damageDealt ?? 0),
+        );
+        tickSummary =
+            '⚔️ Tick $tick: ${attacks.length} attack${attacks.length > 1 ? 's' : ''}, $totalDamage total damage';
+      }
+
+      currentTickInfo = tickSummary;
 
       // Determine if there was combat action this tick
-      final hadCombat = currentTickDetails.isNotEmpty || tickActions.isNotEmpty;
+      final hadCombat = currentTickDetails.isNotEmpty || attacks.isNotEmpty;
       final tickDelay = hadCombat ? tickDelayWithCombat : tickDelayNoCombat;
 
       // Auto-progress with variable delay based on combat activity
@@ -559,6 +600,9 @@ class MatchManager {
       laneTickProgress[lane.position] = 6;
     }
 
+    // Reset lane buffs after combat completes
+    _combatResolver.resetLaneBuffsPublic();
+
     // Final delay after lane completes (skip in fast/sim mode)
     if (!fastMode && !skipAllTicks) {
       await Future.delayed(const Duration(milliseconds: 400));
@@ -568,6 +612,116 @@ class MatchManager {
     currentCombatTick = null;
     currentTickDetails = [];
     onCombatUpdate?.call();
+  }
+
+  /// Process far_attack cards (siege cannons that attack other tiles in same lane)
+  /// These cards attack enemies at different tiles in their lane, but only if:
+  /// 1. They are NOT contested (no enemy at their own tile)
+  /// 2. There ARE enemies at other tiles in the same lane
+  /// 3. Their tick fires (tick 5 for siege cannon)
+  Future<void> _processFarAttackCards() async {
+    if (_currentMatch == null) return;
+
+    _log('\n--- FAR ATTACK PHASE ---');
+
+    for (final lane in _currentMatch!.lanes) {
+      // Check player's far_attack cards
+      await _processFarAttackInLane(lane, isPlayer: true);
+      // Check opponent's far_attack cards
+      await _processFarAttackInLane(lane, isPlayer: false);
+    }
+
+    _log('--- END FAR ATTACK PHASE ---');
+  }
+
+  /// Process far_attack cards for one side in a lane
+  Future<void> _processFarAttackInLane(
+    Lane lane, {
+    required bool isPlayer,
+  }) async {
+    final laneName = lane.position.name.toUpperCase();
+    final cards = isPlayer ? lane.playerCards : lane.opponentCards;
+    final enemyCards = isPlayer ? lane.opponentCards : lane.playerCards;
+
+    // Check all tiles for far_attack cards
+    for (final zone in Zone.values) {
+      final stack = cards.getStackAt(zone, isPlayer);
+      final allCardsInStack = [
+        stack.topCard,
+        stack.bottomCard,
+      ].whereType<GameCard>();
+
+      for (final card in allCardsInStack) {
+        if (!card.isAlive) continue;
+        if (!card.abilities.contains('far_attack')) continue;
+
+        // Check if contested at own tile (enemy present at same zone)
+        final enemyAtSameTile = enemyCards.getStackAt(zone, !isPlayer);
+        if (!enemyAtSameTile.isEmpty) {
+          _log(
+            '$laneName: ${card.name} cannot fire - contested at ${zone.name}',
+          );
+          continue;
+        }
+
+        // Find enemies at OTHER tiles in this lane
+        GameCard? target;
+        Zone? targetZone;
+        for (final otherZone in Zone.values) {
+          if (otherZone == zone) continue; // Skip own tile
+          final enemyStack = enemyCards.getStackAt(otherZone, !isPlayer);
+          final enemyActive = enemyStack.activeCard;
+          if (enemyActive != null && enemyActive.isAlive) {
+            target = enemyActive;
+            targetZone = otherZone;
+            break; // Attack first enemy found
+          }
+        }
+
+        if (target == null) {
+          _log('$laneName: ${card.name} has no targets in other tiles');
+          continue;
+        }
+
+        // Check if tick 5 fires (far_attack cards are tick 5)
+        // Since this runs after combat, we simulate a single tick 5 attack
+        if (card.tick == 5) {
+          final damage = card.damage;
+          final hpBefore = target.currentHealth;
+          final died = target.takeDamage(damage);
+          final hpAfter = target.currentHealth;
+
+          final side = isPlayer ? '🛡️ YOU' : '⚔️ AI';
+          final result = died ? '💀 DESTROYED' : '✓ Hit';
+
+          _log(
+            '$laneName: 🎯 FAR ATTACK $side ${card.name} → ${target.name} at ${targetZone!.name}',
+          );
+          _log('  $damage damage | HP: $hpBefore → $hpAfter | $result');
+
+          // Add to combat log
+          _combatResolver.combatLog.add(
+            BattleLogEntry(
+              tick: 5,
+              laneDescription: laneName,
+              action: '🎯 FAR ATTACK $side ${card.name} → ${target.name}',
+              details:
+                  '$damage damage dealt | HP: $hpBefore → $hpAfter | $result',
+              isImportant: died,
+              damageDealt: damage,
+              attackerName: card.name,
+              targetName: target.name,
+              targetHpBefore: hpBefore,
+              targetHpAfter: hpAfter,
+              targetDied: died,
+            ),
+          );
+
+          // Cleanup dead cards
+          enemyCards.cleanup();
+        }
+      }
+    }
   }
 
   /// Check crystal damage after combat
