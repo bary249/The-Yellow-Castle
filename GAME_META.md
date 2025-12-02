@@ -239,7 +239,7 @@ After each battle, the player chooses from **5 possible paths**. Each path has a
 ### 4.2 Path Generation Rules
 
 - **Always** at least 1 battle option (Normal or Elite)
-- **Always** at least 1 non-battle option (Shop, Rest, or Event)
+- **Non-battle options** (Shop, Rest, Event) appear every 2-3 encounters, not every turn
 - **Elite battles** become more common in later acts
 - **Mystery battles** have higher variance (could be treasure or trap)
 - **Boss path** appears after minimum battles completed (forced, no choice)

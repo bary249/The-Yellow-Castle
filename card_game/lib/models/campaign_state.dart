@@ -160,24 +160,56 @@ class EncounterGenerator {
 
   List<Encounter> generateChoices(int encounterNumber) {
     final choices = <Encounter>[];
-    final isEarly = encounterNumber < 3;
-    final isMid = encounterNumber >= 3 && encounterNumber < 5;
-    final numBattles = isEarly ? 2 : (isMid ? 2 : 1);
+
+    // Determine if this encounter should have non-battle options
+    // Non-battle options appear every 2-3 encounters (not every turn)
+    final shouldHaveNonBattle =
+        (encounterNumber % 3 == 0) ||
+        (encounterNumber % 3 == 2 && _random.nextBool());
+
+    // Always have at least 2 battle options
+    final numBattles = shouldHaveNonBattle ? 2 : 3;
 
     for (int i = 0; i < numBattles; i++) {
-      choices.add(_generateBattle(encounterNumber, i));
+      // Mix in elite battles as encounter progresses
+      if (encounterNumber >= 3 && i == 0 && _random.nextDouble() < 0.3) {
+        choices.add(_generateElite(encounterNumber));
+      } else {
+        choices.add(_generateBattle(encounterNumber, i));
+      }
     }
 
-    final remainingSlots = 4 - choices.length;
-    final otherTypes = _getAvailableTypes(encounterNumber);
-    otherTypes.shuffle(_random);
+    // Add non-battle options only on designated encounters
+    if (shouldHaveNonBattle) {
+      final otherTypes = _getAvailableTypes(encounterNumber);
+      otherTypes.shuffle(_random);
 
-    for (int i = 0; i < remainingSlots && i < otherTypes.length; i++) {
-      choices.add(_generateEncounter(otherTypes[i], encounterNumber, i));
+      // Add 1-2 non-battle options
+      final numNonBattle = _random.nextBool() ? 1 : 2;
+      for (int i = 0; i < numNonBattle && i < otherTypes.length; i++) {
+        choices.add(_generateEncounter(otherTypes[i], encounterNumber, i));
+      }
     }
 
     choices.shuffle(_random);
     return choices;
+  }
+
+  Encounter _generateElite(int encounterNumber) {
+    final eliteTitles = [
+      ('Austrian Grenadiers', 'Elite heavy infantry guards the pass.'),
+      ('Cavalry Ambush', 'Enemy hussars have set a trap.'),
+      ('Fortified Position', 'A well-defended enemy stronghold.'),
+    ];
+    final elite = eliteTitles[_random.nextInt(eliteTitles.length)];
+    return Encounter(
+      id: 'elite_$encounterNumber',
+      type: EncounterType.elite,
+      title: elite.$1,
+      description: elite.$2,
+      difficulty: BattleDifficulty.hard,
+      goldReward: 25 + (act * 10),
+    );
   }
 
   Encounter generateBoss() {
