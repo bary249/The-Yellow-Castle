@@ -14,6 +14,7 @@ import '../services/match_manager.dart';
 import '../services/simple_ai.dart';
 import '../services/auth_service.dart';
 import '../services/deck_storage_service.dart';
+import '../services/combat_resolver.dart' show AttackResult;
 
 /// Test screen for playing a match vs AI opponent or online multiplayer
 class TestMatchScreen extends StatefulWidget {
@@ -220,27 +221,393 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         _selectedCardCol == null)
       return;
 
+    final attacker = _selectedCardForAction!;
+
+    // Show attack preview dialog
+    _showAttackPreviewDialog(
+      attacker: attacker,
+      target: target,
+      attackerRow: _selectedCardRow!,
+      attackerCol: _selectedCardCol!,
+      targetRow: targetRow,
+      targetCol: targetCol,
+    );
+  }
+
+  /// Show attack preview dialog with predicted outcome
+  void _showAttackPreviewDialog({
+    required GameCard attacker,
+    required GameCard target,
+    required int attackerRow,
+    required int attackerCol,
+    required int targetRow,
+    required int targetCol,
+  }) {
+    // Get preview from combat resolver
+    final preview = _matchManager.previewAttackTYC3(attacker, target);
+
+    final attackerHpAfter = (attacker.currentHealth - preview.retaliationDamage)
+        .clamp(0, attacker.health);
+    final targetHpAfter = (target.currentHealth - preview.damageDealt).clamp(
+      0,
+      target.health,
+    );
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('⚔️ Attack Preview', textAlign: TextAlign.center),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Attacker and Target side by side
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                // Attacker
+                _buildCombatCardPreview(
+                  card: attacker,
+                  label: 'ATTACKER',
+                  hpAfter: attackerHpAfter,
+                  willDie: preview.attackerDied,
+                  color: Colors.blue,
+                ),
+                // Arrow
+                Column(
+                  children: [
+                    Text(
+                      '${preview.damageDealt}',
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.red,
+                      ),
+                    ),
+                    const Icon(
+                      Icons.arrow_forward,
+                      size: 32,
+                      color: Colors.red,
+                    ),
+                    if (preview.retaliationDamage > 0) ...[
+                      const SizedBox(height: 8),
+                      const Icon(
+                        Icons.arrow_back,
+                        size: 24,
+                        color: Colors.orange,
+                      ),
+                      Text(
+                        '${preview.retaliationDamage}',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.orange,
+                        ),
+                      ),
+                      const Text(
+                        'retaliation',
+                        style: TextStyle(fontSize: 10, color: Colors.orange),
+                      ),
+                    ],
+                  ],
+                ),
+                // Target
+                _buildCombatCardPreview(
+                  card: target,
+                  label: 'TARGET',
+                  hpAfter: targetHpAfter,
+                  willDie: preview.targetDied,
+                  color: Colors.red,
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            // Outcome summary
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.grey[200],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                children: [
+                  if (preview.targetDied)
+                    const Text(
+                      '💀 Target will be KILLED!',
+                      style: TextStyle(
+                        color: Colors.red,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  if (preview.attackerDied)
+                    const Text(
+                      '⚠️ Attacker will DIE from retaliation!',
+                      style: TextStyle(
+                        color: Colors.orange,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  if (!preview.targetDied && !preview.attackerDied)
+                    const Text(
+                      'Both units survive',
+                      style: TextStyle(color: Colors.green),
+                    ),
+                  if (attacker.isRanged && !preview.targetDied)
+                    const Text(
+                      '🏹 Ranged - No retaliation',
+                      style: TextStyle(color: Colors.blue, fontSize: 12),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _executeAttackTYC3(
+                attacker,
+                target,
+                attackerRow,
+                attackerCol,
+                targetRow,
+                targetCol,
+              );
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text(
+              '⚔️ ATTACK',
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Build a card preview for combat dialog
+  Widget _buildCombatCardPreview({
+    required GameCard card,
+    required String label,
+    required int hpAfter,
+    required bool willDie,
+    required Color color,
+  }) {
+    return Column(
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 10,
+            color: color,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Container(
+          width: 80,
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: willDie ? Colors.red[100] : color.withOpacity(0.1),
+            border: Border.all(color: willDie ? Colors.red : color, width: 2),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Column(
+            children: [
+              Text(
+                card.name,
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 4),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.flash_on, size: 12, color: Colors.orange),
+                  Text('${card.damage}', style: const TextStyle(fontSize: 12)),
+                ],
+              ),
+              const SizedBox(height: 2),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.favorite, size: 12, color: Colors.red),
+                  Text(
+                    '${card.currentHealth} → $hpAfter',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: willDie ? Colors.red : Colors.black,
+                      fontWeight: willDie ? FontWeight.bold : FontWeight.normal,
+                    ),
+                  ),
+                ],
+              ),
+              if (willDie) const Text('💀', style: TextStyle(fontSize: 16)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Execute the attack after confirmation
+  void _executeAttackTYC3(
+    GameCard attacker,
+    GameCard target,
+    int attackerRow,
+    int attackerCol,
+    int targetRow,
+    int targetCol,
+  ) {
     final result = _matchManager.attackCardTYC3(
-      _selectedCardForAction!,
+      attacker,
       target,
-      _selectedCardRow!,
-      _selectedCardCol!,
+      attackerRow,
+      attackerCol,
       targetRow,
       targetCol,
     );
 
     if (result != null) {
-      // Attack succeeded
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(result.message),
-          duration: const Duration(seconds: 1),
-        ),
-      );
+      // Show battle result dialog
+      _showBattleResultDialog(result, attacker, target);
     }
 
     _clearTYC3Selection();
     setState(() {});
+  }
+
+  /// Show battle result dialog with animation
+  void _showBattleResultDialog(
+    AttackResult result,
+    GameCard attacker,
+    GameCard target,
+  ) {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) => AlertDialog(
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [const Text('⚔️ Battle Result')],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Attack damage
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.red[50],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    attacker.name,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const Text(' dealt '),
+                  Text(
+                    '${result.damageDealt}',
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.red,
+                    ),
+                  ),
+                  const Text(' damage'),
+                  if (result.targetDied)
+                    const Text(' 💀', style: TextStyle(fontSize: 20)),
+                ],
+              ),
+            ),
+
+            // Retaliation
+            if (result.retaliationDamage > 0) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.orange[50],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      target.name,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const Text(' retaliated for '),
+                    Text(
+                      '${result.retaliationDamage}',
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.orange,
+                      ),
+                    ),
+                    if (result.attackerDied)
+                      const Text(' 💀', style: TextStyle(fontSize: 20)),
+                  ],
+                ),
+              ),
+            ],
+
+            // Summary
+            const SizedBox(height: 12),
+            if (result.targetDied && result.attackerDied)
+              const Text(
+                '💀 Both units destroyed!',
+                style: TextStyle(
+                  color: Colors.purple,
+                  fontWeight: FontWeight.bold,
+                ),
+              )
+            else if (result.targetDied)
+              Text(
+                '💀 ${target.name} destroyed!',
+                style: const TextStyle(
+                  color: Colors.red,
+                  fontWeight: FontWeight.bold,
+                ),
+              )
+            else if (result.attackerDied)
+              Text(
+                '💀 ${attacker.name} destroyed!',
+                style: const TextStyle(
+                  color: Colors.orange,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+
+    // Auto-dismiss after 2 seconds
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted && Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+    });
   }
 
   /// TYC3: Move card to adjacent tile

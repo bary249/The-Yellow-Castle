@@ -1559,6 +1559,16 @@ class MatchManager {
     return result;
   }
 
+  /// TYC3: Preview an attack without executing it
+  /// Returns predicted AttackResult with damage values
+  AttackResult previewAttackTYC3(GameCard attacker, GameCard target) {
+    return _combatResolver.previewAttackTYC3(
+      attacker,
+      target,
+      isPlayerAttacking: isPlayerTurn,
+    );
+  }
+
   /// TYC3: Get valid attack targets for a card
   List<GameCard> getValidTargetsTYC3(GameCard attacker, int row, int col) {
     if (_currentMatch == null) return [];

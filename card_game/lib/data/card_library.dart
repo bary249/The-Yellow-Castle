@@ -9,17 +9,13 @@ import '../models/card.dart';
 /// - Legendary (4): Max 1 copy - champions with unique powers
 ///
 /// TYC3 AP System:
-/// - maxAP: Maximum AP the card can hold (1-3)
-/// - apPerTurn: AP gained at start of owner's turn
+/// - ALL CARDS have maxAP=3 and apPerTurn=3 (simplified for now)
 /// - attackAPCost: AP cost to attack (1-2)
 /// - attackRange: 1 = adjacent, 2 = long range (cannons)
+/// - Move costs 1 AP, Attack costs attackAPCost AP
 ///
-/// AP Assignment Strategy:
-/// - Fast units (tick 1-2, moveSpeed 2): maxAP=2, can act frequently
-/// - Medium units (tick 3-4): maxAP=1, balanced
-/// - Heavy units (tick 5): maxAP=1, attackAPCost=2, slow but powerful
-/// - Cavalry (moveSpeed 2): maxAP=2, mobile
-/// - Artillery: attackRange=2, long range attacks
+/// NOTE: Explicit maxAP/apPerTurn values below are legacy and ignored.
+/// The default in GameCard (3) is used for all cards.
 
 // ============================================================================
 // COMMON CARDS (Rarity 1) - Unlimited copies available

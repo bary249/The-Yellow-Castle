@@ -60,9 +60,9 @@ class GameCard {
     required this.health,
     this.tick = 3, // Legacy default
     this.moveSpeed = 1, // Default: normal speed (1 tile per turn)
-    // TYC3 AP fields with sensible defaults
-    this.maxAP = 1,
-    this.apPerTurn = 1,
+    // TYC3 AP fields - all units have 3 AP for simplicity
+    this.maxAP = 3,
+    this.apPerTurn = 3,
     this.attackAPCost = 1,
     this.attackRange = 1, // 1 = adjacent, 2 = long range
     this.element,

@@ -913,6 +913,96 @@ class CombatResolver {
     );
   }
 
+  /// TYC3: Preview an attack without applying damage
+  /// Returns predicted AttackResult with damage values
+  AttackResult previewAttackTYC3(
+    GameCard attacker,
+    GameCard target, {
+    bool isPlayerAttacking = true,
+  }) {
+    // Calculate base damage
+    int damage = attacker.damage;
+
+    // Apply fury bonus
+    final furyBonus = _getFuryBonus(attacker);
+    damage += furyBonus;
+
+    // Apply lane damage bonus if set
+    if (isPlayerAttacking) {
+      damage += _playerLaneDamageBonus;
+    } else {
+      damage += _opponentLaneDamageBonus;
+    }
+
+    // Apply shield reduction on target
+    final targetShield = _getShieldValue(target);
+    final shieldBonus = isPlayerAttacking
+        ? _opponentLaneShieldBonus
+        : _playerLaneShieldBonus;
+    final totalShield = targetShield + shieldBonus;
+    damage = (damage - totalShield).clamp(0, damage);
+
+    // Predict target death
+    final targetHpAfter = (target.currentHealth - damage).clamp(
+      0,
+      target.health,
+    );
+    final targetDied = targetHpAfter <= 0;
+
+    // Calculate retaliation (if target survives and attacker is not ranged)
+    int retaliationDamage = 0;
+    bool attackerDied = false;
+    int attackerHpAfter = attacker.currentHealth;
+
+    if (!targetDied && !attacker.isRanged) {
+      // Target retaliates
+      retaliationDamage = target.damage;
+
+      // Apply target's fury
+      retaliationDamage += _getFuryBonus(target);
+
+      // Apply attacker's shield
+      final attackerShield = _getShieldValue(attacker);
+      final attackerShieldBonus = isPlayerAttacking
+          ? _playerLaneShieldBonus
+          : _opponentLaneShieldBonus;
+      retaliationDamage =
+          (retaliationDamage - attackerShield - attackerShieldBonus).clamp(
+            0,
+            retaliationDamage,
+          );
+
+      attackerHpAfter = (attacker.currentHealth - retaliationDamage).clamp(
+        0,
+        attacker.health,
+      );
+      attackerDied = attackerHpAfter <= 0;
+    }
+
+    // Add thorns damage
+    int thornsDamage = 0;
+    if (!attackerDied && !targetDied) {
+      thornsDamage = _getThornsDamage(target);
+      if (thornsDamage > 0) {
+        attackerHpAfter = (attackerHpAfter - thornsDamage).clamp(
+          0,
+          attacker.health,
+        );
+        attackerDied = attackerHpAfter <= 0;
+        retaliationDamage += thornsDamage;
+      }
+    }
+
+    return AttackResult(
+      success: true,
+      damageDealt: damage,
+      retaliationDamage: retaliationDamage,
+      targetDied: targetDied,
+      attackerDied: attackerDied,
+      message: 'Preview: ${attacker.name} → $damage dmg → ${target.name}',
+    );
+  }
+
   /// TYC3: Get fury bonus from card abilities
   int _getFuryBonus(GameCard card) {
     for (final ability in card.abilities) {
