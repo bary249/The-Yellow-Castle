@@ -72,7 +72,7 @@ class GameCard {
     this.rarity = 1,
   }) : abilities = List.unmodifiable(abilities ?? const []),
        currentHealth = health,
-       currentAP = maxAP; // Cards start with full AP
+       currentAP = apPerTurn; // Cards start with apPerTurn AP
 
   /// Create a copy of this card (for deck shuffling/dealing)
   GameCard copy() {
