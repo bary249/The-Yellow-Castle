@@ -2012,7 +2012,13 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     _buildStatIcon(Icons.flash_on, card.damage, size: 14),
-                    _buildStatIcon(Icons.favorite, card.health, size: 14),
+                    // Show HP as current/max
+                    _buildStatIconWithMax(
+                      Icons.favorite,
+                      card.currentHealth,
+                      card.health,
+                      size: 14,
+                    ),
                   ],
                 ),
                 const SizedBox(height: 4),
@@ -4413,9 +4419,11 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                                               size: 10,
                                             ),
                                             const SizedBox(width: 2),
-                                            _buildStatIcon(
+                                            // Show HP as current/max
+                                            _buildStatIconWithMax(
                                               Icons.favorite,
                                               card.currentHealth,
+                                              card.health,
                                               size: 10,
                                             ),
                                             const SizedBox(width: 2),
@@ -4751,8 +4759,10 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                                       size: 10,
                                     ),
                                     const SizedBox(width: 2),
-                                    _buildStatIcon(
+                                    // Show HP as current/max for hand cards
+                                    _buildStatIconWithMax(
                                       Icons.favorite,
+                                      card.currentHealth,
                                       card.health,
                                       size: 10,
                                     ),
