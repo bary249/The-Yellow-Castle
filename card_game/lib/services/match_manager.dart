@@ -1152,6 +1152,318 @@ class MatchManager {
     _log('=== END GAME STATE SNAPSHOT ===\n');
   }
 
+  // ===========================================================================
+  // TYC3: TURN-BASED AP SYSTEM
+  // ===========================================================================
+
+  /// Whether to use the new TYC3 turn-based system (vs legacy simultaneous)
+  bool useTurnBasedSystem = false;
+
+  /// Callback when turn changes (for UI updates)
+  Function(String activePlayerId)? onTurnChanged;
+
+  /// Callback when turn timer updates (for UI countdown)
+  Function(int secondsRemaining)? onTurnTimerUpdate;
+
+  /// Start a new match with TYC3 turn-based system
+  void startMatchTYC3({
+    required String playerId,
+    required String playerName,
+    required Deck playerDeck,
+    required String opponentId,
+    required String opponentName,
+    required Deck opponentDeck,
+    bool opponentIsAI = true,
+    String? playerAttunedElement,
+    String? opponentAttunedElement,
+    GameHero? playerHero,
+    GameHero? opponentHero,
+  }) {
+    // Use the existing startMatch logic
+    startMatch(
+      playerId: playerId,
+      playerName: playerName,
+      playerDeck: playerDeck,
+      opponentId: opponentId,
+      opponentName: opponentName,
+      opponentDeck: opponentDeck,
+      opponentIsAI: opponentIsAI,
+      playerAttunedElement: playerAttunedElement,
+      opponentAttunedElement: opponentAttunedElement,
+      playerHero: playerHero,
+      opponentHero: opponentHero,
+    );
+
+    if (_currentMatch == null) return;
+
+    // Enable TYC3 mode
+    useTurnBasedSystem = true;
+
+    // Random first player selection
+    final random = DateTime.now().millisecondsSinceEpoch % 2 == 0;
+    final firstPlayerId = random ? playerId : opponentId;
+
+    // Initialize TYC3 turn state
+    _currentMatch!.activePlayerId = firstPlayerId;
+    _currentMatch!.isFirstTurn = true;
+    _currentMatch!.cardsPlayedThisTurn = 0;
+    _currentMatch!.turnStartTime = DateTime.now();
+
+    // Set phase based on who goes first
+    if (firstPlayerId == playerId) {
+      _currentMatch!.currentPhase = MatchPhase.playerTurn;
+    } else {
+      _currentMatch!.currentPhase = MatchPhase.opponentTurn;
+    }
+
+    // Regenerate AP for all cards of the active player
+    _regenerateAPForActivePlayer();
+
+    _log(
+      '\n🎲 TYC3: ${firstPlayerId == playerId ? "Player" : "Opponent"} goes first!',
+    );
+    _log(
+      '📍 Turn 1 - ${_currentMatch!.isFirstTurn ? "First turn (1 card limit)" : ""}',
+    );
+
+    onTurnChanged?.call(firstPlayerId);
+  }
+
+  /// Check if it's currently the player's turn
+  bool get isPlayerTurn {
+    if (_currentMatch == null) return false;
+    if (!useTurnBasedSystem) return true; // Legacy mode always allows player
+    return _currentMatch!.activePlayerId == _currentMatch!.player.id;
+  }
+
+  /// Check if it's currently the opponent's turn
+  bool get isOpponentTurn {
+    if (_currentMatch == null) return false;
+    if (!useTurnBasedSystem) return true; // Legacy mode always allows opponent
+    return _currentMatch!.activePlayerId == _currentMatch!.opponent.id;
+  }
+
+  /// Get the active player
+  Player? get activePlayer {
+    if (_currentMatch == null) return null;
+    if (_currentMatch!.activePlayerId == _currentMatch!.player.id) {
+      return _currentMatch!.player;
+    }
+    return _currentMatch!.opponent;
+  }
+
+  /// Get max cards that can be played this turn
+  int get maxCardsThisTurn {
+    if (_currentMatch == null) return 0;
+    return _currentMatch!.isFirstTurn ? 1 : 2;
+  }
+
+  /// Check if active player can play more cards this turn
+  bool get canPlayMoreCards {
+    if (_currentMatch == null) return false;
+    return _currentMatch!.cardsPlayedThisTurn < maxCardsThisTurn;
+  }
+
+  /// Get seconds remaining in current turn
+  int get turnSecondsRemaining {
+    if (_currentMatch?.turnStartTime == null) return 0;
+    final elapsed = DateTime.now().difference(_currentMatch!.turnStartTime!);
+    final remaining = MatchState.turnDurationSeconds - elapsed.inSeconds;
+    return remaining.clamp(0, MatchState.turnDurationSeconds);
+  }
+
+  /// TYC3: Place a card from hand onto a base tile
+  /// Returns true if successful
+  bool placeCardTYC3(GameCard card, int row, int col) {
+    if (_currentMatch == null) return false;
+    if (!useTurnBasedSystem) return false;
+
+    final active = activePlayer;
+    if (active == null) return false;
+
+    // Check if it's this player's turn
+    final isPlayer = active.id == _currentMatch!.player.id;
+    if (isPlayer && !isPlayerTurn) return false;
+    if (!isPlayer && !isOpponentTurn) return false;
+
+    // Check card limit
+    if (!canPlayMoreCards) {
+      _log('❌ Cannot play more cards this turn (limit: $maxCardsThisTurn)');
+      return false;
+    }
+
+    // Validate placement - must be on own base row
+    final validRow = isPlayer ? 2 : 0;
+    if (row != validRow) {
+      _log('❌ Can only place cards on your base row ($validRow)');
+      return false;
+    }
+
+    // Get the tile (board.getTile returns non-null for valid 0-2 range)
+    final tile = _currentMatch!.board.getTile(row, col);
+
+    // Check tile capacity
+    if (!tile.canAddCard) {
+      _log('❌ Tile is full (max ${Tile.maxCards} cards)');
+      return false;
+    }
+
+    // Remove card from hand
+    if (!active.playCard(card)) {
+      _log('❌ Card not in hand');
+      return false;
+    }
+
+    // Place card on tile
+    tile.addCard(card);
+    _currentMatch!.cardsPlayedThisTurn++;
+
+    // Initialize card's AP
+    card.currentAP = card.maxAP;
+
+    _log('✅ Placed ${card.name} at tile ($row, $col)');
+    _log(
+      '   Cards played this turn: ${_currentMatch!.cardsPlayedThisTurn}/$maxCardsThisTurn',
+    );
+
+    return true;
+  }
+
+  /// TYC3: End the current player's turn
+  void endTurnTYC3() {
+    if (_currentMatch == null) return;
+    if (!useTurnBasedSystem) return;
+
+    final wasPlayerTurn = isPlayerTurn;
+    final wasFirstTurn = _currentMatch!.isFirstTurn;
+
+    // Switch active player
+    if (_currentMatch!.activePlayerId == _currentMatch!.player.id) {
+      _currentMatch!.activePlayerId = _currentMatch!.opponent.id;
+      _currentMatch!.currentPhase = MatchPhase.opponentTurn;
+    } else {
+      _currentMatch!.activePlayerId = _currentMatch!.player.id;
+      _currentMatch!.currentPhase = MatchPhase.playerTurn;
+
+      // Increment turn number when it comes back to player
+      _currentMatch!.turnNumber++;
+    }
+
+    // First turn is over after both players have had a turn
+    if (wasFirstTurn && !wasPlayerTurn) {
+      _currentMatch!.isFirstTurn = false;
+    }
+
+    // Reset turn state
+    _currentMatch!.cardsPlayedThisTurn = 0;
+    _currentMatch!.turnStartTime = DateTime.now();
+
+    // Draw a card for the new active player
+    final newActive = activePlayer;
+    if (newActive != null) {
+      newActive.drawCards(count: 1);
+      _log('📥 ${newActive.name} draws 1 card');
+    }
+
+    // Regenerate AP for all cards of the new active player
+    _regenerateAPForActivePlayer();
+
+    _log(
+      '\n🔄 Turn ended. Now: ${isPlayerTurn ? "Player" : "Opponent"}\'s turn',
+    );
+    _log(
+      '📍 Turn ${_currentMatch!.turnNumber}${_currentMatch!.isFirstTurn ? " (First turn)" : ""}',
+    );
+
+    onTurnChanged?.call(_currentMatch!.activePlayerId!);
+  }
+
+  /// Regenerate AP for all cards belonging to the active player
+  void _regenerateAPForActivePlayer() {
+    if (_currentMatch == null) return;
+
+    final activeId = _currentMatch!.activePlayerId;
+    if (activeId == null) return;
+
+    final isPlayer = activeId == _currentMatch!.player.id;
+
+    // Iterate through all tiles on the board
+    for (int row = 0; row < 3; row++) {
+      for (int col = 0; col < 3; col++) {
+        final tile = _currentMatch!.board.getTile(row, col);
+
+        for (final card in tile.cards) {
+          // Determine if this card belongs to the active player
+          // Player cards are on rows 1-2, opponent cards are on rows 0-1
+          // More accurately: check tile ownership or card placement
+          final isPlayerCard =
+              (row == 2) || (row == 1 && tile.owner == TileOwner.player);
+          final isOpponentCard =
+              (row == 0) || (row == 1 && tile.owner == TileOwner.opponent);
+
+          if ((isPlayer && isPlayerCard) || (!isPlayer && isOpponentCard)) {
+            card.regenerateAP();
+          }
+        }
+      }
+    }
+  }
+
+  /// TYC3: Check if a card can move to an adjacent tile
+  bool canMoveCard(
+    GameCard card,
+    int fromRow,
+    int fromCol,
+    int toRow,
+    int toCol,
+  ) {
+    if (_currentMatch == null) return false;
+    if (!card.canMove()) return false;
+
+    // Must be adjacent (same column, row +/- 1)
+    if (fromCol != toCol) return false;
+    if ((toRow - fromRow).abs() != 1) return false;
+
+    // Cannot move to enemy base (row 0 for player, row 2 for opponent)
+    final isPlayerCard = fromRow >= 1; // Simplified check
+    if (isPlayerCard && toRow == 0) return false;
+    if (!isPlayerCard && toRow == 2) return false;
+
+    // Check destination tile capacity
+    final destTile = _currentMatch!.board.getTile(toRow, toCol);
+    if (!destTile.canAddCard) return false;
+
+    return true;
+  }
+
+  /// TYC3: Move a card to an adjacent tile (costs 1 AP)
+  bool moveCardTYC3(
+    GameCard card,
+    int fromRow,
+    int fromCol,
+    int toRow,
+    int toCol,
+  ) {
+    if (!canMoveCard(card, fromRow, fromCol, toRow, toCol)) return false;
+
+    final fromTile = _currentMatch!.board.getTile(fromRow, fromCol);
+    final toTile = _currentMatch!.board.getTile(toRow, toCol);
+
+    // Spend AP
+    if (!card.spendMoveAP()) return false;
+
+    // Remove from source tile
+    fromTile.cards.remove(card);
+
+    // Add to destination tile
+    toTile.addCard(card);
+
+    _log('🚶 ${card.name} moved from ($fromRow,$fromCol) to ($toRow,$toCol)');
+    _log('   AP remaining: ${card.currentAP}/${card.maxAP}');
+
+    return true;
+  }
+
   void _log(String message) {
     // Always print for now (keeps existing debug behavior)
     // Simulations additionally capture logs via logSink.

@@ -195,7 +195,7 @@ class EncounterGenerator {
     return choices;
   }
 
-  Encounter _generateElite(int encounterNumber) {
+  Encounter _generateElite(int encounterNumber, [int index = 0]) {
     final eliteTitles = [
       ('Austrian Grenadiers', 'Elite heavy infantry guards the pass.'),
       ('Cavalry Ambush', 'Enemy hussars have set a trap.'),
@@ -203,11 +203,11 @@ class EncounterGenerator {
     ];
     final elite = eliteTitles[_random.nextInt(eliteTitles.length)];
     return Encounter(
-      id: 'elite_$encounterNumber',
+      id: 'elite_${encounterNumber}_$index',
       type: EncounterType.elite,
       title: elite.$1,
       description: elite.$2,
-      difficulty: BattleDifficulty.hard,
+      difficulty: BattleDifficulty.elite,
       goldReward: 25 + (act * 10),
     );
   }
@@ -287,21 +287,6 @@ class EncounterGenerator {
       default:
         return _generateBattle(encounterNumber, index);
     }
-  }
-
-  Encounter _generateElite(int encounterNumber, int index) {
-    final eliteTitles = [
-      ('Austrian Grenadiers', 'Elite heavy infantry guards the pass.'),
-    ];
-    final elite = eliteTitles[_random.nextInt(eliteTitles.length)];
-    return Encounter(
-      id: 'elite_${encounterNumber}_$index',
-      type: EncounterType.elite,
-      title: elite.$1,
-      description: elite.$2,
-      difficulty: BattleDifficulty.elite,
-      goldReward: 25 + (act * 10),
-    );
   }
 
   Encounter _generateShop(int index) {
