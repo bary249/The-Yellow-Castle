@@ -518,128 +518,135 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     int col,
   ) {
     final laneName = _getLaneName(col);
+    bool dialogDismissed = false;
 
     showDialog(
       context: context,
       barrierDismissible: true,
-      builder: (context) => AlertDialog(
-        title: Column(
-          children: [
-            const Text('⚔️ Battle Result'),
-            Text(
-              '$laneName Lane',
-              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Attack damage
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.red[50],
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    attacker.name,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const Text(' dealt '),
-                  Text(
-                    '${result.damageDealt}',
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.red,
-                    ),
-                  ),
-                  const Text(' damage'),
-                  if (result.targetDied)
-                    const Text(' 💀', style: TextStyle(fontSize: 20)),
-                ],
-              ),
-            ),
+      builder: (dialogContext) {
+        // Auto-dismiss after 2 seconds
+        Future.delayed(const Duration(seconds: 2), () {
+          if (!dialogDismissed && mounted && Navigator.canPop(dialogContext)) {
+            dialogDismissed = true;
+            Navigator.pop(dialogContext);
+          }
+        });
 
-            // Retaliation
-            if (result.retaliationDamage > 0) ...[
-              const SizedBox(height: 8),
+        return AlertDialog(
+          title: Column(
+            children: [
+              const Text('⚔️ Battle Result'),
+              Text(
+                '$laneName Lane',
+                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Attack damage
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.orange[50],
+                  color: Colors.red[50],
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
-                      target.name,
+                      attacker.name,
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
-                    const Text(' retaliated for '),
+                    const Text(' dealt '),
                     Text(
-                      '${result.retaliationDamage}',
+                      '${result.damageDealt}',
                       style: const TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
-                        color: Colors.orange,
+                        color: Colors.red,
                       ),
                     ),
-                    if (result.attackerDied)
+                    const Text(' damage'),
+                    if (result.targetDied)
                       const Text(' 💀', style: TextStyle(fontSize: 20)),
                   ],
                 ),
               ),
+
+              // Retaliation
+              if (result.retaliationDamage > 0) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.orange[50],
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        target.name,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      const Text(' retaliated for '),
+                      Text(
+                        '${result.retaliationDamage}',
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.orange,
+                        ),
+                      ),
+                      if (result.attackerDied)
+                        const Text(' 💀', style: TextStyle(fontSize: 20)),
+                    ],
+                  ),
+                ),
+              ],
+
+              // Summary
+              const SizedBox(height: 12),
+              if (result.targetDied && result.attackerDied)
+                const Text(
+                  '💀 Both units destroyed!',
+                  style: TextStyle(
+                    color: Colors.purple,
+                    fontWeight: FontWeight.bold,
+                  ),
+                )
+              else if (result.targetDied)
+                Text(
+                  '💀 ${target.name} destroyed!',
+                  style: const TextStyle(
+                    color: Colors.red,
+                    fontWeight: FontWeight.bold,
+                  ),
+                )
+              else if (result.attackerDied)
+                Text(
+                  '💀 ${attacker.name} destroyed!',
+                  style: const TextStyle(
+                    color: Colors.orange,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
             ],
-
-            // Summary
-            const SizedBox(height: 12),
-            if (result.targetDied && result.attackerDied)
-              const Text(
-                '💀 Both units destroyed!',
-                style: TextStyle(
-                  color: Colors.purple,
-                  fontWeight: FontWeight.bold,
-                ),
-              )
-            else if (result.targetDied)
-              Text(
-                '💀 ${target.name} destroyed!',
-                style: const TextStyle(
-                  color: Colors.red,
-                  fontWeight: FontWeight.bold,
-                ),
-              )
-            else if (result.attackerDied)
-              Text(
-                '💀 ${attacker.name} destroyed!',
-                style: const TextStyle(
-                  color: Colors.orange,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-          ],
-        ),
-        actions: [
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
           ),
-        ],
-      ),
+          actions: [
+            ElevatedButton(
+              onPressed: () {
+                dialogDismissed = true;
+                Navigator.pop(dialogContext);
+              },
+              child: const Text('OK'),
+            ),
+          ],
+        );
+      },
     );
-
-    // Auto-dismiss after 2 seconds
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted && Navigator.canPop(context)) {
-        Navigator.pop(context);
-      }
-    });
   }
 
   /// Show battle result dialog for AI attacks (async, waits for dismiss)
@@ -1075,79 +1082,92 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       final match = _matchManager.currentMatch;
       final enemyHp = match?.opponent.baseHP ?? 0;
       final laneName = _getLaneName(col);
+      bool dialogDismissed = false;
 
       showDialog(
         context: context,
         barrierDismissible: true,
-        builder: (context) => AlertDialog(
-          title: Column(
-            children: [
-              const Text('🏰 Base Attacked!'),
-              Text(
-                '$laneName Lane',
-                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-              ),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.green[50],
-                  borderRadius: BorderRadius.circular(8),
+        builder: (dialogContext) {
+          // Auto-dismiss after 2 seconds
+          Future.delayed(const Duration(seconds: 2), () {
+            if (!dialogDismissed &&
+                mounted &&
+                Navigator.canPop(dialogContext)) {
+              dialogDismissed = true;
+              Navigator.pop(dialogContext);
+            }
+          });
+
+          return AlertDialog(
+            title: Column(
+              children: [
+                const Text('🏰 Base Attacked!'),
+                Text(
+                  '$laneName Lane',
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                 ),
-                child: Column(
-                  children: [
-                    Text(
-                      '${attacker.name} dealt $damage damage!',
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.favorite, color: Colors.red, size: 20),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Enemy Base HP: $enemyHp',
-                          style: const TextStyle(fontSize: 14),
-                        ),
-                      ],
-                    ),
-                    if (enemyHp <= 0)
-                      const Padding(
-                        padding: EdgeInsets.only(top: 8),
-                        child: Text(
-                          '🏆 VICTORY!',
-                          style: TextStyle(
-                            color: Colors.green,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 24,
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.green[50],
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    children: [
+                      Text(
+                        '${attacker.name} dealt $damage damage!',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(
+                            Icons.favorite,
+                            color: Colors.red,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Enemy Base HP: $enemyHp',
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                        ],
+                      ),
+                      if (enemyHp <= 0)
+                        const Padding(
+                          padding: EdgeInsets.only(top: 8),
+                          child: Text(
+                            '🏆 VICTORY!',
+                            style: TextStyle(
+                              color: Colors.green,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 24,
+                            ),
                           ),
                         ),
-                      ),
-                  ],
+                    ],
+                  ),
                 ),
+              ],
+            ),
+            actions: [
+              ElevatedButton(
+                onPressed: () {
+                  dialogDismissed = true;
+                  Navigator.pop(dialogContext);
+                },
+                child: const Text('OK'),
               ),
             ],
-          ),
-          actions: [
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('OK'),
-            ),
-          ],
-        ),
+          );
+        },
       );
-
-      // Auto-dismiss after 2 seconds
-      Future.delayed(const Duration(seconds: 2), () {
-        if (mounted && Navigator.canPop(context)) {
-          Navigator.pop(context);
-        }
-      });
     }
 
     _clearTYC3Selection();
