@@ -234,6 +234,16 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     );
   }
 
+  /// Get lane name from column index
+  String _getLaneName(int col) {
+    return ['West', 'Center', 'East'][col];
+  }
+
+  /// Get row name
+  String _getRowName(int row) {
+    return ['Enemy Base', 'Middle', 'Your Base'][row];
+  }
+
   /// Show attack preview dialog with predicted outcome
   void _showAttackPreviewDialog({
     required GameCard attacker,
@@ -253,10 +263,20 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       target.health,
     );
 
+    final laneName = _getLaneName(attackerCol);
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('⚔️ Attack Preview', textAlign: TextAlign.center),
+        title: Column(
+          children: [
+            const Text('⚔️ Attack Preview', textAlign: TextAlign.center),
+            Text(
+              '$laneName Lane',
+              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+            ),
+          ],
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -479,7 +499,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
 
     if (result != null) {
       // Show battle result dialog
-      _showBattleResultDialog(result, attacker, target);
+      _showBattleResultDialog(result, attacker, target, attackerCol);
     }
 
     _clearTYC3Selection();
@@ -491,14 +511,22 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     AttackResult result,
     GameCard attacker,
     GameCard target,
+    int col,
   ) {
+    final laneName = _getLaneName(col);
+
     showDialog(
       context: context,
       barrierDismissible: true,
       builder: (context) => AlertDialog(
-        title: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [const Text('⚔️ Battle Result')],
+        title: Column(
+          children: [
+            const Text('⚔️ Battle Result'),
+            Text(
+              '$laneName Lane',
+              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+            ),
+          ],
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -615,12 +643,23 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     AttackResult result,
     GameCard attacker,
     GameCard target,
+    int col,
   ) async {
+    final laneName = _getLaneName(col);
+
     await showDialog(
       context: context,
       barrierDismissible: true,
       builder: (context) => AlertDialog(
-        title: const Text('🤖 Enemy Attack!', textAlign: TextAlign.center),
+        title: Column(
+          children: [
+            const Text('🤖 Enemy Attack!', textAlign: TextAlign.center),
+            Text(
+              '$laneName Lane',
+              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+            ),
+          ],
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -726,15 +765,28 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   }
 
   /// Show dialog when AI attacks player's base
-  Future<void> _showAIBaseAttackDialog(GameCard attacker, int damage) async {
+  Future<void> _showAIBaseAttackDialog(
+    GameCard attacker,
+    int damage,
+    int col,
+  ) async {
     final match = _matchManager.currentMatch;
     final playerHp = match?.player.baseHP ?? 0;
+    final laneName = _getLaneName(col);
 
     await showDialog(
       context: context,
       barrierDismissible: true,
       builder: (context) => AlertDialog(
-        title: const Text('⚠️ BASE UNDER ATTACK!', textAlign: TextAlign.center),
+        title: Column(
+          children: [
+            const Text('⚠️ BASE UNDER ATTACK!', textAlign: TextAlign.center),
+            Text(
+              '$laneName Lane',
+              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+            ),
+          ],
+        ),
         backgroundColor: Colors.red[50],
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1005,7 +1057,12 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                     if (mounted) {
                       setState(() {});
                       // Show battle result dialog for AI attack
-                      await _showAIBattleResultDialog(result, card, target);
+                      await _showAIBattleResultDialog(
+                        result,
+                        card,
+                        target,
+                        col,
+                      );
                     }
                   }
                   break;
@@ -1022,7 +1079,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
               if (mounted) {
                 setState(() {});
                 // Show base attack dialog
-                await _showAIBaseAttackDialog(card, damage);
+                await _showAIBaseAttackDialog(card, damage, col);
               }
             }
           }
