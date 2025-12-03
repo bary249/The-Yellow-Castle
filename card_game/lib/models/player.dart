@@ -27,7 +27,7 @@ class Player {
 
   // Constants
   static const int maxHandSize = 8;
-  static const int maxBaseHP = 100; // TYC3: Increased base HP
+  static const int maxBaseHP = 25; // TYC3: Increased base HP
 
   /// LEGACY: Alias for backward compatibility
   @Deprecated('Use baseHP instead')

@@ -268,8 +268,13 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     required int targetRow,
     required int targetCol,
   }) {
-    // Get preview from combat resolver
-    final preview = _matchManager.previewAttackTYC3(attacker, target);
+    // Get preview from combat resolver (includes terrain buff)
+    final preview = _matchManager.previewAttackTYC3(
+      attacker,
+      target,
+      targetRow,
+      targetCol,
+    );
 
     final attackerHpAfter = (attacker.currentHealth - preview.retaliationDamage)
         .clamp(0, attacker.health);
@@ -3841,11 +3846,22 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       final tileCards = tile.cards.where((c) => c.isAlive).toList();
       final playerId = match.player.id;
 
+      // Fog of War: Check if player has cards in middle (row 1) of this lane
+      final middleTile = match.board.getTile(1, col);
+      final playerHasMiddleCard = middleTile.cards.any(
+        (c) => c.ownerId == playerId && c.isAlive,
+      );
+
       // Use card.ownerId to determine ownership
       for (final card in tileCards) {
         if (card.ownerId == playerId) {
           playerCardsAtTile.add(card);
         } else {
+          // Fog of War: Hide enemy base cards (row 0) unless player has cards in middle
+          if (row == 0 && !playerHasMiddleCard) {
+            // Don't add to opponentCardsAtTile - hidden by fog of war
+            continue;
+          }
           opponentCardsAtTile.add(card);
         }
       }

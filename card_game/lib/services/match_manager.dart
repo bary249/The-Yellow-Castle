@@ -1534,11 +1534,15 @@ class MatchManager {
     // Determine if player is attacking
     final isPlayerAttacking = isPlayerTurn;
 
+    // Get terrain of target tile for terrain buff
+    final tileTerrain = targetTile.terrain;
+
     // Resolve the attack
     final result = _combatResolver.resolveAttackTYC3(
       attacker,
       target,
       isPlayerAttacking: isPlayerAttacking,
+      tileTerrain: tileTerrain,
     );
 
     _log('⚔️ ${attacker.name} attacks ${target.name}');
@@ -1586,11 +1590,21 @@ class MatchManager {
 
   /// TYC3: Preview an attack without executing it
   /// Returns predicted AttackResult with damage values
-  AttackResult previewAttackTYC3(GameCard attacker, GameCard target) {
+  AttackResult previewAttackTYC3(
+    GameCard attacker,
+    GameCard target,
+    int targetRow,
+    int targetCol,
+  ) {
+    // Get terrain of target tile for terrain buff preview
+    final targetTile = _currentMatch!.board.getTile(targetRow, targetCol);
+    final tileTerrain = targetTile.terrain;
+
     return _combatResolver.previewAttackTYC3(
       attacker,
       target,
       isPlayerAttacking: isPlayerTurn,
+      tileTerrain: tileTerrain,
     );
   }
 

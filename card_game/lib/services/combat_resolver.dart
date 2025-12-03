@@ -769,11 +769,13 @@ class CombatResolver {
   // ===========================================================================
 
   /// TYC3: Resolve a single attack from attacker to target
-  /// Handles damage, abilities (fury, shield, ranged), and retaliation
+  /// Handles damage, abilities (fury, shield, ranged), terrain buffs, and retaliation
+  /// tileTerrain is the terrain of the tile where combat occurs (target's tile)
   AttackResult resolveAttackTYC3(
     GameCard attacker,
     GameCard target, {
     bool isPlayerAttacking = true,
+    String? tileTerrain,
   }) {
     // Calculate base damage
     int damage = attacker.damage;
@@ -781,6 +783,13 @@ class CombatResolver {
     // Apply fury bonus
     final furyBonus = _getFuryBonus(attacker);
     damage += furyBonus;
+
+    // Apply terrain buff for attacker (+1 if attacker's element matches tile terrain)
+    int attackerTerrainBonus = 0;
+    if (tileTerrain != null && attacker.element == tileTerrain) {
+      attackerTerrainBonus = 1;
+      damage += attackerTerrainBonus;
+    }
 
     // Apply lane damage bonus if set
     if (isPlayerAttacking) {
@@ -831,6 +840,11 @@ class CombatResolver {
 
       // Apply target's fury
       retaliationDamage += _getFuryBonus(target);
+
+      // Apply terrain buff for defender (+1 if defender's element matches tile terrain)
+      if (tileTerrain != null && target.element == tileTerrain) {
+        retaliationDamage += 1;
+      }
 
       // Apply attacker's shield
       final attackerShield = _getShieldValue(attacker);
@@ -919,6 +933,7 @@ class CombatResolver {
     GameCard attacker,
     GameCard target, {
     bool isPlayerAttacking = true,
+    String? tileTerrain,
   }) {
     // Calculate base damage
     int damage = attacker.damage;
@@ -926,6 +941,11 @@ class CombatResolver {
     // Apply fury bonus
     final furyBonus = _getFuryBonus(attacker);
     damage += furyBonus;
+
+    // Apply terrain buff for attacker (+1 if attacker's element matches tile terrain)
+    if (tileTerrain != null && attacker.element == tileTerrain) {
+      damage += 1;
+    }
 
     // Apply lane damage bonus if set
     if (isPlayerAttacking) {
@@ -961,6 +981,11 @@ class CombatResolver {
       // Apply target's fury
       retaliationDamage += _getFuryBonus(target);
 
+      // Apply terrain buff for defender (+1 if defender's element matches tile terrain)
+      if (tileTerrain != null && target.element == tileTerrain) {
+        retaliationDamage += 1;
+      }
+
       // Apply attacker's shield
       final attackerShield = _getShieldValue(attacker);
       final attackerShieldBonus = isPlayerAttacking
@@ -979,7 +1004,7 @@ class CombatResolver {
       attackerDied = attackerHpAfter <= 0;
     }
 
-    // Add thorns damage
+    // Add thorns damageR
     int thornsDamage = 0;
     if (!attackerDied && !targetDied) {
       thornsDamage = _getThornsDamage(target);
