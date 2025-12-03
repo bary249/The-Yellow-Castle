@@ -1318,8 +1318,9 @@ class MatchManager {
     tile.addCard(card);
     _currentMatch!.cardsPlayedThisTurn++;
 
-    // Initialize card's AP
+    // Initialize card's AP and set owner
     card.currentAP = card.maxAP;
+    card.ownerId = active.id;
 
     _log('✅ Placed ${card.name} at tile ($row, $col)');
     _log(
@@ -1429,6 +1430,13 @@ class MatchManager {
     int toCol,
   ) {
     if (_currentMatch == null) return 'No active match';
+
+    // Check if card belongs to active player using ownerId
+    final activeId = _currentMatch!.activePlayerId;
+    if (card.ownerId != activeId) {
+      return "Cannot move opponent's cards";
+    }
+
     if (!card.canMove())
       return 'Not enough AP to move (need 1, have ${card.currentAP})';
 
@@ -1437,7 +1445,7 @@ class MatchManager {
     if ((toRow - fromRow).abs() != 1) return 'Can only move to adjacent tile';
 
     // Cannot move to enemy base (row 0 for player, row 2 for opponent)
-    final isPlayerCard = fromRow >= 1; // Simplified check
+    final isPlayerCard = card.ownerId == _currentMatch!.player.id;
     if (isPlayerCard && toRow == 0) return 'Cannot move into enemy base';
     if (!isPlayerCard && toRow == 2) return 'Cannot move into enemy base';
 

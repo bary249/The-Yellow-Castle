@@ -348,9 +348,18 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   }
 
   Future<void> _doAITurnTYC3() async {
-    // Simple AI: place cards, move forward, and attack
+    // Guard: Only run if it's actually the AI's turn
+    if (!_matchManager.isOpponentTurn) {
+      debugPrint('ERROR: _doAITurnTYC3 called but it is NOT opponent turn!');
+      return;
+    }
+
     final match = _matchManager.currentMatch;
     if (match == null) return;
+
+    debugPrint(
+      'AI TURN START - isOpponentTurn: ${_matchManager.isOpponentTurn}',
+    );
 
     // Wait a bit for visual feedback
     await Future.delayed(const Duration(milliseconds: 500));
@@ -2918,23 +2927,14 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     // TYC3 Mode: Read cards directly from tile.cards
     if (_useTYC3Mode) {
       final tileCards = tile.cards.where((c) => c.isAlive).toList();
+      final playerId = match.player.id;
 
-      if (row == 0) {
-        // Enemy base - all cards here are opponent's
-        opponentCardsAtTile = tileCards;
-      } else if (row == 2) {
-        // Player base - all cards here are player's
-        playerCardsAtTile = tileCards;
-      } else {
-        // Middle row - cards belong to tile owner
-        if (tile.owner == TileOwner.player) {
-          playerCardsAtTile = tileCards;
-        } else if (tile.owner == TileOwner.opponent) {
-          opponentCardsAtTile = tileCards;
+      // Use card.ownerId to determine ownership
+      for (final card in tileCards) {
+        if (card.ownerId == playerId) {
+          playerCardsAtTile.add(card);
         } else {
-          // Contested - need to determine by who placed them
-          // For now, assume all are visible
-          playerCardsAtTile = tileCards;
+          opponentCardsAtTile.add(card);
         }
       }
     } else {

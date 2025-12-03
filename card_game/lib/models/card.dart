@@ -32,6 +32,9 @@ class GameCard {
   /// Current AP available (runtime state)
   int currentAP;
 
+  /// Owner player ID (set when card is placed on board)
+  String? ownerId;
+
   // ===== END TYC3 =====
 
   /// Optional element for terrain matching (e.g. 'Woods', 'Lake', 'Desert')
