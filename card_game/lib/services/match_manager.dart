@@ -1417,23 +1417,35 @@ class MatchManager {
     int toRow,
     int toCol,
   ) {
-    if (_currentMatch == null) return false;
-    if (!card.canMove()) return false;
+    return getMoveError(card, fromRow, fromCol, toRow, toCol) == null;
+  }
+
+  /// TYC3: Get the reason why a card can't move (null if can move)
+  String? getMoveError(
+    GameCard card,
+    int fromRow,
+    int fromCol,
+    int toRow,
+    int toCol,
+  ) {
+    if (_currentMatch == null) return 'No active match';
+    if (!card.canMove())
+      return 'Not enough AP to move (need 1, have ${card.currentAP})';
 
     // Must be adjacent (same column, row +/- 1)
-    if (fromCol != toCol) return false;
-    if ((toRow - fromRow).abs() != 1) return false;
+    if (fromCol != toCol) return 'Can only move forward/backward in same lane';
+    if ((toRow - fromRow).abs() != 1) return 'Can only move to adjacent tile';
 
     // Cannot move to enemy base (row 0 for player, row 2 for opponent)
     final isPlayerCard = fromRow >= 1; // Simplified check
-    if (isPlayerCard && toRow == 0) return false;
-    if (!isPlayerCard && toRow == 2) return false;
+    if (isPlayerCard && toRow == 0) return 'Cannot move into enemy base';
+    if (!isPlayerCard && toRow == 2) return 'Cannot move into enemy base';
 
     // Check destination tile capacity
     final destTile = _currentMatch!.board.getTile(toRow, toCol);
-    if (!destTile.canAddCard) return false;
+    if (!destTile.canAddCard) return 'Destination tile is full (max 4 cards)';
 
-    return true;
+    return null; // Can move
   }
 
   /// TYC3: Move a card to an adjacent tile (costs 1 AP)

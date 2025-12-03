@@ -250,6 +250,22 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         _selectedCardCol == null)
       return;
 
+    // Check for error first to show meaningful message
+    final error = _matchManager.getMoveError(
+      _selectedCardForAction!,
+      _selectedCardRow!,
+      _selectedCardCol!,
+      toRow,
+      toCol,
+    );
+
+    if (error != null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error)));
+      return;
+    }
+
     final success = _matchManager.moveCardTYC3(
       _selectedCardForAction!,
       _selectedCardRow!,
@@ -268,10 +284,6 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         toRow,
         toCol,
       );
-    } else {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Cannot move there')));
     }
 
     setState(() {});
@@ -336,7 +348,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   }
 
   Future<void> _doAITurnTYC3() async {
-    // Simple AI: place cards and attack
+    // Simple AI: place cards, move forward, and attack
     final match = _matchManager.currentMatch;
     if (match == null) return;
 
@@ -355,7 +367,32 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       for (int col = 0; col < 3; col++) {
         if (_matchManager.placeCardTYC3(card, 0, col)) {
           cardsPlaced++;
+          if (mounted) setState(() {});
+          await Future.delayed(const Duration(milliseconds: 200));
           break;
+        }
+      }
+    }
+
+    // AI moves cards forward (from row 0 to row 1)
+    // Process in order: row 0 first (base), then row 1 (middle)
+    for (int row = 0; row <= 1; row++) {
+      for (int col = 0; col < 3; col++) {
+        final tile = match.board.getTile(row, col);
+        for (final card in tile.cards.toList()) {
+          if (!card.isAlive) continue;
+          if (!card.canMove()) continue;
+
+          // AI cards move from row 0 -> 1 -> 2 (toward player base)
+          final targetRow = row + 1;
+          if (targetRow > 2) continue; // Can't go past row 2
+
+          // Try to move forward
+          if (_matchManager.moveCardTYC3(card, row, col, targetRow, col)) {
+            debugPrint('AI moved ${card.name} from row $row to row $targetRow');
+            if (mounted) setState(() {});
+            await Future.delayed(const Duration(milliseconds: 200));
+          }
         }
       }
     }
@@ -367,10 +404,11 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         for (final card in tile.cards.toList()) {
           if (!card.isAlive) continue;
 
-          // Check if this is an AI card (row 0-1)
-          if (row > 1) continue;
+          // Check if this is an AI card (row 0-1, or row 2 if it moved there)
+          // Actually for AI, cards start at row 0 and move toward row 2
+          // So AI cards can be at row 0, 1, or 2
 
-          // Try to attack
+          // Try to attack enemy cards
           final targets = _matchManager.getValidTargetsTYC3(card, row, col);
           if (targets.isNotEmpty && card.canAttack()) {
             // Attack first valid target
@@ -380,16 +418,33 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
               for (int tc = 0; tc < 3; tc++) {
                 final targetTile = match.board.getTile(tr, tc);
                 if (targetTile.cards.contains(target)) {
-                  _matchManager.attackCardTYC3(card, target, row, col, tr, tc);
+                  final result = _matchManager.attackCardTYC3(
+                    card,
+                    target,
+                    row,
+                    col,
+                    tr,
+                    tc,
+                  );
+                  if (result != null) {
+                    debugPrint('AI: ${result.message}');
+                    if (mounted) setState(() {});
+                    await Future.delayed(const Duration(milliseconds: 300));
+                  }
                   break;
                 }
               }
             }
           }
 
-          // Try to attack base if possible
-          if (card.canAttack()) {
-            _matchManager.attackBaseTYC3(card, row, col);
+          // Try to attack player base if at row 2 and no guards
+          if (row == 2 && card.canAttack()) {
+            final damage = _matchManager.attackBaseTYC3(card, row, col);
+            if (damage > 0) {
+              debugPrint('AI attacked player base for $damage damage!');
+              if (mounted) setState(() {});
+              await Future.delayed(const Duration(milliseconds: 300));
+            }
           }
         }
       }
