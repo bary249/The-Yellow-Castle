@@ -8,6 +8,7 @@ enum TileOwner {
 }
 
 /// Represents a single tile on the 3×3 game board.
+/// TYC3: Updated for 4-card capacity (2×2 grid per tile)
 ///
 /// The board layout (from player's perspective):
 /// ```
@@ -17,6 +18,12 @@ enum TileOwner {
 /// ```
 ///
 /// Columns represent lanes: 0=left, 1=center, 2=right
+///
+/// TYC3: Each tile can hold up to 4 cards in a 2×2 grid:
+/// ```
+/// [Front-Left]  [Front-Right]   <- Front row (closer to enemy)
+/// [Back-Left]   [Back-Right]    <- Back row
+/// ```
 class Tile {
   final int row;
   final int column;
@@ -29,8 +36,11 @@ class Tile {
   /// Current owner of this tile.
   TileOwner owner;
 
-  /// Cards placed on this tile (up to 2).
-  /// Index 0 = front card (active), Index 1 = back card (backup).
+  /// TYC3: Maximum cards per tile (2×2 grid)
+  static const int maxCards = 4;
+
+  /// Cards placed on this tile (up to 4 in TYC3).
+  /// Layout: [0]=front-left, [1]=front-right, [2]=back-left, [3]=back-right
   final List<GameCard> cards;
 
   Tile({
@@ -53,10 +63,38 @@ class Tile {
   LaneColumn get laneColumn => LaneColumn.values[column];
 
   /// Get the front (active) card, if any.
+  /// TYC3: Returns first card in front row (index 0 or 1)
   GameCard? get frontCard => cards.isNotEmpty ? cards.first : null;
 
   /// Get the back (backup) card, if any.
+  /// LEGACY: For backward compatibility, returns second card
   GameCard? get backCard => cards.length > 1 ? cards[1] : null;
+
+  // ===== TYC3: 2×2 GRID ACCESS =====
+
+  /// Get cards in the front row (indices 0-1)
+  List<GameCard> get frontRowCards {
+    final result = <GameCard>[];
+    if (cards.isNotEmpty) result.add(cards[0]);
+    if (cards.length > 1) result.add(cards[1]);
+    return result;
+  }
+
+  /// Get cards in the back row (indices 2-3)
+  List<GameCard> get backRowCards {
+    final result = <GameCard>[];
+    if (cards.length > 2) result.add(cards[2]);
+    if (cards.length > 3) result.add(cards[3]);
+    return result;
+  }
+
+  /// Get card at specific grid position (0-3)
+  GameCard? getCardAt(int index) {
+    if (index < 0 || index >= cards.length) return null;
+    return cards[index];
+  }
+
+  // ===== END TYC3 =====
 
   /// Get all alive cards on this tile.
   List<GameCard> get aliveCards => cards.where((c) => c.isAlive).toList();
@@ -64,11 +102,15 @@ class Tile {
   /// Check if tile has any cards.
   bool get hasCards => cards.isNotEmpty;
 
-  /// Check if tile has room for more cards (max 2).
-  bool get canAddCard => cards.length < 2;
+  /// Check if tile has room for more cards (max 4 in TYC3).
+  bool get canAddCard => cards.length < maxCards;
+
+  /// TYC3: Get number of empty slots
+  int get emptySlots => maxCards - cards.length;
 
   /// Add a card to this tile.
   /// Returns true if card was added successfully.
+  /// TYC3: Cards fill front row first, then back row
   bool addCard(GameCard card, {bool asFront = false}) {
     if (!canAddCard) return false;
 
@@ -76,8 +118,23 @@ class Tile {
       // Insert at front
       cards.insert(0, card);
     } else {
-      // Add to back
+      // Add to next available slot
       cards.add(card);
+    }
+    return true;
+  }
+
+  /// TYC3: Add a card at a specific grid position (0-3)
+  /// Returns true if successful
+  bool addCardAt(GameCard card, int index) {
+    if (index < 0 || index > maxCards) return false;
+    if (cards.length >= maxCards) return false;
+
+    // If index is beyond current length, just add to end
+    if (index >= cards.length) {
+      cards.add(card);
+    } else {
+      cards.insert(index, card);
     }
     return true;
   }

@@ -3,6 +3,7 @@ import 'deck.dart';
 import 'hero.dart';
 
 /// Represents a player's state during a match
+/// TYC3: Base HP system (renamed from crystalHP)
 class Player {
   final String id;
   final String name;
@@ -11,7 +12,9 @@ class Player {
   // Match state
   final Deck deck;
   final List<GameCard> hand;
-  int crystalHP;
+
+  // TYC3: Base HP (renamed from crystalHP for clarity)
+  int baseHP;
   int gold;
 
   /// The hero selected for this match (optional for backward compatibility).
@@ -24,21 +27,29 @@ class Player {
 
   // Constants
   static const int maxHandSize = 8;
-  static const int maxCrystalHP = 50;
+  static const int maxBaseHP = 100; // TYC3: Increased base HP
+
+  /// LEGACY: Alias for backward compatibility
+  @Deprecated('Use baseHP instead')
+  int get crystalHP => baseHP;
+  @Deprecated('Use baseHP instead')
+  set crystalHP(int value) => baseHP = value;
+  static const int maxCrystalHP = maxBaseHP; // Legacy alias
 
   Player({
     required this.id,
     required this.name,
     required this.deck,
     this.isHuman = true,
-    this.crystalHP = maxCrystalHP,
+    int? baseHP,
     this.gold = 0,
     this.attunedElement,
     this.hero,
-  }) : hand = [];
+  }) : hand = [],
+       baseHP = baseHP ?? maxBaseHP;
 
-  /// Check if crystal is destroyed
-  bool get isDefeated => crystalHP <= 0;
+  /// Check if base is destroyed (player loses)
+  bool get isDefeated => baseHP <= 0;
 
   /// Check if hand is full
   bool get isHandFull => hand.length >= maxHandSize;
@@ -69,21 +80,29 @@ class Player {
     return true;
   }
 
-  /// Take damage to crystal
-  void takeCrystalDamage(int amount) {
-    crystalHP -= amount;
-    if (crystalHP < 0) crystalHP = 0;
+  /// Take damage to base
+  void takeBaseDamage(int amount) {
+    baseHP -= amount;
+    if (baseHP < 0) baseHP = 0;
   }
+
+  /// LEGACY: Alias for backward compatibility
+  @Deprecated('Use takeBaseDamage instead')
+  void takeCrystalDamage(int amount) => takeBaseDamage(amount);
 
   /// Earn gold
   void earnGold(int amount) {
     gold += amount;
   }
 
-  /// Get crystal HP percentage for UI
-  double get crystalHPPercent => crystalHP / maxCrystalHP;
+  /// Get base HP percentage for UI
+  double get baseHPPercent => baseHP / maxBaseHP;
+
+  /// LEGACY: Alias for backward compatibility
+  @Deprecated('Use baseHPPercent instead')
+  double get crystalHPPercent => baseHPPercent;
 
   @override
   String toString() =>
-      '$name (Crystal: $crystalHP HP, Hand: ${hand.length}, Deck: ${deck.remainingCards})';
+      '$name (Base: $baseHP HP, Hand: ${hand.length}, Deck: ${deck.remainingCards})';
 }
