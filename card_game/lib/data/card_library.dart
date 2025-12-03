@@ -18,6 +18,30 @@ import '../models/card.dart';
 /// The default in GameCard (3) is used for all cards.
 
 // ============================================================================
+// SCOUT UNIT - Added to every deck
+// ============================================================================
+
+/// Scout - A reconnaissance unit that can see through fog of war.
+/// Has 2 AP but deals no damage. Can see adjacent lanes (all 3 if in center,
+/// 2 lanes if on west/east).
+/// Every deck gets one Scout automatically.
+GameCard scoutUnit(int index) => GameCard(
+  id: 'scout_$index',
+  name: 'Scout',
+  damage: 0, // Cannot attack
+  health: 4,
+  tick: 2,
+  moveSpeed: 2, // Fast - scouts are mobile
+  maxAP: 2, // 2 AP as specified
+  apPerTurn: 2,
+  attackAPCost: 1, // Can't attack anyway (0 damage)
+  element: null, // Neutral - works in any terrain
+  abilities: const ['scout'], // Special ability: reveals adjacent lanes
+  cost: 1,
+  rarity: 1, // Common
+);
+
+// ============================================================================
 // COMMON CARDS (Rarity 1) - Unlimited copies available
 // ============================================================================
 
@@ -907,8 +931,12 @@ String rarityName(int rarity) {
 // ============================================================================
 
 /// Build a simple 25-card starter deck - mostly common with 1 rare per element
+/// Every deck includes 1 Scout for reconnaissance.
 List<GameCard> buildStarterCardPool() {
   final cards = <GameCard>[];
+
+  // 1 Scout - every deck gets one for reconnaissance
+  cards.add(scoutUnit(0));
 
   // 6 Common Quick Strikes: 2 of each element
   for (int i = 0; i < 2; i++) {
@@ -934,13 +962,12 @@ List<GameCard> buildStarterCardPool() {
   cards.add(lakeVeteran(0));
   cards.add(woodsVeteran(0));
 
-  // 6 Common Tanks: 2 of each element
+  // 5 Common Tanks (reduced by 1 to make room for Scout)
   cards.add(desertTank(0));
   cards.add(desertTank(1));
   cards.add(lakeTank(0));
   cards.add(lakeTank(1));
   cards.add(woodsTank(0));
-  cards.add(woodsTank(1));
 
   // 1 Epic card (random element based on player preference later)
   cards.add(lakeShieldTotem(0));
@@ -1004,8 +1031,12 @@ List<GameCard> buildFullCardPool() {
 
 /// Terrain-focused deck: Lake Control.
 /// Heavier on Lake units with some Woods/Desert splash.
+/// Every deck includes 1 Scout for reconnaissance.
 List<GameCard> buildWaterControlDeck() {
   final cards = <GameCard>[];
+
+  // 1 Scout - every deck gets one for reconnaissance
+  cards.add(scoutUnit(0));
 
   // Quick Strikes (8): 5 Water, 2 Nature, 1 Fire
   for (int i = 0; i < 6; i++) {
@@ -1028,14 +1059,13 @@ List<GameCard> buildWaterControlDeck() {
   cards.add(woodsWarrior(2));
   cards.add(desertWarrior(0));
 
-  // Tanks (7): 3 Water, 2 Nature, 2 Fire
+  // Tanks (6): 3 Water, 2 Nature, 1 Fire (reduced by 1 for Scout)
   cards.add(lakeTank(0));
   cards.add(lakeTank(1));
   cards.add(lakeTank(2));
   cards.add(woodsTank(0));
   cards.add(woodsTank(1));
   cards.add(desertTank(0));
-  cards.add(desertTank(1));
 
   // Support: 2 Water Shield Totems (0 dmg / 1 HP buff cards)
   cards.add(lakeShieldTotem(0));
@@ -1047,8 +1077,12 @@ List<GameCard> buildWaterControlDeck() {
 
 /// Terrain-focused deck: Desert Aggro.
 /// Heavier on Desert units with some Woods/Lake splash.
+/// Every deck includes 1 Scout for reconnaissance.
 List<GameCard> buildFireAggroDeck() {
   final cards = <GameCard>[];
+
+  // 1 Scout - every deck gets one for reconnaissance
+  cards.add(scoutUnit(0));
 
   // Quick Strikes (8): 5 Fire, 2 Nature, 1 Water
   for (int i = 0; i < 6; i++) {
@@ -1071,14 +1105,13 @@ List<GameCard> buildFireAggroDeck() {
   cards.add(woodsWarrior(2));
   cards.add(lakeWarrior(0));
 
-  // Tanks (7): 3 Fire, 2 Nature, 2 Water
+  // Tanks (6): 3 Fire, 2 Nature, 1 Water (reduced by 1 for Scout)
   cards.add(desertTank(0));
   cards.add(desertTank(1));
   cards.add(desertTank(2));
   cards.add(woodsTank(0));
   cards.add(woodsTank(1));
   cards.add(lakeTank(0));
-  cards.add(lakeTank(1));
 
   // Support: 2 Fire War Banners (0 dmg / 1 HP buff cards)
   cards.add(desertWarBanner(0));
@@ -1094,12 +1127,16 @@ List<GameCard> buildFireAggroDeck() {
 
 /// Napoleon's 25-card starter deck for campaign mode.
 /// Composition:
-/// - 16 Common cards (6 types)
+/// - 1 Scout for reconnaissance
+/// - 15 Common cards (6 types)
 /// - 9 Rare cards (3 types × 3 copies)
 List<GameCard> buildNapoleonStarterDeck() {
   final cards = <GameCard>[];
 
-  // === COMMON CARDS (16 total) ===
+  // 1 Scout - every deck gets one for reconnaissance
+  cards.add(scoutUnit(0));
+
+  // === COMMON CARDS (15 total) ===
 
   // Voltigeur ×3 - Fast skirmishers (tick 1, move 2)
   for (int i = 0; i < 3; i++) {
@@ -1126,8 +1163,8 @@ List<GameCard> buildNapoleonStarterDeck() {
     cards.add(napoleonSapper(i));
   }
 
-  // Drummer Boy ×3 - Support with inspire_1 (tick 3, move 1)
-  for (int i = 0; i < 3; i++) {
+  // Drummer Boy ×2 - Support with inspire_1 (reduced by 1 for Scout)
+  for (int i = 0; i < 2; i++) {
     cards.add(napoleonDrummerBoy(i));
   }
 
@@ -1342,16 +1379,20 @@ GameCard austrianOfficer(int index) => GameCard(
 
 /// Build Act 1 enemy deck - Austrian forces in Italy
 /// Balanced deck for early campaign, slightly weaker than Napoleon's starter
+/// Every deck includes 1 Scout for reconnaissance.
 List<GameCard> buildAct1EnemyDeck() {
   final cards = <GameCard>[];
+
+  // 1 Scout - every deck gets one for reconnaissance
+  cards.add(scoutUnit(0));
 
   // Fast skirmishers ×4
   for (int i = 0; i < 4; i++) {
     cards.add(austrianJager(i));
   }
 
-  // Line Infantry ×5
-  for (int i = 0; i < 5; i++) {
+  // Line Infantry ×4 (reduced by 1 for Scout)
+  for (int i = 0; i < 4; i++) {
     cards.add(austrianLineInfantry(i));
   }
 

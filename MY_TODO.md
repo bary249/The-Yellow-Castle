@@ -33,3 +33,8 @@ Major changes! ✅ ALL COMPLETED
 - Simulation mode: Uses MatchManager with new logic
 - Player vs AI: Uses same MatchManager + updated SimpleAI
 - Online mode: Uses same logic + moveSpeed serialized in Firebase
+
+
+
+
+Add Icon for each terrain in tile and on card.

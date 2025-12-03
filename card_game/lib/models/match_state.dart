@@ -2,6 +2,7 @@ import 'player.dart';
 import 'lane.dart';
 import 'game_board.dart';
 import 'tile.dart';
+import 'relic.dart';
 
 /// Current phase of the match
 /// TYC3: Updated for turn-based system
@@ -64,6 +65,10 @@ class MatchState {
   /// Fog of war: tracks which lanes' enemy base terrains are revealed to player.
   /// A lane is revealed once player captures its middle tile.
   final Set<LanePosition> revealedEnemyBaseLanes = {};
+
+  /// Relic manager for handling relics on the battlefield.
+  /// Currently places one relic on the center middle tile.
+  final RelicManager relicManager = RelicManager();
 
   MatchState({
     required this.player,

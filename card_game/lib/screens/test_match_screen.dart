@@ -835,27 +835,54 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: Colors.blue[50],
+                  color: Colors.green[50],
                   borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.green, width: 1),
                 ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                child: Column(
                   children: [
                     Text(
-                      target.name,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    const Text(' retaliated for '),
-                    Text(
-                      '${result.retaliationDamage}',
-                      style: const TextStyle(
-                        fontSize: 18,
+                      result.targetDied
+                          ? '↩️ Retaliation (before dying)'
+                          : '↩️ Retaliation',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.green[700],
                         fontWeight: FontWeight.bold,
-                        color: Colors.blue,
                       ),
                     ),
+                    const SizedBox(height: 4),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          target.name,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        const Text(' dealt '),
+                        Text(
+                          '${result.retaliationDamage}',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.green,
+                          ),
+                        ),
+                        const Text(' to '),
+                        Text(
+                          attacker.name,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
                     if (result.attackerDied)
-                      const Text(' 💀', style: TextStyle(fontSize: 18)),
+                      const Text(
+                        '💀 ATTACKER DESTROYED!',
+                        style: TextStyle(
+                          color: Colors.green,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -2137,6 +2164,201 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     );
   }
 
+  /// Show celebratory dialog when a relic is discovered
+  void _showRelicDiscoveredDialog(
+    String playerName,
+    bool isHumanPlayer,
+    GameCard rewardCard,
+  ) {
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.amber[50],
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: Colors.amber, width: 3),
+        ),
+        title: Column(
+          children: [
+            const Text('🏺', style: TextStyle(fontSize: 48)),
+            const SizedBox(height: 8),
+            Text(
+              isHumanPlayer
+                  ? 'Ancient Artifact Found!'
+                  : 'Opponent Found Relic!',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: isHumanPlayer ? Colors.amber[800] : Colors.red[800],
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '$playerName discovered a hidden relic!',
+              style: const TextStyle(fontSize: 14),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: _getRarityFillColor(rewardCard),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: _getRarityBorderColor(rewardCard),
+                  width: 2,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.amber.withOpacity(0.5),
+                    blurRadius: 10,
+                    spreadRadius: 2,
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  Text(
+                    isHumanPlayer
+                        ? '✨ Card Added to Hand! ✨'
+                        : '⚠️ Enemy Gained:',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: isHumanPlayer
+                          ? Colors.green[700]
+                          : Colors.red[700],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    rewardCard.name,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _buildStatBadge('⚔️', '${rewardCard.damage}', Colors.red),
+                      const SizedBox(width: 12),
+                      _buildStatBadge(
+                        '❤️',
+                        '${rewardCard.health}',
+                        Colors.green,
+                      ),
+                      const SizedBox(width: 12),
+                      _buildStatBadge('⏱️', '${rewardCard.tick}', Colors.blue),
+                    ],
+                  ),
+                  if (rewardCard.element != null) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[800],
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        rewardCard.element!,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ],
+                  if (rewardCard.abilities.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 4,
+                      children: rewardCard.abilities
+                          .map(
+                            (a) => Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.purple[100],
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                a,
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.purple[800],
+                                ),
+                              ),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(
+              isHumanPlayer ? 'Awesome!' : 'Continue',
+              style: TextStyle(
+                color: isHumanPlayer ? Colors.amber[800] : Colors.grey[700],
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    // Refresh UI to show new card in hand
+    if (mounted) setState(() {});
+  }
+
+  /// Build a stat badge for the relic dialog
+  Widget _buildStatBadge(String icon, String value, MaterialColor color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.2),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withOpacity(0.5)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(icon, style: const TextStyle(fontSize: 14)),
+          const SizedBox(width: 4),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: color[700],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// Listen to Firebase match document updates
   void _listenToMatchUpdates() {
     if (widget.onlineMatchId == null) return;
@@ -2387,6 +2609,12 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         playerHero: playerHero,
         opponentHero: opponentHero,
       );
+
+      // Set up relic discovery callback
+      _matchManager.onRelicDiscovered =
+          (playerName, isHumanPlayer, rewardCard) {
+            _showRelicDiscoveredDialog(playerName, isHumanPlayer, rewardCard);
+          };
 
       if (_isOnlineMode) {
         // Online TYC3: Sync initial state and listen for opponent actions
@@ -3019,20 +3247,58 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     final turnText = isMyTurn ? 'Your Turn' : "Opponent's Turn";
     final cardsPlayed = match.cardsPlayedThisTurn;
     final maxCards = _matchManager.maxCardsThisTurn;
+    final cardsRemaining = maxCards - cardsPlayed;
+    final isFirstTurn = match.isFirstTurn && isMyTurn;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          'Turn ${match.turnNumber} - $turnText',
-          style: const TextStyle(fontSize: 16),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Turn ${match.turnNumber} - $turnText',
+              style: const TextStyle(fontSize: 16),
+            ),
+            if (isFirstTurn)
+              Text(
+                '(First turn - 1 card limit)',
+                style: TextStyle(fontSize: 11, color: Colors.yellow[300]),
+              ),
+          ],
         ),
-        if (isMyTurn)
-          Text(
-            'Cards: $cardsPlayed/$maxCards',
-            style: const TextStyle(fontSize: 12, color: Colors.white70),
+        if (isMyTurn) ...[
+          const SizedBox(width: 16),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: cardsRemaining > 0 ? Colors.green[700] : Colors.grey[600],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: cardsRemaining > 0
+                    ? Colors.green[300]!
+                    : Colors.grey[400]!,
+                width: 1,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.style, size: 14, color: Colors.white),
+                const SizedBox(width: 4),
+                Text(
+                  '$cardsRemaining/$maxCards',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            ),
           ),
+        ],
       ],
     );
   }
@@ -4484,23 +4750,27 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                     bool showTerrain = true;
 
                     if (isEnemyBase) {
+                      final lanePos = [
+                        LanePosition.west,
+                        LanePosition.center,
+                        LanePosition.east,
+                      ][col];
+
+                      // Check if revealed via revealedEnemyBaseLanes (scout ability or capture)
+                      final isRevealedByScout = match.revealedEnemyBaseLanes
+                          .contains(lanePos);
+
                       if (_useTYC3Mode) {
-                        // TYC3: Revealed if player has cards in middle of this lane
+                        // TYC3: Revealed if player has cards in middle of this lane OR scout revealed it
                         final middleTile = match.board.getTile(1, col);
                         final playerId = match.player.id;
-                        showTerrain = middleTile.cards.any(
+                        final hasCardInMiddle = middleTile.cards.any(
                           (c) => c.ownerId == playerId && c.isAlive,
                         );
+                        showTerrain = hasCardInMiddle || isRevealedByScout;
                       } else {
                         // Legacy: Use revealedEnemyBaseLanes
-                        final lanePos = [
-                          LanePosition.west,
-                          LanePosition.center,
-                          LanePosition.east,
-                        ][col];
-                        showTerrain = match.revealedEnemyBaseLanes.contains(
-                          lanePos,
-                        );
+                        showTerrain = isRevealedByScout;
                       }
                     }
 

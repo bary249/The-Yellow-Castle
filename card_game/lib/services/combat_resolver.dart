@@ -830,11 +830,14 @@ class CombatResolver {
       ),
     );
 
-    // Check for retaliation (if target survived and attacker is not ranged)
+    // Check for retaliation (melee attackers always receive retaliation, even from dying units)
+    // This represents simultaneous combat - both units strike at the same time
     int retaliationDamage = 0;
     bool attackerDied = false;
 
-    if (!targetDied && !attacker.isRanged && target.isAlive) {
+    // Retaliation happens if attacker is melee (not ranged) and target has damage > 0
+    // Note: We use target.damage (base stat) not currentHealth since target retaliates before dying
+    if (!attacker.isRanged && target.damage > 0) {
       // Target retaliates
       retaliationDamage = target.damage;
 
@@ -969,12 +972,13 @@ class CombatResolver {
     );
     final targetDied = targetHpAfter <= 0;
 
-    // Calculate retaliation (if target survives and attacker is not ranged)
+    // Calculate retaliation (melee attackers always receive retaliation, even from dying units)
     int retaliationDamage = 0;
     bool attackerDied = false;
     int attackerHpAfter = attacker.currentHealth;
 
-    if (!targetDied && !attacker.isRanged) {
+    // Retaliation happens if attacker is melee and target has damage > 0
+    if (!attacker.isRanged && target.damage > 0) {
       // Target retaliates
       retaliationDamage = target.damage;
 

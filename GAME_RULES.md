@@ -37,9 +37,31 @@
   - You don't know enemy terrain bonuses
   - You don't know what cards they've deployed to their base
 
+### Scout Visibility
+- **Scout** units have a special ability to see through fog of war.
+- When a Scout is in the **middle row**, it reveals enemy base tiles:
+  - **West lane**: Reveals West and Center enemy bases
+  - **Center lane**: Reveals ALL 3 enemy bases (West, Center, East)
+  - **East lane**: Reveals East and Center enemy bases
+- Scouts are valuable for reconnaissance but deal **0 damage**.
+
 ---
 
-## 2.2 Heroes
+## 2.2 Relics
+
+- A **hidden relic** is placed on a **random middle tile** (West, Center, or East) at the start of each match.
+- Players don't know which tile contains the relic until they reach it.
+- The **first player to reach the relic tile** claims it.
+- **Relic Reward**: Currently grants a random Rare or Epic card added to your hand.
+- Future relic types may include:
+  - Gold bonuses
+  - Crystal healing
+  - Extra card draws
+  - Temporary buffs
+
+---
+
+## 2.3 Heroes
 
 - Heroes are **historical figures** with unique abilities.
 - Each hero has:
@@ -226,6 +248,7 @@ For each **tick** in each lane:
 | **stack_buff_damage_X** | +X damage to all friendly cards in stack |
 | **stack_debuff_enemy_damage_X** | -X damage to all enemy cards in lane |
 | **conceal_back** | When front card with a back card, hides back card identity from enemy |
+| **scout** | Reveals enemy base tiles in adjacent lanes (see Fog of War section) |
 
 The UI will show these abilities as **keywords** on the card with full descriptions in the deck editor.
 

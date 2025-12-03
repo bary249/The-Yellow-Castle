@@ -70,6 +70,10 @@ class MatchManager {
       board: board,
     );
 
+    // Initialize relics on the battlefield (random middle tile)
+    _currentMatch!.relicManager.initializeRelics();
+    _log('🏺 Relic hidden on a middle tile (location unknown)');
+
     // Draw initial hands
     player.drawInitialHand();
     opponent.drawInitialHand();
@@ -1165,6 +1169,11 @@ class MatchManager {
   /// Callback when turn timer updates (for UI countdown)
   Function(int secondsRemaining)? onTurnTimerUpdate;
 
+  /// Callback when a relic is discovered (for celebratory UI)
+  /// Parameters: (playerName, isHumanPlayer, rewardCard)
+  Function(String playerName, bool isHumanPlayer, GameCard rewardCard)?
+  onRelicDiscovered;
+
   /// Start a new match with TYC3 turn-based system
   void startMatchTYC3({
     required String playerId,
@@ -1323,11 +1332,18 @@ class MatchManager {
     card.currentAP = card.maxAP - 1;
     card.ownerId = active.id;
 
-    _log('✅ Placed ${card.name} at tile ($row, $col)');
-    _log('   AP: ${card.currentAP}/${card.maxAP} (1 AP spent on placement)');
+    final owner = isPlayer ? 'Player' : 'Opponent';
     _log(
-      '   Cards played this turn: ${_currentMatch!.cardsPlayedThisTurn}/$maxCardsThisTurn',
+      '✅ [$owner] Placed ${card.name} (${card.damage}/${card.health}) at ($row, $col)',
     );
+
+    // Check for relic pickup at placement tile (in case placed on middle)
+    _checkRelicPickup(row, col, card.ownerId!);
+
+    // Update scout visibility if the placed card has scout ability
+    if (card.abilities.contains('scout')) {
+      _updateScoutVisibility(row, col, card.ownerId!);
+    }
 
     return true;
   }
@@ -1378,6 +1394,9 @@ class MatchManager {
       '📍 Turn ${_currentMatch!.turnNumber}${_currentMatch!.isFirstTurn ? " (First turn)" : ""}',
     );
 
+    // Log board state summary at end of each turn
+    _logBoardStateSummary();
+
     onTurnChanged?.call(_currentMatch!.activePlayerId!);
   }
 
@@ -1388,6 +1407,8 @@ class MatchManager {
     final activeId = _currentMatch!.activePlayerId;
     if (activeId == null) return;
 
+    int cardsRegen = 0;
+
     // Iterate through all tiles on the board
     for (int row = 0; row < 3; row++) {
       for (int col = 0; col < 3; col++) {
@@ -1396,14 +1417,15 @@ class MatchManager {
         for (final card in tile.cards) {
           // Use ownerId to determine if card belongs to active player
           if (card.ownerId == activeId && card.isAlive) {
-            final oldAP = card.currentAP;
             card.regenerateAP();
-            _log(
-              '   ⚡ ${card.name} regenerates AP: $oldAP → ${card.currentAP}/${card.maxAP}',
-            );
+            cardsRegen++;
           }
         }
       }
+    }
+
+    if (cardsRegen > 0) {
+      _log('⚡ $cardsRegen cards regenerated AP');
     }
   }
 
@@ -1484,10 +1506,188 @@ class MatchManager {
     // Add to destination tile
     toTile.addCard(card);
 
-    _log('🚶 ${card.name} moved from ($fromRow,$fromCol) to ($toRow,$toCol)');
-    _log('   AP remaining: ${card.currentAP}/${card.maxAP}');
+    final owner = card.ownerId == _currentMatch!.player.id
+        ? 'Player'
+        : 'Opponent';
+    _log(
+      '🚶 [$owner] ${card.name} moved ($fromRow,$fromCol) → ($toRow,$toCol)',
+    );
+
+    // Check for relic pickup at destination tile
+    _checkRelicPickup(toRow, toCol, card.ownerId!);
+
+    // Update scout visibility if the moved card has scout ability
+    if (card.abilities.contains('scout')) {
+      _updateScoutVisibility(toRow, toCol, card.ownerId!);
+    }
 
     return true;
+  }
+
+  /// Check if a player picks up a relic at the given tile.
+  /// If a relic is found, claim it and add the reward card to the player's hand.
+  void _checkRelicPickup(int row, int col, String playerId) {
+    if (_currentMatch == null) return;
+
+    final relic = _currentMatch!.relicManager.getRelicAt(row, col);
+    if (relic == null) return;
+
+    // Claim the relic
+    final rewardCard = _currentMatch!.relicManager.claimRelicAt(
+      row,
+      col,
+      playerId,
+    );
+    if (rewardCard == null) return;
+
+    // Determine which player claimed it
+    final isPlayer = playerId == _currentMatch!.player.id;
+    final claimingPlayer = isPlayer
+        ? _currentMatch!.player
+        : _currentMatch!.opponent;
+
+    // Add the reward card to the player's hand
+    claimingPlayer.hand.add(rewardCard);
+    rewardCard.ownerId = playerId;
+
+    _log('');
+    _log('🏺 ═══════════════════════════════════════════════════════');
+    _log('🏺 ${claimingPlayer.name} discovered the Ancient Artifact!');
+    _log(
+      '🏺 Reward: ${rewardCard.name} (${rewardCard.damage} DMG, ${rewardCard.health} HP)',
+    );
+    _log('🏺 ═══════════════════════════════════════════════════════');
+    _log('');
+
+    // Notify UI to show celebratory dialog
+    onRelicDiscovered?.call(claimingPlayer.name, isPlayer, rewardCard);
+  }
+
+  /// Update fog of war visibility based on scout ability.
+  /// Scouts can see adjacent lanes (all 3 if in center, 2 if on edge).
+  void _updateScoutVisibility(int row, int col, String playerId) {
+    if (_currentMatch == null) return;
+
+    // Only player's scouts reveal for the player
+    final isPlayer = playerId == _currentMatch!.player.id;
+    if (!isPlayer) return;
+
+    // Scout reveals enemy base tiles in adjacent lanes
+    // Scout can ONLY see from middle row (row 1) - one tile ahead to enemy base
+    if (row == 1) {
+      // Reveal current lane
+      final currentLane = [
+        LanePosition.west,
+        LanePosition.center,
+        LanePosition.east,
+      ][col];
+      if (!_currentMatch!.revealedEnemyBaseLanes.contains(currentLane)) {
+        _currentMatch!.revealedEnemyBaseLanes.add(currentLane);
+        _log('👁️ Scout reveals ${currentLane.name} enemy base');
+      }
+
+      // Reveal adjacent lanes based on column
+      if (col == 0) {
+        // West lane - can also see center
+        if (!_currentMatch!.revealedEnemyBaseLanes.contains(
+          LanePosition.center,
+        )) {
+          _currentMatch!.revealedEnemyBaseLanes.add(LanePosition.center);
+          _log('👁️ Scout reveals center enemy base');
+        }
+      } else if (col == 1) {
+        // Center lane - can see all 3 lanes
+        if (!_currentMatch!.revealedEnemyBaseLanes.contains(
+          LanePosition.west,
+        )) {
+          _currentMatch!.revealedEnemyBaseLanes.add(LanePosition.west);
+          _log('👁️ Scout reveals west enemy base');
+        }
+        if (!_currentMatch!.revealedEnemyBaseLanes.contains(
+          LanePosition.east,
+        )) {
+          _currentMatch!.revealedEnemyBaseLanes.add(LanePosition.east);
+          _log('👁️ Scout reveals east enemy base');
+        }
+      } else if (col == 2) {
+        // East lane - can also see center
+        if (!_currentMatch!.revealedEnemyBaseLanes.contains(
+          LanePosition.center,
+        )) {
+          _currentMatch!.revealedEnemyBaseLanes.add(LanePosition.center);
+          _log('👁️ Scout reveals center enemy base');
+        }
+      }
+    }
+  }
+
+  /// Log a summary of the current board state for debugging
+  void _logBoardStateSummary() {
+    if (_currentMatch == null) return;
+
+    final match = _currentMatch!;
+    final laneNames = ['West', 'Center', 'East'];
+
+    _log('\n📊 ═══ BOARD STATE ═══');
+    _log(
+      '💎 Crystals: Player ${match.player.crystalHP} HP | Opponent ${match.opponent.crystalHP} HP',
+    );
+    _log(
+      '🃏 Hands: Player ${match.player.hand.length} cards | Opponent ${match.opponent.hand.length} cards',
+    );
+
+    for (int col = 0; col < 3; col++) {
+      final laneName = laneNames[col];
+      final buffer = StringBuffer();
+      buffer.write('  $laneName: ');
+
+      // Enemy base (row 0)
+      final enemyBase = match.board.getTile(0, col);
+      final enemyCards = enemyBase.cards.where((c) => c.isAlive).toList();
+      if (enemyCards.isNotEmpty) {
+        buffer.write(
+          'EB[${enemyCards.map((c) => '${c.name}:${c.currentHealth}/${c.health}').join(', ')}] ',
+        );
+      }
+
+      // Middle (row 1)
+      final middle = match.board.getTile(1, col);
+      final middleCards = middle.cards.where((c) => c.isAlive).toList();
+      if (middleCards.isNotEmpty) {
+        buffer.write(
+          'M[${middleCards.map((c) => '${c.name}:${c.currentHealth}/${c.health}').join(', ')}] ',
+        );
+      }
+
+      // Player base (row 2)
+      final playerBase = match.board.getTile(2, col);
+      final playerCards = playerBase.cards.where((c) => c.isAlive).toList();
+      if (playerCards.isNotEmpty) {
+        buffer.write(
+          'PB[${playerCards.map((c) => '${c.name}:${c.currentHealth}/${c.health}').join(', ')}]',
+        );
+      }
+
+      if (enemyCards.isNotEmpty ||
+          middleCards.isNotEmpty ||
+          playerCards.isNotEmpty) {
+        _log(buffer.toString());
+      }
+    }
+
+    // Relic status
+    if (!match.relicManager.isRelicClaimed) {
+      _log('🏺 Relic: Unclaimed (hidden)');
+    } else {
+      _log(
+        '🏺 Relic: Claimed by ${match.relicManager.relicClaimedBy == match.player.id ? "Player" : "Opponent"}',
+      );
+    }
+
+    // Fog of war status
+    final revealed = match.revealedEnemyBaseLanes.map((l) => l.name).join(', ');
+    _log('👁️ Revealed enemy bases: ${revealed.isEmpty ? "None" : revealed}');
+    _log('═══════════════════════\n');
   }
 
   /// TYC3: Attack a target card
@@ -1537,6 +1737,17 @@ class MatchManager {
     // Get terrain of target tile for terrain buff
     final tileTerrain = targetTile.terrain;
 
+    // Log attack details
+    final attackerOwner = attacker.ownerId == _currentMatch!.player.id
+        ? 'Player'
+        : 'Opponent';
+    _log(
+      '⚔️ [$attackerOwner] ${attacker.name} (${attacker.currentHealth}/${attacker.health} HP) attacks ${target.name} (${target.currentHealth}/${target.health} HP)',
+    );
+    _log(
+      '   Position: ($attackerRow,$attackerCol) → ($targetRow,$targetCol) | Terrain: ${tileTerrain ?? "none"}',
+    );
+
     // Resolve the attack
     final result = _combatResolver.resolveAttackTYC3(
       attacker,
@@ -1545,8 +1756,9 @@ class MatchManager {
       tileTerrain: tileTerrain,
     );
 
-    _log('⚔️ ${attacker.name} attacks ${target.name}');
-    _log('   Damage dealt: ${result.damageDealt}');
+    _log(
+      '   Damage: ${result.damageDealt} → ${target.name} now ${target.currentHealth}/${target.health} HP',
+    );
 
     final attackerTile = _currentMatch!.board.getTile(attackerRow, attackerCol);
 
@@ -1577,6 +1789,14 @@ class MatchManager {
             _log(
               '   🚶 ${attacker.name} advances to (${targetRow},${targetCol}) after kill',
             );
+
+            // Check for relic pickup at new tile
+            _checkRelicPickup(targetRow, targetCol, attacker.ownerId!);
+
+            // Update scout visibility if the attacker has scout ability
+            if (attacker.abilities.contains('scout')) {
+              _updateScoutVisibility(targetRow, targetCol, attacker.ownerId!);
+            }
           } else {
             _log(
               '   ⚠️ ${attacker.name} cannot advance - other enemies remain on tile',
@@ -1586,7 +1806,13 @@ class MatchManager {
       }
     }
     if (result.retaliationDamage > 0) {
-      _log('   ↩️ Retaliation: ${result.retaliationDamage} damage');
+      final retaliationNote = result.targetDied ? ' (before dying)' : '';
+      _log(
+        '   ↩️ Retaliation$retaliationNote: ${target.name} deals ${result.retaliationDamage} to ${attacker.name}',
+      );
+      _log(
+        '   ${attacker.name} now ${attacker.currentHealth}/${attacker.health} HP',
+      );
       if (result.attackerDied) {
         _log('   💀 ${attacker.name} destroyed by retaliation!');
         // Remove dead attacker from tile
