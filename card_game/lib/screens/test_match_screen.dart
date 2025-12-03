@@ -178,6 +178,20 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       return;
     }
 
+    // Check tile capacity before trying to place
+    final match = _matchManager.currentMatch;
+    if (match != null) {
+      final tile = match.board.getTile(row, col);
+      if (tile.cards.length >= Tile.maxCards) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Tile is full (max ${Tile.maxCards} cards per tile)'),
+          ),
+        );
+        return;
+      }
+    }
+
     // Try to place the card
     final success = _matchManager.placeCardTYC3(_selectedCard!, row, col);
 
@@ -185,6 +199,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       _selectedCard = null;
       setState(() {});
     } else {
+      // Generic fallback - shouldn't normally reach here
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Cannot place card here')));
@@ -4052,7 +4067,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         isNotEnemyBase &&
         _selectedCard != null &&
         stagedInLane == 0 && // No card already staged in this lane
-        (existingPlayerCount + stagedCount) < 2;
+        (existingPlayerCount + stagedCount) < Tile.maxCards;
 
     // Determine tile color based on owner and terrain
     Color bgColor;

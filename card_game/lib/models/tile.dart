@@ -36,8 +36,9 @@ class Tile {
   /// Current owner of this tile.
   TileOwner owner;
 
-  /// TYC3: Maximum cards per tile (2×2 grid)
-  static const int maxCards = 4;
+  /// TYC3: Maximum cards per tile
+  /// Set to 2 for simpler gameplay, can be increased to 4 for 2×2 grid
+  static const int maxCards = 2;
 
   /// Cards placed on this tile (up to 4 in TYC3).
   /// Layout: [0]=front-left, [1]=front-right, [2]=back-left, [3]=back-right
