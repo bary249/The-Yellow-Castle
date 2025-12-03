@@ -8,8 +8,18 @@ import '../models/card.dart';
 /// - Epic (3): Max 2 copies - specialists with abilities
 /// - Legendary (4): Max 1 copy - champions with unique powers
 ///
-/// Power Score formula: (damage * 2 + health) / tick
-/// Higher score = more efficient card
+/// TYC3 AP System:
+/// - maxAP: Maximum AP the card can hold (1-3)
+/// - apPerTurn: AP gained at start of owner's turn
+/// - attackAPCost: AP cost to attack (1-2)
+/// - attackRange: 1 = adjacent, 2 = long range (cannons)
+///
+/// AP Assignment Strategy:
+/// - Fast units (tick 1-2, moveSpeed 2): maxAP=2, can act frequently
+/// - Medium units (tick 3-4): maxAP=1, balanced
+/// - Heavy units (tick 5): maxAP=1, attackAPCost=2, slow but powerful
+/// - Cavalry (moveSpeed 2): maxAP=2, mobile
+/// - Artillery: attackRange=2, long range attacks
 
 // ============================================================================
 // COMMON CARDS (Rarity 1) - Unlimited copies available
@@ -22,6 +32,9 @@ GameCard desertQuickStrike(int index) => GameCard(
   health: 4,
   tick: 1,
   moveSpeed: 2, // Fast - reaches enemy quickly
+  maxAP: 2, // TYC3: Fast unit
+  apPerTurn: 2,
+  attackAPCost: 1,
   element: 'Desert',
   abilities: const [],
   cost: 1,
@@ -35,6 +48,9 @@ GameCard lakeQuickStrike(int index) => GameCard(
   health: 6,
   tick: 1,
   moveSpeed: 2, // Fast - reaches enemy quickly
+  maxAP: 2, // TYC3: Fast unit
+  apPerTurn: 2,
+  attackAPCost: 1,
   element: 'Lake',
   abilities: const [],
   cost: 1,
@@ -48,6 +64,9 @@ GameCard woodsQuickStrike(int index) => GameCard(
   health: 5,
   tick: 1,
   moveSpeed: 2, // Fast - reaches enemy quickly
+  maxAP: 2, // TYC3: Fast unit
+  apPerTurn: 2,
+  attackAPCost: 1,
   element: 'Woods',
   abilities: const [],
   cost: 1,
@@ -61,6 +80,9 @@ GameCard desertWarrior(int index) => GameCard(
   health: 9,
   tick: 3,
   moveSpeed: 1, // Normal speed
+  maxAP: 1, // TYC3: Medium unit
+  apPerTurn: 1,
+  attackAPCost: 1,
   element: 'Desert',
   abilities: const [],
   cost: 2,
@@ -74,6 +96,9 @@ GameCard lakeWarrior(int index) => GameCard(
   health: 11,
   tick: 3,
   moveSpeed: 1, // Normal speed
+  maxAP: 1, // TYC3: Medium unit
+  apPerTurn: 1,
+  attackAPCost: 1,
   element: 'Lake',
   abilities: const [],
   cost: 2,
@@ -87,6 +112,9 @@ GameCard woodsWarrior(int index) => GameCard(
   health: 10,
   tick: 3,
   moveSpeed: 1, // Normal speed
+  maxAP: 1, // TYC3: Medium unit
+  apPerTurn: 1,
+  attackAPCost: 1,
   element: 'Woods',
   abilities: const [],
   cost: 2,
@@ -100,8 +128,11 @@ GameCard desertTank(int index) => GameCard(
   health: 14,
   tick: 5,
   moveSpeed: 0, // Stationary - holds position
+  maxAP: 1, // TYC3: Heavy unit
+  apPerTurn: 1,
+  attackAPCost: 1, // Heavy but efficient
   element: 'Desert',
-  abilities: const [],
+  abilities: const ['guard'], // TYC3: Tanks have guard
   cost: 3,
   rarity: 1, // Common
 );
@@ -113,8 +144,11 @@ GameCard lakeTank(int index) => GameCard(
   health: 16,
   tick: 5,
   moveSpeed: 0, // Stationary - holds position
+  maxAP: 1, // TYC3: Heavy unit
+  apPerTurn: 1,
+  attackAPCost: 1,
   element: 'Lake',
-  abilities: const [],
+  abilities: const ['guard'], // TYC3: Tanks have guard
   cost: 3,
   rarity: 1, // Common
 );
@@ -126,8 +160,11 @@ GameCard woodsTank(int index) => GameCard(
   health: 15,
   tick: 5,
   moveSpeed: 0, // Stationary - holds position
+  maxAP: 1, // TYC3: Heavy unit
+  apPerTurn: 1,
+  attackAPCost: 1,
   element: 'Woods',
-  abilities: const [],
+  abilities: const ['guard'], // TYC3: Tanks have guard
   cost: 3,
   rarity: 1, // Common
 );
@@ -143,6 +180,9 @@ GameCard desertEliteStriker(int index) => GameCard(
   health: 5, // +1 from common
   tick: 1,
   moveSpeed: 2, // Fast - like Quick Strike
+  maxAP: 2, // TYC3: Fast unit
+  apPerTurn: 2,
+  attackAPCost: 1,
   element: 'Desert',
   abilities: const [],
   cost: 2,
@@ -156,6 +196,9 @@ GameCard lakeEliteStriker(int index) => GameCard(
   health: 7, // +1 from common
   tick: 1,
   moveSpeed: 2, // Fast - like Quick Strike
+  maxAP: 2, // TYC3: Fast unit
+  apPerTurn: 2,
+  attackAPCost: 1,
   element: 'Lake',
   abilities: const [],
   cost: 2,
@@ -169,6 +212,9 @@ GameCard woodsEliteStriker(int index) => GameCard(
   health: 6, // +1 from common
   tick: 1,
   moveSpeed: 2, // Fast - like Quick Strike
+  maxAP: 2, // TYC3: Fast unit
+  apPerTurn: 2,
+  attackAPCost: 1,
   element: 'Woods',
   abilities: const [],
   cost: 2,
@@ -182,6 +228,9 @@ GameCard desertVeteran(int index) => GameCard(
   health: 11, // +2 from common warrior
   tick: 3,
   moveSpeed: 1, // Normal speed
+  maxAP: 1, // TYC3: Medium unit
+  apPerTurn: 1,
+  attackAPCost: 1,
   element: 'Desert',
   abilities: const [],
   cost: 3,
@@ -195,6 +244,9 @@ GameCard lakeVeteran(int index) => GameCard(
   health: 13, // +2 from common warrior
   tick: 3,
   moveSpeed: 1, // Normal speed
+  maxAP: 1, // TYC3: Medium unit
+  apPerTurn: 1,
+  attackAPCost: 1,
   element: 'Lake',
   abilities: const [],
   cost: 3,
@@ -208,6 +260,9 @@ GameCard woodsVeteran(int index) => GameCard(
   health: 12, // +2 from common warrior
   tick: 3,
   moveSpeed: 1, // Normal speed
+  maxAP: 1, // TYC3: Medium unit
+  apPerTurn: 1,
+  attackAPCost: 1,
   element: 'Woods',
   abilities: const [],
   cost: 3,
@@ -226,6 +281,9 @@ GameCard lakeShieldTotem(int index) => GameCard(
   health: 1,
   tick: 3,
   moveSpeed: 0, // Stationary support
+  maxAP: 1, // TYC3: Support unit
+  apPerTurn: 1,
+  attackAPCost: 1,
   element: 'Lake',
   abilities: const ['shield_2', 'stack_debuff_enemy_damage_2'],
   cost: 2,
@@ -240,6 +298,9 @@ GameCard desertWarBanner(int index) => GameCard(
   health: 1,
   tick: 3,
   moveSpeed: 0, // Stationary support
+  maxAP: 1, // TYC3: Support unit
+  apPerTurn: 1,
+  attackAPCost: 1,
   element: 'Desert',
   abilities: const ['fury_2', 'stack_buff_damage_2'],
   cost: 2,
@@ -254,6 +315,9 @@ GameCard woodsHealingTree(int index) => GameCard(
   health: 3,
   tick: 4,
   moveSpeed: 0, // Stationary support
+  maxAP: 1, // TYC3: Support unit
+  apPerTurn: 1,
+  attackAPCost: 1,
   element: 'Woods',
   abilities: const ['heal_ally_2', 'regen_1'],
   cost: 2,
@@ -268,6 +332,9 @@ GameCard desertBerserker(int index) => GameCard(
   health: 10, // Lower health - glass cannon
   tick: 4,
   moveSpeed: 1, // Normal speed
+  maxAP: 1, // TYC3: Medium unit
+  apPerTurn: 1,
+  attackAPCost: 1,
   element: 'Desert',
   abilities: const ['fury_1'], // +1 damage when attacking
   cost: 4,
@@ -282,8 +349,11 @@ GameCard lakeGuardian(int index) => GameCard(
   health: 20, // Very tanky
   tick: 5,
   moveSpeed: 0, // Stationary - elite tank holds position
+  maxAP: 1, // TYC3: Heavy unit
+  apPerTurn: 1,
+  attackAPCost: 1,
   element: 'Lake',
-  abilities: const ['shield_1'], // Reduces incoming damage
+  abilities: const ['shield_1', 'guard'], // TYC3: Elite guard
   cost: 4,
   rarity: 3, // Epic
 );
@@ -296,8 +366,11 @@ GameCard woodsSentinel(int index) => GameCard(
   health: 14,
   tick: 4,
   moveSpeed: 1, // Normal speed
+  maxAP: 1, // TYC3: Medium unit
+  apPerTurn: 1,
+  attackAPCost: 1,
   element: 'Woods',
-  abilities: const ['regen_1'], // Heals 1 HP per tick
+  abilities: const ['regen_1'], // Heals 1 HP per turn
   cost: 4,
   rarity: 3, // Epic
 );
@@ -311,6 +384,9 @@ GameCard desertShadowScout(int index) => GameCard(
   health: 6,
   tick: 2,
   moveSpeed: 2, // Fast scout
+  maxAP: 2, // TYC3: Fast unit
+  apPerTurn: 2,
+  attackAPCost: 1,
   element: 'Desert',
   abilities: const ['conceal_back'], // Hides back card from enemy view
   cost: 3,
@@ -326,6 +402,9 @@ GameCard lakeMistWeaver(int index) => GameCard(
   health: 8,
   tick: 2,
   moveSpeed: 1, // Normal speed
+  maxAP: 1, // TYC3: Medium unit
+  apPerTurn: 1,
+  attackAPCost: 1,
   element: 'Lake',
   abilities: const ['conceal_back', 'shield_1'], // Conceals and has light armor
   cost: 3,
@@ -341,6 +420,9 @@ GameCard woodsShroudWalker(int index) => GameCard(
   health: 7,
   tick: 2,
   moveSpeed: 1, // Normal speed
+  maxAP: 1, // TYC3: Medium unit
+  apPerTurn: 1,
+  attackAPCost: 1,
   element: 'Woods',
   abilities: const ['conceal_back', 'regen_1'], // Conceals and regenerates
   cost: 3,
@@ -359,6 +441,9 @@ GameCard sunfireWarlord() => GameCard(
   health: 18,
   tick: 5,
   moveSpeed: 1, // Normal speed - powerful but balanced
+  maxAP: 2, // TYC3: Legendary - extra AP
+  apPerTurn: 1,
+  attackAPCost: 2, // Heavy attack
   element: 'Desert',
   abilities: const ['fury_2', 'cleave'], // +2 damage, hits multiple
   cost: 5,
@@ -373,8 +458,11 @@ GameCard tidalLeviathan() => GameCard(
   health: 28,
   tick: 5,
   moveSpeed: 0, // Stationary - legendary tank holds the line
+  maxAP: 1, // TYC3: Heavy unit
+  apPerTurn: 1,
+  attackAPCost: 1,
   element: 'Lake',
-  abilities: const ['shield_3', 'regenerate'], // Massive tank
+  abilities: const ['shield_3', 'regen_2', 'guard'], // TYC3: Legendary guard
   cost: 5,
   rarity: 4, // Legendary
 );
@@ -387,8 +475,11 @@ GameCard ancientTreant() => GameCard(
   health: 22,
   tick: 5,
   moveSpeed: 0, // Stationary - legendary tree holds position
+  maxAP: 1, // TYC3: Heavy unit
+  apPerTurn: 1,
+  attackAPCost: 1,
   element: 'Woods',
-  abilities: const ['regen_2', 'thorns_3'], // Heals and reflects damage
+  abilities: const ['regen_2', 'thorns_3', 'guard'], // TYC3: Legendary guard
   cost: 5,
   rarity: 4, // Legendary
 );
@@ -401,8 +492,11 @@ GameCard shadowAssassin() => GameCard(
   health: 7,
   tick: 2,
   moveSpeed: 2, // Fast, fragile assassin
+  maxAP: 3, // TYC3: Legendary assassin - very mobile
+  apPerTurn: 2,
+  attackAPCost: 1,
   element: null, // Neutral
-  abilities: const ['stealth_pass'],
+  abilities: const ['ranged'], // TYC3: Assassin has ranged (no retaliation)
   cost: 5,
   rarity: 4, // Legendary
 );
@@ -425,6 +519,9 @@ GameCard napoleonVoltigeur(int index) => GameCard(
   health: 5,
   tick: 1,
   moveSpeed: 2, // Fast skirmishers
+  maxAP: 2, // TYC3: Fast unit
+  apPerTurn: 2,
+  attackAPCost: 1,
   element: 'Woods',
   abilities: const [],
   cost: 1,
@@ -440,6 +537,9 @@ GameCard napoleonFusilier(int index) => GameCard(
   health: 9,
   tick: 3,
   moveSpeed: 1, // Standard march
+  maxAP: 1, // TYC3: Medium unit
+  apPerTurn: 1,
+  attackAPCost: 1,
   element: 'Woods',
   abilities: const [],
   cost: 2,
@@ -455,6 +555,9 @@ GameCard napoleonLineInfantry(int index) => GameCard(
   health: 12,
   tick: 3, // Faster to be more useful
   moveSpeed: 1,
+  maxAP: 1, // TYC3: Medium unit
+  apPerTurn: 1,
+  attackAPCost: 1,
   element: 'Woods',
   abilities: const [],
   cost: 2,
@@ -470,8 +573,12 @@ GameCard napoleonFieldCannon(int index) => GameCard(
   health: 8,
   tick: 2,
   moveSpeed: 0, // Stationary artillery
+  maxAP: 1, // TYC3: Artillery
+  apPerTurn: 1,
+  attackAPCost: 1,
+  attackRange: 2, // TYC3: Long range
   element: 'Woods',
-  abilities: const ['ranged'], // Can attack from back position
+  abilities: const ['ranged'], // No retaliation
   cost: 2,
   rarity: 1, // Common
 );
@@ -485,6 +592,9 @@ GameCard napoleonSapper(int index) => GameCard(
   health: 8,
   tick: 3,
   moveSpeed: 1,
+  maxAP: 1, // TYC3: Medium unit
+  apPerTurn: 1,
+  attackAPCost: 1,
   element: 'Woods',
   abilities: const ['fortify_1'], // +1 shield to all allies in lane
   cost: 2,
@@ -500,6 +610,9 @@ GameCard napoleonDrummerBoy(int index) => GameCard(
   health: 4,
   tick: 3,
   moveSpeed: 1,
+  maxAP: 1, // TYC3: Support unit
+  apPerTurn: 1,
+  attackAPCost: 1,
   element: 'Woods',
   abilities: const ['inspire_1'], // +1 damage to all allies in lane
   cost: 1,
@@ -517,6 +630,9 @@ GameCard napoleonGrenadier(int index) => GameCard(
   health: 14,
   tick: 3, // Faster to actually use fury
   moveSpeed: 1,
+  maxAP: 1, // TYC3: Medium unit
+  apPerTurn: 1,
+  attackAPCost: 1,
   element: 'Woods',
   abilities: const ['fury_1'], // +1 damage when attacking
   cost: 3,
@@ -532,8 +648,11 @@ GameCard napoleonHussar(int index) => GameCard(
   health: 6,
   tick: 2,
   moveSpeed: 2, // Fast cavalry
+  maxAP: 2, // TYC3: Cavalry - fast
+  apPerTurn: 2,
+  attackAPCost: 1,
   element: 'Lake',
-  abilities: const ['first_strike'], // Attacks first in same tick
+  abilities: const ['ranged'], // TYC3: Cavalry charges - no retaliation
   cost: 3,
   rarity: 2, // Rare
 );
@@ -547,6 +666,9 @@ GameCard napoleonCuirassier(int index) => GameCard(
   health: 10,
   tick: 3,
   moveSpeed: 1,
+  maxAP: 1, // TYC3: Heavy cavalry
+  apPerTurn: 1,
+  attackAPCost: 1,
   element: 'Lake',
   abilities: const ['shield_1'], // Armor reduces damage
   cost: 3,
@@ -564,6 +686,9 @@ GameCard napoleonYoungGuard(int index) => GameCard(
   health: 10,
   tick: 3,
   moveSpeed: 1,
+  maxAP: 1, // TYC3: Medium unit
+  apPerTurn: 1,
+  attackAPCost: 1,
   element: 'Woods',
   abilities: const ['rally_1'], // Adjacent allies gain +1 damage
   cost: 3,
@@ -579,8 +704,11 @@ GameCard napoleonChasseur(int index) => GameCard(
   health: 7,
   tick: 2,
   moveSpeed: 2, // Fast light cavalry
+  maxAP: 2, // TYC3: Cavalry - fast
+  apPerTurn: 2,
+  attackAPCost: 1,
   element: 'Lake',
-  abilities: const ['first_strike'],
+  abilities: const ['ranged'], // TYC3: Cavalry charges
   cost: 2,
   rarity: 2, // Rare
 );
@@ -594,6 +722,10 @@ GameCard napoleonHorseArtillery(int index) => GameCard(
   health: 6,
   tick: 2,
   moveSpeed: 1, // Can move unlike field cannon
+  maxAP: 2, // TYC3: Mobile artillery
+  apPerTurn: 1,
+  attackAPCost: 1,
+  attackRange: 2, // TYC3: Long range
   element: 'Woods',
   abilities: const ['ranged'],
   cost: 3,
@@ -611,8 +743,11 @@ GameCard napoleonOldGuard(int index) => GameCard(
   health: 14,
   tick: 4,
   moveSpeed: 1,
+  maxAP: 1, // TYC3: Elite unit
+  apPerTurn: 1,
+  attackAPCost: 1,
   element: 'Woods',
-  abilities: const ['fury_2', 'shield_1'], // Elite stats
+  abilities: const ['fury_2', 'shield_1', 'guard'], // TYC3: Elite guard
   cost: 4,
   rarity: 3, // Epic
 );
@@ -626,6 +761,9 @@ GameCard napoleonMarshalNey(int index) => GameCard(
   health: 11,
   tick: 3,
   moveSpeed: 1,
+  maxAP: 2, // TYC3: Commander - extra actions
+  apPerTurn: 1,
+  attackAPCost: 1,
   element: 'Woods',
   abilities: const ['command_1', 'fury_1'], // Leadership + aggression
   cost: 4,
@@ -641,6 +779,10 @@ GameCard napoleonGrandBattery(int index) => GameCard(
   health: 10,
   tick: 3,
   moveSpeed: 0, // Stationary
+  maxAP: 1, // TYC3: Heavy artillery
+  apPerTurn: 1,
+  attackAPCost: 1,
+  attackRange: 2, // TYC3: Long range
   element: 'Woods',
   abilities: const ['ranged', 'cleave'], // Hits all enemies in lane
   cost: 4,
@@ -656,8 +798,11 @@ GameCard napoleonPolishLancer(int index) => GameCard(
   health: 8,
   tick: 2,
   moveSpeed: 2, // Fast cavalry
+  maxAP: 2, // TYC3: Elite cavalry
+  apPerTurn: 2,
+  attackAPCost: 1,
   element: 'Lake',
-  abilities: const ['first_strike', 'fury_1'],
+  abilities: const ['ranged', 'fury_1'], // TYC3: Cavalry charge
   cost: 4,
   rarity: 3, // Epic
 );
@@ -671,6 +816,9 @@ GameCard napoleonImperialEagle(int index) => GameCard(
   health: 6,
   tick: 3,
   moveSpeed: 1,
+  maxAP: 1, // TYC3: Support unit
+  apPerTurn: 1,
+  attackAPCost: 1,
   element: 'Woods',
   abilities: const ['inspire_2', 'rally_1'], // Major morale boost
   cost: 3,
@@ -679,8 +827,7 @@ GameCard napoleonImperialEagle(int index) => GameCard(
 
 /// Siege Cannon - Massive artillery that fires at distant tiles in the same lane
 /// Historical: Heavy siege artillery used to bombard fortifications from afar
-/// Special: Attacks enemies in OTHER TILES of the same lane (e.g., base → middle)
-/// Cannot attack if contested on its own tile (enemies present at same position)
+/// TYC3: Long range (2 tiles), can hit enemy base from player base
 GameCard napoleonSiegeCannon(int index) => GameCard(
   id: 'napoleon_siege_cannon_$index',
   name: 'Siege Cannon',
@@ -688,10 +835,12 @@ GameCard napoleonSiegeCannon(int index) => GameCard(
   health: 8,
   tick: 5, // Slow
   moveSpeed: 0, // Stationary
+  maxAP: 1, // TYC3: Heavy artillery
+  apPerTurn: 1,
+  attackAPCost: 2, // Expensive to fire
+  attackRange: 2, // TYC3: Long range - base to base
   element: 'Woods',
-  abilities: const [
-    'far_attack',
-  ], // Attacks different lane, disabled if contested
+  abilities: const ['ranged', 'long_range'], // No retaliation, long range
   cost: 4,
   rarity: 3, // Epic
 );
@@ -707,8 +856,16 @@ GameCard napoleonsGuard() => GameCard(
   health: 18,
   tick: 5,
   moveSpeed: 1,
+  maxAP: 2, // TYC3: Legendary - extra AP
+  apPerTurn: 1,
+  attackAPCost: 1,
   element: 'Woods',
-  abilities: const ['fury_2', 'shield_2', 'inspire_1'],
+  abilities: const [
+    'fury_2',
+    'shield_2',
+    'inspire_1',
+    'guard',
+  ], // TYC3: Legendary guard
   cost: 5,
   rarity: 4, // Legendary
 );
@@ -1075,6 +1232,9 @@ GameCard austrianJager(int index) => GameCard(
   health: 5,
   tick: 1,
   moveSpeed: 2,
+  maxAP: 2, // TYC3: Fast unit
+  apPerTurn: 2,
+  attackAPCost: 1,
   element: 'Woods',
   abilities: const [],
   cost: 1,
@@ -1089,6 +1249,9 @@ GameCard austrianLineInfantry(int index) => GameCard(
   health: 9,
   tick: 3,
   moveSpeed: 1,
+  maxAP: 1, // TYC3: Medium unit
+  apPerTurn: 1,
+  attackAPCost: 1,
   element: 'Woods',
   abilities: const [],
   cost: 2,
@@ -1103,8 +1266,11 @@ GameCard austrianGrenadier(int index) => GameCard(
   health: 11,
   tick: 3,
   moveSpeed: 1,
+  maxAP: 1, // TYC3: Medium unit
+  apPerTurn: 1,
+  attackAPCost: 1,
   element: 'Woods',
-  abilities: const ['shield_1'],
+  abilities: const ['shield_1', 'guard'], // TYC3: Guard
   cost: 2,
   rarity: 2,
 );
@@ -1117,8 +1283,11 @@ GameCard austrianHussar(int index) => GameCard(
   health: 6,
   tick: 2,
   moveSpeed: 2,
+  maxAP: 2, // TYC3: Cavalry - fast
+  apPerTurn: 2,
+  attackAPCost: 1,
   element: 'Lake',
-  abilities: const [],
+  abilities: const ['ranged'], // TYC3: Cavalry charge
   cost: 2,
   rarity: 2,
 );
@@ -1131,6 +1300,9 @@ GameCard austrianCuirassier(int index) => GameCard(
   health: 10,
   tick: 3,
   moveSpeed: 1,
+  maxAP: 1, // TYC3: Heavy cavalry
+  apPerTurn: 1,
+  attackAPCost: 1,
   element: 'Lake',
   abilities: const ['shield_1'],
   cost: 3,
@@ -1145,6 +1317,10 @@ GameCard austrianArtillery(int index) => GameCard(
   health: 6,
   tick: 3,
   moveSpeed: 0,
+  maxAP: 1, // TYC3: Artillery
+  apPerTurn: 1,
+  attackAPCost: 1,
+  attackRange: 2, // TYC3: Long range
   element: 'Woods',
   abilities: const ['ranged'],
   cost: 2,
@@ -1159,6 +1335,9 @@ GameCard austrianOfficer(int index) => GameCard(
   health: 7,
   tick: 3,
   moveSpeed: 1,
+  maxAP: 1, // TYC3: Support unit
+  apPerTurn: 1,
+  attackAPCost: 1,
   element: 'Woods',
   abilities: const ['inspire_1'],
   cost: 2,
