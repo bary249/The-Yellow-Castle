@@ -220,20 +220,22 @@ These abilities from the current system need review for turn-based compatibility
 - [x] Add `attackRange: 2` to cannons/artillery for long range
 - [x] Update ability strings: `ranged` (no retaliation), `guard`, `long_range`
 
-### Phase 3: Turn System Overhaul
-**Files to modify:**
-- `lib/services/match_manager.dart` - Core turn logic
-- `lib/models/match_state.dart` - Phase enum updates
+### Phase 3: Turn System Overhaul ✅ COMPLETE
+**Files modified:**
+- `lib/services/match_manager.dart` - Added TYC3 turn-based methods
+- `lib/models/match_state.dart` - Phase enum already updated in Phase 1
 
 **Tasks:**
-- [ ] Update `MatchPhase` enum: remove `combatPhase`, add `playerTurn`, `opponentTurn`
-- [ ] Add `startPlayerTurn()` and `startOpponentTurn()` methods
-- [ ] Implement random first player selection in `startMatch()`
-- [ ] Add 30-second turn timer tracking
-- [ ] Implement `endTurn()` method (switch active player)
-- [ ] Remove simultaneous submission logic (`playerSubmitted`, `opponentSubmitted`)
-- [ ] Implement first-turn restriction (1 card only for first player)
-- [ ] Add AP regeneration at turn start
+- [x] Update `MatchPhase` enum: added `playerTurn`, `opponentTurn` (Phase 1)
+- [x] Add `startMatchTYC3()` method with random first player
+- [x] Implement random first player selection
+- [x] Add 30-second turn timer tracking (`turnSecondsRemaining`)
+- [x] Implement `endTurnTYC3()` method (switch active player)
+- [x] Keep legacy submission logic (deprecated, for backward compat)
+- [x] Implement first-turn restriction (1 card only via `maxCardsThisTurn`)
+- [x] Add AP regeneration at turn start (`_regenerateAPForActivePlayer`)
+- [x] Add `placeCardTYC3()` for card placement
+- [x] Add `canMoveCard()` and `moveCardTYC3()` for movement
 
 ### Phase 4: Action System (Move & Attack)
 **Files to create:**
