@@ -279,25 +279,21 @@ These abilities from the current system need review for turn-based compatibility
   - Must clear all guards/cards first
   - Game over check after base damage
 
-### Phase 6: UI Overhaul
-**Files to modify:**
+### Phase 6: UI Overhaul ✅ PARTIAL (Core functionality done)
+**Files modified:**
 - `lib/screens/test_match_screen.dart` - Main battle UI
 
 **Tasks:**
-- [ ] Add "End Turn" button (prominent, always visible)
-- [ ] Add turn indicator (whose turn + 30s countdown)
-- [ ] Update card display:
-  - Top-left: Attack AP cost
-  - Top-right: Current AP / Max AP
-  - Bottom-left: Damage
-  - Bottom-right: HP
-- [ ] Implement card selection UI (tap to select)
-- [ ] Implement target selection UI (tap enemy card/base)
-- [ ] Implement move destination UI (tap adjacent tile)
-- [ ] Add action buttons: "Move", "Attack", "Cancel"
-- [ ] Show valid targets/destinations highlighted
-- [ ] Remove tick-based combat log, add action log
-- [ ] Update tile display for 4-card capacity (2×2 grid)
+- [x] Add "End Turn" button (prominent, always visible)
+- [x] Add turn indicator (whose turn + 30s countdown)
+- [x] Add TYC3 mode toggle (`_useTYC3Mode = true`)
+- [x] Implement card placement from hand to base tiles
+- [x] Add card selection for move/attack actions
+- [x] Add simple AI turn logic for TYC3 mode
+- [ ] Update card display with AP info (TODO)
+- [ ] Show valid targets/destinations highlighted (TODO)
+- [ ] Add action buttons: "Move", "Attack", "Cancel" (TODO)
+- [ ] Update tile display for 4-card capacity (TODO)
 
 ### Phase 7: AI Updates
 **Files to modify:**
