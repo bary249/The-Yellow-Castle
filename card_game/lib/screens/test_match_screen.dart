@@ -4028,15 +4028,28 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                   builder: (context) {
                     // Fog of war: check if enemy base terrain is revealed
                     final isEnemyBase = row == 0;
-                    final lanePos = [
-                      LanePosition.west,
-                      LanePosition.center,
-                      LanePosition.east,
-                    ][col];
-                    final isRevealed = match.revealedEnemyBaseLanes.contains(
-                      lanePos,
-                    );
-                    final showTerrain = !isEnemyBase || isRevealed;
+                    bool showTerrain = true;
+
+                    if (isEnemyBase) {
+                      if (_useTYC3Mode) {
+                        // TYC3: Revealed if player has cards in middle of this lane
+                        final middleTile = match.board.getTile(1, col);
+                        final playerId = match.player.id;
+                        showTerrain = middleTile.cards.any(
+                          (c) => c.ownerId == playerId && c.isAlive,
+                        );
+                      } else {
+                        // Legacy: Use revealedEnemyBaseLanes
+                        final lanePos = [
+                          LanePosition.west,
+                          LanePosition.center,
+                          LanePosition.east,
+                        ][col];
+                        showTerrain = match.revealedEnemyBaseLanes.contains(
+                          lanePos,
+                        );
+                      }
+                    }
 
                     return Container(
                       padding: const EdgeInsets.symmetric(
