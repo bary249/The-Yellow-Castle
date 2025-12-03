@@ -1,6 +1,25 @@
 import '../models/card.dart';
 import '../models/lane.dart';
 
+/// TYC3: Result of a single attack
+class AttackResult {
+  final bool success;
+  final int damageDealt;
+  final int retaliationDamage;
+  final bool targetDied;
+  final bool attackerDied;
+  final String message;
+
+  AttackResult({
+    required this.success,
+    this.damageDealt = 0,
+    this.retaliationDamage = 0,
+    this.targetDied = false,
+    this.attackerDied = false,
+    this.message = '',
+  });
+}
+
 /// Log importance levels
 enum LogLevel { verbose, normal, important }
 
@@ -743,5 +762,267 @@ class CombatResolver {
   /// Clear combat log
   void clearLog() {
     combatLog.clear();
+  }
+
+  // ===========================================================================
+  // TYC3: SINGLE-ATTACK RESOLUTION SYSTEM
+  // ===========================================================================
+
+  /// TYC3: Resolve a single attack from attacker to target
+  /// Handles damage, abilities (fury, shield, ranged), and retaliation
+  AttackResult resolveAttackTYC3(
+    GameCard attacker,
+    GameCard target, {
+    bool isPlayerAttacking = true,
+  }) {
+    // Calculate base damage
+    int damage = attacker.damage;
+
+    // Apply fury bonus
+    final furyBonus = _getFuryBonus(attacker);
+    damage += furyBonus;
+
+    // Apply lane damage bonus if set
+    if (isPlayerAttacking) {
+      damage += _playerLaneDamageBonus;
+    } else {
+      damage += _opponentLaneDamageBonus;
+    }
+
+    // Apply shield reduction on target
+    final targetShield = _getShieldValue(target);
+    final shieldBonus = isPlayerAttacking
+        ? _opponentLaneShieldBonus
+        : _playerLaneShieldBonus;
+    final totalShield = targetShield + shieldBonus;
+    damage = (damage - totalShield).clamp(0, damage);
+
+    // Deal damage to target
+    final targetHpBefore = target.currentHealth;
+    final targetDied = target.takeDamage(damage);
+    final targetHpAfter = target.currentHealth;
+
+    // Log the attack
+    combatLog.add(
+      BattleLogEntry(
+        tick: 0, // TYC3 doesn't use ticks
+        laneDescription: 'TYC3',
+        action: '⚔️ ${attacker.name} ATTACKS',
+        details:
+            '${target.name} takes $damage damage | HP: $targetHpBefore → $targetHpAfter${targetDied ? " 💀" : ""}',
+        isImportant: targetDied,
+        level: targetDied ? LogLevel.important : LogLevel.normal,
+        damageDealt: damage,
+        attackerName: attacker.name,
+        targetName: target.name,
+        targetHpBefore: targetHpBefore,
+        targetHpAfter: targetHpAfter,
+        targetDied: targetDied,
+      ),
+    );
+
+    // Check for retaliation (if target survived and attacker is not ranged)
+    int retaliationDamage = 0;
+    bool attackerDied = false;
+
+    if (!targetDied && !attacker.isRanged && target.isAlive) {
+      // Target retaliates
+      retaliationDamage = target.damage;
+
+      // Apply target's fury
+      retaliationDamage += _getFuryBonus(target);
+
+      // Apply attacker's shield
+      final attackerShield = _getShieldValue(attacker);
+      final attackerShieldBonus = isPlayerAttacking
+          ? _playerLaneShieldBonus
+          : _opponentLaneShieldBonus;
+      retaliationDamage =
+          (retaliationDamage - attackerShield - attackerShieldBonus).clamp(
+            0,
+            retaliationDamage,
+          );
+
+      // Deal retaliation damage
+      final attackerHpBefore = attacker.currentHealth;
+      attackerDied = attacker.takeDamage(retaliationDamage);
+      final attackerHpAfter = attacker.currentHealth;
+
+      // Log retaliation
+      combatLog.add(
+        BattleLogEntry(
+          tick: 0,
+          laneDescription: 'TYC3',
+          action: '↩️ ${target.name} RETALIATES',
+          details:
+              '${attacker.name} takes $retaliationDamage damage | HP: $attackerHpBefore → $attackerHpAfter${attackerDied ? " 💀" : ""}',
+          isImportant: attackerDied,
+          level: attackerDied ? LogLevel.important : LogLevel.normal,
+          damageDealt: retaliationDamage,
+          attackerName: target.name,
+          targetName: attacker.name,
+          targetHpBefore: attackerHpBefore,
+          targetHpAfter: attackerHpAfter,
+          targetDied: attackerDied,
+        ),
+      );
+    } else if (!targetDied && attacker.isRanged) {
+      // Log that ranged attack avoided retaliation
+      combatLog.add(
+        BattleLogEntry(
+          tick: 0,
+          laneDescription: 'TYC3',
+          action: '🏹 RANGED - No retaliation',
+          details:
+              '${attacker.name} is ranged, ${target.name} cannot retaliate',
+          level: LogLevel.verbose,
+        ),
+      );
+    }
+
+    // Apply thorns damage if target has thorns ability
+    if (!attackerDied && target.isAlive) {
+      final thornsDamage = _getThornsDamage(target);
+      if (thornsDamage > 0) {
+        final attackerHpBefore = attacker.currentHealth;
+        attackerDied = attacker.takeDamage(thornsDamage);
+        final attackerHpAfter = attacker.currentHealth;
+
+        combatLog.add(
+          BattleLogEntry(
+            tick: 0,
+            laneDescription: 'TYC3',
+            action: '🌿 ${target.name} THORNS',
+            details:
+                '${attacker.name} takes $thornsDamage thorns damage | HP: $attackerHpBefore → $attackerHpAfter${attackerDied ? " 💀" : ""}',
+            isImportant: attackerDied,
+            level: attackerDied ? LogLevel.important : LogLevel.normal,
+          ),
+        );
+      }
+    }
+
+    return AttackResult(
+      success: true,
+      damageDealt: damage,
+      retaliationDamage: retaliationDamage,
+      targetDied: targetDied,
+      attackerDied: attackerDied,
+      message:
+          '${attacker.name} dealt $damage to ${target.name}${targetDied ? " (killed)" : ""}',
+    );
+  }
+
+  /// TYC3: Get fury bonus from card abilities
+  int _getFuryBonus(GameCard card) {
+    for (final ability in card.abilities) {
+      if (ability.startsWith('fury_')) {
+        return int.tryParse(ability.split('_').last) ?? 0;
+      }
+    }
+    return 0;
+  }
+
+  /// TYC3: Get shield value from card abilities
+  int _getShieldValue(GameCard card) {
+    for (final ability in card.abilities) {
+      if (ability.startsWith('shield_')) {
+        return int.tryParse(ability.split('_').last) ?? 0;
+      }
+    }
+    return 0;
+  }
+
+  /// TYC3: Get thorns damage from card abilities
+  int _getThornsDamage(GameCard card) {
+    for (final ability in card.abilities) {
+      if (ability.startsWith('thorns_')) {
+        return int.tryParse(ability.split('_').last) ?? 0;
+      }
+    }
+    return 0;
+  }
+
+  /// TYC3: Check if attacker can attack target based on range and position
+  /// Returns null if valid, or an error message if invalid
+  String? validateAttackTYC3({
+    required GameCard attacker,
+    required GameCard target,
+    required int attackerRow,
+    required int attackerCol,
+    required int targetRow,
+    required int targetCol,
+    required List<GameCard> guardsInTargetTile,
+  }) {
+    // Check if attacker has enough AP
+    if (!attacker.canAttack()) {
+      return 'Not enough AP to attack (need ${attacker.attackAPCost}, have ${attacker.currentAP})';
+    }
+
+    // Calculate distance (in tiles)
+    final rowDistance = (targetRow - attackerRow).abs();
+    final colDistance = (targetCol - attackerCol).abs();
+
+    // Must be in same column (lane) for now
+    if (colDistance != 0) {
+      return 'Can only attack in the same lane';
+    }
+
+    // Check range
+    if (rowDistance > attacker.attackRange) {
+      return 'Target is out of range (range: ${attacker.attackRange}, distance: $rowDistance)';
+    }
+
+    // Check guard rule - must attack guards first
+    if (guardsInTargetTile.isNotEmpty && !target.isGuard) {
+      final guardNames = guardsInTargetTile.map((g) => g.name).join(', ');
+      return 'Must attack guards first: $guardNames';
+    }
+
+    return null; // Valid attack
+  }
+
+  /// TYC3: Get all valid attack targets for a card
+  List<GameCard> getValidTargetsTYC3({
+    required GameCard attacker,
+    required int attackerRow,
+    required int attackerCol,
+    required List<List<List<GameCard>>> boardCards, // [row][col][cards]
+    required bool isPlayerCard,
+  }) {
+    final targets = <GameCard>[];
+
+    // Determine which rows to check based on range
+    final minRow = (attackerRow - attacker.attackRange).clamp(0, 2);
+    final maxRow = (attackerRow + attacker.attackRange).clamp(0, 2);
+
+    // Only check same column (lane)
+    final col = attackerCol;
+
+    for (int row = minRow; row <= maxRow; row++) {
+      if (row == attackerRow) continue; // Can't attack own tile
+
+      // Check if this is an enemy tile
+      final isEnemyTile = isPlayerCard
+          ? (row < attackerRow)
+          : (row > attackerRow);
+      if (!isEnemyTile) continue;
+
+      final cardsInTile = boardCards[row][col];
+      if (cardsInTile.isEmpty) continue;
+
+      // Check for guards
+      final guards = cardsInTile.where((c) => c.isGuard && c.isAlive).toList();
+
+      if (guards.isNotEmpty) {
+        // Can only target guards
+        targets.addAll(guards);
+      } else {
+        // Can target any card
+        targets.addAll(cardsInTile.where((c) => c.isAlive));
+      }
+    }
+
+    return targets;
   }
 }

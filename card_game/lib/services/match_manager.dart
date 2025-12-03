@@ -1464,6 +1464,179 @@ class MatchManager {
     return true;
   }
 
+  /// TYC3: Attack a target card
+  /// Returns the AttackResult, or null if attack is invalid
+  AttackResult? attackCardTYC3(
+    GameCard attacker,
+    GameCard target,
+    int attackerRow,
+    int attackerCol,
+    int targetRow,
+    int targetCol,
+  ) {
+    if (_currentMatch == null) return null;
+    if (!useTurnBasedSystem) return null;
+
+    // Get guards in target tile
+    final targetTile = _currentMatch!.board.getTile(targetRow, targetCol);
+    final guardsInTile = targetTile.cards
+        .where((c) => c.isGuard && c.isAlive && c != target)
+        .toList();
+
+    // Validate the attack
+    final error = _combatResolver.validateAttackTYC3(
+      attacker: attacker,
+      target: target,
+      attackerRow: attackerRow,
+      attackerCol: attackerCol,
+      targetRow: targetRow,
+      targetCol: targetCol,
+      guardsInTargetTile: guardsInTile,
+    );
+
+    if (error != null) {
+      _log('❌ Attack failed: $error');
+      return null;
+    }
+
+    // Spend AP
+    if (!attacker.spendAttackAP()) {
+      _log('❌ Not enough AP to attack');
+      return null;
+    }
+
+    // Determine if player is attacking
+    final isPlayerAttacking = isPlayerTurn;
+
+    // Resolve the attack
+    final result = _combatResolver.resolveAttackTYC3(
+      attacker,
+      target,
+      isPlayerAttacking: isPlayerAttacking,
+    );
+
+    _log('⚔️ ${attacker.name} attacks ${target.name}');
+    _log('   Damage dealt: ${result.damageDealt}');
+    if (result.targetDied) {
+      _log('   💀 ${target.name} destroyed!');
+      // Remove dead card from tile
+      targetTile.cards.remove(target);
+    }
+    if (result.retaliationDamage > 0) {
+      _log('   ↩️ Retaliation: ${result.retaliationDamage} damage');
+      if (result.attackerDied) {
+        _log('   💀 ${attacker.name} destroyed by retaliation!');
+        // Remove dead attacker from tile
+        final attackerTile = _currentMatch!.board.getTile(
+          attackerRow,
+          attackerCol,
+        );
+        attackerTile.cards.remove(attacker);
+      }
+    }
+    _log('   AP remaining: ${attacker.currentAP}/${attacker.maxAP}');
+
+    return result;
+  }
+
+  /// TYC3: Get valid attack targets for a card
+  List<GameCard> getValidTargetsTYC3(GameCard attacker, int row, int col) {
+    if (_currentMatch == null) return [];
+    if (!useTurnBasedSystem) return [];
+
+    // Build board cards array
+    final boardCards = <List<List<GameCard>>>[];
+    for (int r = 0; r < 3; r++) {
+      final rowCards = <List<GameCard>>[];
+      for (int c = 0; c < 3; c++) {
+        final tile = _currentMatch!.board.getTile(r, c);
+        rowCards.add(tile.cards.where((card) => card.isAlive).toList());
+      }
+      boardCards.add(rowCards);
+    }
+
+    return _combatResolver.getValidTargetsTYC3(
+      attacker: attacker,
+      attackerRow: row,
+      attackerCol: col,
+      boardCards: boardCards,
+      isPlayerCard: isPlayerTurn,
+    );
+  }
+
+  /// TYC3: Attack the enemy base directly (if no guards blocking)
+  /// Returns damage dealt, or 0 if attack failed
+  int attackBaseTYC3(GameCard attacker, int attackerRow, int attackerCol) {
+    if (_currentMatch == null) return 0;
+    if (!useTurnBasedSystem) return 0;
+
+    // Check if attacker can attack
+    if (!attacker.canAttack()) {
+      _log('❌ Not enough AP to attack base');
+      return 0;
+    }
+
+    // Determine target base row
+    final isPlayerAttacking = isPlayerTurn;
+    final targetBaseRow = isPlayerAttacking ? 0 : 2;
+
+    // Check range to base
+    final distance = (targetBaseRow - attackerRow).abs();
+    if (distance > attacker.attackRange) {
+      _log(
+        '❌ Base is out of range (range: ${attacker.attackRange}, distance: $distance)',
+      );
+      return 0;
+    }
+
+    // Check for guards in the path (enemy base tile in same column)
+    final baseTile = _currentMatch!.board.getTile(targetBaseRow, attackerCol);
+    final guards = baseTile.cards.where((c) => c.isGuard && c.isAlive).toList();
+    if (guards.isNotEmpty) {
+      _log(
+        '❌ Must destroy guards first: ${guards.map((g) => g.name).join(", ")}',
+      );
+      return 0;
+    }
+
+    // Check for any enemy cards in base tile
+    if (baseTile.cards.any((c) => c.isAlive)) {
+      _log('❌ Must destroy all enemy cards in base tile first');
+      return 0;
+    }
+
+    // Spend AP
+    if (!attacker.spendAttackAP()) {
+      _log('❌ Not enough AP to attack base');
+      return 0;
+    }
+
+    // Deal damage to base
+    final damage = attacker.damage;
+    final targetPlayer = isPlayerAttacking
+        ? _currentMatch!.opponent
+        : _currentMatch!.player;
+
+    targetPlayer.takeBaseDamage(damage);
+
+    _log(
+      '💥 ${attacker.name} attacks ${targetPlayer.name}\'s base for $damage damage!',
+    );
+    _log('   Base HP: ${targetPlayer.baseHP}/${Player.maxBaseHP}');
+    _log('   AP remaining: ${attacker.currentAP}/${attacker.maxAP}');
+
+    // Check for game over
+    if (targetPlayer.isDefeated) {
+      _currentMatch!.currentPhase = MatchPhase.gameOver;
+      _currentMatch!.winnerId = isPlayerAttacking
+          ? _currentMatch!.player.id
+          : _currentMatch!.opponent.id;
+      _log('🏆 GAME OVER! ${isPlayerAttacking ? "Player" : "Opponent"} wins!');
+    }
+
+    return damage;
+  }
+
   void _log(String message) {
     // Always print for now (keeps existing debug behavior)
     // Simulations additionally capture logs via logSink.
