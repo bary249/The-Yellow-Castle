@@ -1439,9 +1439,6 @@ class MatchManager {
       return "Cannot move opponent's cards";
     }
 
-    if (card.moveSpeed <= 0) {
-      return 'This card cannot move (moveSpeed: ${card.moveSpeed})';
-    }
     if (card.currentAP < 1) {
       return 'Not enough AP to move (need 1, have ${card.currentAP})';
     }
@@ -1586,6 +1583,9 @@ class MatchManager {
     if (_currentMatch == null) return [];
     if (!useTurnBasedSystem) return [];
 
+    // Determine if attacker is a player card based on ownerId
+    final isPlayerCard = attacker.ownerId == _currentMatch!.player.id;
+
     // Build board cards array
     final boardCards = <List<List<GameCard>>>[];
     for (int r = 0; r < 3; r++) {
@@ -1602,7 +1602,7 @@ class MatchManager {
       attackerRow: row,
       attackerCol: col,
       boardCards: boardCards,
-      isPlayerCard: isPlayerTurn,
+      isPlayerCard: isPlayerCard,
     );
   }
 
@@ -1618,8 +1618,8 @@ class MatchManager {
       return 0;
     }
 
-    // Determine target base row
-    final isPlayerAttacking = isPlayerTurn;
+    // Determine target base row based on attacker's owner
+    final isPlayerAttacking = attacker.ownerId == _currentMatch!.player.id;
     final targetBaseRow = isPlayerAttacking ? 0 : 2;
 
     // Check range to base

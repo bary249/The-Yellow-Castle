@@ -122,7 +122,8 @@ class GameCard {
   bool canAttack() => currentAP >= attackAPCost;
 
   /// Check if card has enough AP to move (costs 1 AP)
-  bool canMove() => currentAP >= 1 && moveSpeed > 0;
+  /// Note: moveSpeed is legacy, all cards can move in TYC3
+  bool canMove() => currentAP >= 1;
 
   /// Spend AP for an attack. Returns true if successful.
   bool spendAttackAP() {

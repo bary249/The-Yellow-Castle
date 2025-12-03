@@ -907,7 +907,19 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   }
 
   /// TYC3: Handle tap on a tile (place card or move to)
-  void _onTileTapTYC3(int row, int col, bool canPlace, bool canMoveTo) {
+  void _onTileTapTYC3(
+    int row,
+    int col,
+    bool canPlace,
+    bool canMoveTo,
+    bool canAttackBase,
+  ) {
+    // If we can attack the enemy base, show preview
+    if (canAttackBase && _selectedCardForAction != null) {
+      _showBaseAttackPreviewDialog(row, col);
+      return;
+    }
+
     // If we can move to this tile, do it
     if (canMoveTo && _selectedCardForAction != null) {
       _moveCardTYC3(row, col);
@@ -925,6 +937,217 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       _clearTYC3Selection();
       setState(() {});
     }
+  }
+
+  /// Show preview dialog for attacking enemy base
+  void _showBaseAttackPreviewDialog(int row, int col) {
+    if (_selectedCardForAction == null ||
+        _selectedCardRow == null ||
+        _selectedCardCol == null)
+      return;
+
+    final attacker = _selectedCardForAction!;
+    final match = _matchManager.currentMatch;
+    if (match == null) return;
+
+    final enemyHp = match.opponent.baseHP;
+    final damage = attacker.damage;
+    final hpAfter = (enemyHp - damage).clamp(0, 999);
+    final willWin = hpAfter <= 0;
+    final laneName = _getLaneName(col);
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Column(
+          children: [
+            const Text('🏰 Attack Enemy Base?', textAlign: TextAlign.center),
+            Text(
+              '$laneName Lane',
+              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.red[50],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.red, width: 2),
+              ),
+              child: Column(
+                children: [
+                  Text(
+                    attacker.name,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text('will deal '),
+                      Text(
+                        '$damage',
+                        style: const TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.red,
+                        ),
+                      ),
+                      const Text(' damage'),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.favorite, color: Colors.red, size: 20),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Enemy Base: $enemyHp → $hpAfter',
+                        style: const TextStyle(fontSize: 14),
+                      ),
+                    ],
+                  ),
+                  if (willWin)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 8),
+                      child: Text(
+                        '🏆 VICTORY!',
+                        style: TextStyle(
+                          color: Colors.green,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 20,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _executeBaseAttackTYC3(col);
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text(
+              '🏰 ATTACK BASE',
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Execute attack on enemy base
+  void _executeBaseAttackTYC3(int col) {
+    if (_selectedCardForAction == null ||
+        _selectedCardRow == null ||
+        _selectedCardCol == null)
+      return;
+
+    final attacker = _selectedCardForAction!;
+    final damage = _matchManager.attackBaseTYC3(
+      attacker,
+      _selectedCardRow!,
+      _selectedCardCol!,
+    );
+
+    if (damage > 0) {
+      final match = _matchManager.currentMatch;
+      final enemyHp = match?.opponent.baseHP ?? 0;
+      final laneName = _getLaneName(col);
+
+      showDialog(
+        context: context,
+        barrierDismissible: true,
+        builder: (context) => AlertDialog(
+          title: Column(
+            children: [
+              const Text('🏰 Base Attacked!'),
+              Text(
+                '$laneName Lane',
+                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.green[50],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      '${attacker.name} dealt $damage damage!',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.favorite, color: Colors.red, size: 20),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Enemy Base HP: $enemyHp',
+                          style: const TextStyle(fontSize: 14),
+                        ),
+                      ],
+                    ),
+                    if (enemyHp <= 0)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 8),
+                        child: Text(
+                          '🏆 VICTORY!',
+                          style: TextStyle(
+                            color: Colors.green,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 24,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+
+      // Auto-dismiss after 2 seconds
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted && Navigator.canPop(context)) {
+          Navigator.pop(context);
+        }
+      });
+    }
+
+    _clearTYC3Selection();
+    setState(() {});
   }
 
   /// TYC3: Handle tap on a card (select for action or attack target)
@@ -3650,6 +3873,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
 
     // TYC3: Check if this tile is a valid move destination
     bool canMoveTo = false;
+    bool canAttackBase = false;
     if (_useTYC3Mode &&
         _selectedCardForAction != null &&
         _selectedCardRow != null &&
@@ -3670,12 +3894,32 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
           hasRoom &&
           noEnemyCards &&
           _matchManager.isPlayerTurn;
+
+      // Check if can attack enemy base (row 0)
+      if (row == 0 &&
+          sameCol &&
+          _selectedCardForAction!.canAttack() &&
+          _matchManager.isPlayerTurn) {
+        // Check range
+        final distance = (_selectedCardRow! - 0).abs();
+        if (distance <= _selectedCardForAction!.attackRange) {
+          // Check no enemy cards blocking in base tile
+          final baseTile = _matchManager.currentMatch!.board.getTile(0, col);
+          final hasEnemyCards = baseTile.cards.any((c) => c.isAlive);
+          if (!hasEnemyCards) {
+            canAttackBase = true;
+          }
+        }
+      }
     }
 
     // Determine border color
     Color borderColor;
     double borderWidth;
-    if (canMoveTo) {
+    if (canAttackBase) {
+      borderColor = Colors.orange;
+      borderWidth = 3;
+    } else if (canMoveTo) {
       borderColor = Colors.purple;
       borderWidth = 3;
     } else if (canPlace) {
@@ -3687,7 +3931,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     }
 
     return GestureDetector(
-      onTap: () => _onTileTapTYC3(row, col, canPlace, canMoveTo),
+      onTap: () => _onTileTapTYC3(row, col, canPlace, canMoveTo, canAttackBase),
       child: Container(
         margin: const EdgeInsets.all(2),
         decoration: BoxDecoration(
