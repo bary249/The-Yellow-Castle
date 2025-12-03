@@ -187,48 +187,166 @@ These abilities from the current system need review for turn-based compatibility
 
 ---
 
-## 10. Implementation Phases
+## 10. Implementation Phases (Detailed)
 
-### Phase 1: Core Turn System
-- [ ] Remove simultaneous submission system
-- [ ] Implement turn alternation with random first player
-- [ ] Add 30-second turn timer
-- [ ] Add "End Turn" button
-- [ ] Implement first-turn card limit (1 card for first player)
+### Phase 1: Model Updates (Foundation)
+**Files to modify:**
+- `lib/models/card.dart` - Add AP fields
+- `lib/models/player.dart` - Add base HP
+- `lib/models/match_state.dart` - Add turn tracking
+- `lib/models/tile.dart` - Update capacity to 4 cards
 
-### Phase 2: AP System
-- [ ] Add AP fields to `GameCard` model (currentAP, maxAP, attackAPCost)
-- [ ] Implement AP regeneration at turn start
-- [ ] Update card UI to show AP (top-right corner)
-- [ ] Update card UI to show attack cost (top-left corner)
+**Tasks:**
+- [ ] Add to `GameCard`: `maxAP`, `currentAP`, `attackAPCost`, `apPerTurn`
+- [ ] Add to `GameCard`: `attackRange` (1 = normal, 2 = long range)
+- [ ] Add to `Player`: `baseHP`, `maxBaseHP` (rename from crystalHP)
+- [ ] Add to `MatchState`: `activePlayerId`, `turnStartTime`, `isFirstTurn`, `cardsPlayedThisTurn`
+- [ ] Update `Tile`: change max cards from 2 to 4 (2×2 grid)
+- [ ] Update `GameCard.copy()`, `toJson()`, `fromJson()` for new fields
+- [ ] Add `GameCard.regenerateAP()` method
+- [ ] Add `GameCard.canAttack()`, `GameCard.canMove()` helpers
 
-### Phase 3: Movement System
-- [ ] Implement tile-based movement (1 AP per tile)
-- [ ] Add movement UI (select card → select destination)
-- [ ] Enforce movement restrictions (only to adjacent tiles)
+### Phase 2: Card Library Updates
+**Files to modify:**
+- `lib/data/card_library.dart` - Add AP values to all cards
 
-### Phase 4: Combat System
-- [ ] Implement manual target selection
-- [ ] Implement attack action (spend AP, deal damage)
-- [ ] Implement retaliation system
-- [ ] Implement "take position" on kill (middle tiles only)
+**Tasks:**
+- [ ] Define AP values for each card based on current tick/moveSpeed:
+  - Tick 1-2 cards → likely 2 AP (fast attackers)
+  - Tick 3-5 cards → likely 1 AP (slower, harder hitters)
+  - MoveSpeed 2 cards → 2 AP (cavalry/horsemen)
+  - MoveSpeed 0 cards → 1 AP but stationary
+- [ ] Define `attackAPCost` for each card (most = 1, heavy hitters = 2)
+- [ ] Add `Long_Range` ability to cannons/artillery
+- [ ] Update ability strings: `ranged` (no retaliation), `guard`, etc.
 
-### Phase 5: Base System
-- [ ] Add Base HP to player model
-- [ ] Implement base as attackable target
-- [ ] Implement Guard ability (must attack guard first)
-- [ ] Update win condition to base HP depletion
+### Phase 3: Turn System Overhaul
+**Files to modify:**
+- `lib/services/match_manager.dart` - Core turn logic
+- `lib/models/match_state.dart` - Phase enum updates
 
-### Phase 6: Ability Updates
-- [ ] Implement Ranged (no retaliation)
-- [ ] Review and update all existing abilities
-- [ ] Test ability interactions
+**Tasks:**
+- [ ] Update `MatchPhase` enum: remove `combatPhase`, add `playerTurn`, `opponentTurn`
+- [ ] Add `startPlayerTurn()` and `startOpponentTurn()` methods
+- [ ] Implement random first player selection in `startMatch()`
+- [ ] Add 30-second turn timer tracking
+- [ ] Implement `endTurn()` method (switch active player)
+- [ ] Remove simultaneous submission logic (`playerSubmitted`, `opponentSubmitted`)
+- [ ] Implement first-turn restriction (1 card only for first player)
+- [ ] Add AP regeneration at turn start
 
-### Phase 7: Mode Synchronization
-- [ ] Update Simulation mode
-- [ ] Update Player VS AI mode
-- [ ] Update Online mode
-- [ ] Ensure all 3 modes use identical logic
+### Phase 4: Action System (Move & Attack)
+**Files to create:**
+- `lib/services/action_manager.dart` - Handle player actions
+
+**Files to modify:**
+- `lib/services/match_manager.dart` - Integrate actions
+- `lib/services/combat_resolver.dart` - Rewrite for single attacks
+
+**Tasks:**
+- [ ] Create `ActionManager` service with:
+  - `moveCard(card, fromTile, toTile)` - costs 1 AP
+  - `attackTarget(card, target)` - costs card's attackAPCost
+  - `placeCard(card, tile)` - from hand to base tile
+- [ ] Implement movement validation:
+  - Can only move to adjacent tiles (forward/backward in same lane)
+  - Cannot move to full tiles (4 cards max)
+  - Cannot move to enemy base tiles
+- [ ] Implement attack validation:
+  - Must have enough AP
+  - Target must be in range (1 tile normal, 2 tiles for Long_Range)
+  - Must respect Guard (attack guards before base)
+- [ ] Rewrite `CombatResolver` for single-attack resolution:
+  - `resolveAttack(attacker, target)` - deal damage + retaliation
+  - Remove tick system entirely
+  - Keep ability processing (fury, shield, etc.)
+
+### Phase 5: Retaliation System
+**Files to modify:**
+- `lib/services/combat_resolver.dart` - Add retaliation
+
+**Tasks:**
+- [ ] Implement retaliation in `resolveAttack()`:
+  - After attacker deals damage, defender deals damage back
+  - Retaliation happens even if defender dies
+  - Skip retaliation if attacker has `ranged` ability
+  - Skip retaliation if target is base (base has no damage)
+- [ ] Implement "take position" on kill:
+  - If attacker kills defender in middle zone
+  - Attacker moves to defender's position
+  - Only for middle tiles, not base tiles
+
+### Phase 6: UI Overhaul
+**Files to modify:**
+- `lib/screens/test_match_screen.dart` - Main battle UI
+
+**Tasks:**
+- [ ] Add "End Turn" button (prominent, always visible)
+- [ ] Add turn indicator (whose turn + 30s countdown)
+- [ ] Update card display:
+  - Top-left: Attack AP cost
+  - Top-right: Current AP / Max AP
+  - Bottom-left: Damage
+  - Bottom-right: HP
+- [ ] Implement card selection UI (tap to select)
+- [ ] Implement target selection UI (tap enemy card/base)
+- [ ] Implement move destination UI (tap adjacent tile)
+- [ ] Add action buttons: "Move", "Attack", "Cancel"
+- [ ] Show valid targets/destinations highlighted
+- [ ] Remove tick-based combat log, add action log
+- [ ] Update tile display for 4-card capacity (2×2 grid)
+
+### Phase 7: AI Updates
+**Files to modify:**
+- `lib/services/simple_ai.dart` - Rewrite for turn-based
+
+**Tasks:**
+- [ ] Rewrite AI to take actions during its turn:
+  - Evaluate board state
+  - Decide which cards to place (up to 2)
+  - Decide which cards to move
+  - Decide which cards to attack with
+  - Execute actions sequentially
+- [ ] Add AI decision logic:
+  - Prioritize attacking low-HP enemies
+  - Prioritize attacking base when no guards
+  - Move cards forward when safe
+  - Place cards to defend when threatened
+
+### Phase 8: Simulation Mode Updates
+**Files to modify:**
+- `lib/simulation/match_simulator.dart` - Update for turn-based
+- `bin/simulate_games.dart` - Update CLI
+
+**Tasks:**
+- [ ] Update simulator to alternate turns
+- [ ] AI plays both sides taking actions
+- [ ] Track new metrics (AP usage, attacks per turn, etc.)
+- [ ] Ensure deterministic results for testing
+
+### Phase 9: Online Mode Updates
+**Files to modify:**
+- `lib/services/matchmaking_service.dart`
+- `lib/screens/matchmaking_screen.dart`
+- Firebase rules if needed
+
+**Tasks:**
+- [ ] Update Firebase match document structure:
+  - `activePlayerId` - whose turn
+  - `turnStartTime` - for timer sync
+  - `actions` - list of actions taken this turn
+- [ ] Implement real-time action sync
+- [ ] Handle turn timeout (auto-end turn)
+- [ ] Validate actions server-side (or client-side with verification)
+
+### Phase 10: Testing & Balance
+**Tasks:**
+- [ ] Run simulation mode with new system
+- [ ] Balance AP costs and regeneration rates
+- [ ] Balance attack costs vs damage output
+- [ ] Test all abilities in new system
+- [ ] Test Guard + Ranged + Long_Range interactions
+- [ ] Full playtest of all 3 modes
 
 ---
 
