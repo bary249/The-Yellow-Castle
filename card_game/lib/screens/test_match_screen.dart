@@ -1547,6 +1547,23 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     );
   }
 
+  /// Build stat icon with current/max format (e.g., "2/3")
+  Widget _buildStatIconWithMax(
+    IconData icon,
+    int current,
+    int max, {
+    double size = 10,
+  }) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: size, color: Colors.grey[800]),
+        const SizedBox(width: 1),
+        Text('$current/$max', style: TextStyle(fontSize: size - 2)),
+      ],
+    );
+  }
+
   IconData _abilityIconData(String ability) {
     if (ability.startsWith('shield')) return Icons.shield;
     if (ability.startsWith('fury')) return Icons.whatshot;
@@ -1821,9 +1838,14 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    // TYC3: Show AP instead of tick
+                    // TYC3: Show AP (current/max) and attack cost
                     if (_useTYC3Mode) ...[
-                      _buildStatIcon(Icons.bolt, card.maxAP, size: 14),
+                      _buildStatIconWithMax(
+                        Icons.bolt,
+                        card.currentAP,
+                        card.maxAP,
+                        size: 14,
+                      ),
                       _buildStatIcon(
                         Icons.gps_fixed,
                         card.attackAPCost,
@@ -4192,11 +4214,18 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                                               size: 10,
                                             ),
                                             const SizedBox(width: 2),
-                                            // TYC3: Show AP instead of tick
+                                            // TYC3: Show AP (current/max) and attack cost
                                             if (_useTYC3Mode) ...[
-                                              _buildStatIcon(
+                                              _buildStatIconWithMax(
                                                 Icons.bolt,
                                                 card.currentAP,
+                                                card.maxAP,
+                                                size: 10,
+                                              ),
+                                              const SizedBox(width: 2),
+                                              _buildStatIcon(
+                                                Icons.gps_fixed,
+                                                card.attackAPCost,
                                                 size: 10,
                                               ),
                                             ] else ...[
@@ -4528,10 +4557,11 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                                 Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    // TYC3: Show AP instead of tick
+                                    // TYC3: Show AP (current/max) and attack cost
                                     if (_useTYC3Mode) ...[
-                                      _buildStatIcon(
+                                      _buildStatIconWithMax(
                                         Icons.bolt,
+                                        card.currentAP,
                                         card.maxAP,
                                         size: 10,
                                       ),
