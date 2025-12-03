@@ -73,6 +73,18 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   GameHero? _opponentHero;
   bool _heroSelectionComplete = false;
 
+  // ===== TYC3: Turn-based AP system state =====
+  bool _useTYC3Mode = true; // Enable TYC3 by default for testing
+  Timer? _turnTimer;
+  int _turnSecondsRemaining = 30;
+
+  // TYC3 action state
+  GameCard? _selectedCardForAction; // Card selected for move/attack
+  int? _selectedCardRow;
+  int? _selectedCardCol;
+  String? _currentAction; // 'move', 'attack', or null
+  List<GameCard> _validTargets = [];
+
   /// Get the staging key for a tile.
   String _tileKey(int row, int col) => '$row,$col';
 
@@ -90,7 +102,246 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   @override
   void dispose() {
     _matchListener?.cancel();
+    _turnTimer?.cancel();
     super.dispose();
+  }
+
+  // ===== TYC3: Turn timer methods =====
+
+  void _startTurnTimer() {
+    _turnTimer?.cancel();
+    _turnSecondsRemaining = 30;
+    _turnTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      setState(() {
+        _turnSecondsRemaining--;
+        if (_turnSecondsRemaining <= 0) {
+          timer.cancel();
+          // Auto-end turn when timer expires
+          if (_matchManager.isPlayerTurn) {
+            _endTurnTYC3();
+          }
+        }
+      });
+    });
+  }
+
+  void _endTurnTYC3() {
+    _turnTimer?.cancel();
+    _matchManager.endTurnTYC3();
+    _clearTYC3Selection();
+
+    // If it's now AI's turn, let AI play
+    if (_matchManager.isOpponentTurn && !_isOnlineMode) {
+      _doAITurnTYC3();
+    } else {
+      // Start timer for player's next turn
+      _startTurnTimer();
+    }
+    setState(() {});
+  }
+
+  void _clearTYC3Selection() {
+    _selectedCardForAction = null;
+    _selectedCardRow = null;
+    _selectedCardCol = null;
+    _currentAction = null;
+    _validTargets = [];
+  }
+
+  /// TYC3: Place a card from hand onto a tile
+  void _placeCardTYC3(int row, int col) {
+    if (_selectedCard == null) return;
+
+    // Check if it's player's turn
+    if (!_matchManager.isPlayerTurn) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("It's not your turn!")));
+      return;
+    }
+
+    // Check if can play more cards
+    if (!_matchManager.canPlayMoreCards) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Card limit reached (${_matchManager.maxCardsThisTurn} per turn)',
+          ),
+        ),
+      );
+      return;
+    }
+
+    // Try to place the card
+    final success = _matchManager.placeCardTYC3(_selectedCard!, row, col);
+
+    if (success) {
+      _selectedCard = null;
+      setState(() {});
+    } else {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Cannot place card here')));
+    }
+  }
+
+  /// TYC3: Select a card on the board for action (move/attack)
+  void _selectCardForAction(GameCard card, int row, int col) {
+    // Check if it's player's turn
+    if (!_matchManager.isPlayerTurn) return;
+
+    // Check if this is a player card (row 1-2)
+    if (row == 0) return; // Can't select enemy cards
+
+    setState(() {
+      if (_selectedCardForAction == card) {
+        // Deselect if already selected
+        _clearTYC3Selection();
+      } else {
+        _selectedCardForAction = card;
+        _selectedCardRow = row;
+        _selectedCardCol = col;
+        _currentAction = null;
+
+        // Get valid targets for this card
+        _validTargets = _matchManager.getValidTargetsTYC3(card, row, col);
+      }
+    });
+  }
+
+  /// TYC3: Perform attack on a target
+  void _attackTargetTYC3(GameCard target, int targetRow, int targetCol) {
+    if (_selectedCardForAction == null ||
+        _selectedCardRow == null ||
+        _selectedCardCol == null)
+      return;
+
+    final result = _matchManager.attackCardTYC3(
+      _selectedCardForAction!,
+      target,
+      _selectedCardRow!,
+      _selectedCardCol!,
+      targetRow,
+      targetCol,
+    );
+
+    if (result != null) {
+      // Attack succeeded
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result.message),
+          duration: const Duration(seconds: 1),
+        ),
+      );
+    }
+
+    _clearTYC3Selection();
+    setState(() {});
+  }
+
+  /// TYC3: Move card to adjacent tile
+  void _moveCardTYC3(int toRow, int toCol) {
+    if (_selectedCardForAction == null ||
+        _selectedCardRow == null ||
+        _selectedCardCol == null)
+      return;
+
+    final success = _matchManager.moveCardTYC3(
+      _selectedCardForAction!,
+      _selectedCardRow!,
+      _selectedCardCol!,
+      toRow,
+      toCol,
+    );
+
+    if (success) {
+      // Update selection to new position
+      _selectedCardRow = toRow;
+      _selectedCardCol = toCol;
+      // Refresh valid targets
+      _validTargets = _matchManager.getValidTargetsTYC3(
+        _selectedCardForAction!,
+        toRow,
+        toCol,
+      );
+    } else {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Cannot move there')));
+    }
+
+    setState(() {});
+  }
+
+  Future<void> _doAITurnTYC3() async {
+    // Simple AI: place cards and attack
+    final match = _matchManager.currentMatch;
+    if (match == null) return;
+
+    // Wait a bit for visual feedback
+    await Future.delayed(const Duration(milliseconds: 500));
+
+    // AI places cards (simplified - just place from hand to base)
+    final hand = match.opponent.hand;
+    final maxCards = _matchManager.maxCardsThisTurn;
+    int cardsPlaced = 0;
+
+    for (final card in hand.toList()) {
+      if (cardsPlaced >= maxCards) break;
+
+      // Try to place on each base tile
+      for (int col = 0; col < 3; col++) {
+        if (_matchManager.placeCardTYC3(card, 0, col)) {
+          cardsPlaced++;
+          break;
+        }
+      }
+    }
+
+    // AI attacks with cards that have AP
+    for (int row = 0; row < 3; row++) {
+      for (int col = 0; col < 3; col++) {
+        final tile = match.board.getTile(row, col);
+        for (final card in tile.cards.toList()) {
+          if (!card.isAlive) continue;
+
+          // Check if this is an AI card (row 0-1)
+          if (row > 1) continue;
+
+          // Try to attack
+          final targets = _matchManager.getValidTargetsTYC3(card, row, col);
+          if (targets.isNotEmpty && card.canAttack()) {
+            // Attack first valid target
+            final target = targets.first;
+            // Find target position
+            for (int tr = 0; tr < 3; tr++) {
+              for (int tc = 0; tc < 3; tc++) {
+                final targetTile = match.board.getTile(tr, tc);
+                if (targetTile.cards.contains(target)) {
+                  _matchManager.attackCardTYC3(card, target, row, col, tr, tc);
+                  break;
+                }
+              }
+            }
+          }
+
+          // Try to attack base if possible
+          if (card.canAttack()) {
+            _matchManager.attackBaseTYC3(card, row, col);
+          }
+        }
+      }
+    }
+
+    // End AI turn
+    await Future.delayed(const Duration(milliseconds: 300));
+    _matchManager.endTurnTYC3();
+    _startTurnTimer();
+    if (mounted) setState(() {});
   }
 
   Future<void> _initPlayerAndMatch() async {
@@ -783,20 +1034,47 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       'Enemy deck: ${opponentDeck.name} (${opponentDeck.cards.length} cards)',
     );
 
-    _matchManager.startMatch(
-      playerId: id,
-      playerName: name,
-      playerDeck: playerDeck,
-      opponentId: opponentIdFinal,
-      opponentName: opponentNameFinal,
-      opponentDeck: opponentDeck,
-      opponentIsAI: !_isOnlineMode,
-      playerAttunedElement: playerHero.terrainAffinities.first,
-      opponentAttunedElement: opponentHero.terrainAffinities.first,
-      playerHero: playerHero,
-      opponentHero: opponentHero,
-    );
+    // Use TYC3 mode if enabled
+    if (_useTYC3Mode && !_isOnlineMode) {
+      debugPrint('🎮 Starting TYC3 turn-based match');
+      _matchManager.startMatchTYC3(
+        playerId: id,
+        playerName: name,
+        playerDeck: playerDeck,
+        opponentId: opponentIdFinal,
+        opponentName: opponentNameFinal,
+        opponentDeck: opponentDeck,
+        opponentIsAI: true,
+        playerAttunedElement: playerHero.terrainAffinities.first,
+        opponentAttunedElement: opponentHero.terrainAffinities.first,
+        playerHero: playerHero,
+        opponentHero: opponentHero,
+      );
+
+      // Start turn timer if it's player's turn
+      if (_matchManager.isPlayerTurn) {
+        _startTurnTimer();
+      } else {
+        // AI goes first
+        _doAITurnTYC3();
+      }
+    } else {
+      _matchManager.startMatch(
+        playerId: id,
+        playerName: name,
+        playerDeck: playerDeck,
+        opponentId: opponentIdFinal,
+        opponentName: opponentNameFinal,
+        opponentDeck: opponentDeck,
+        opponentIsAI: !_isOnlineMode,
+        playerAttunedElement: playerHero.terrainAffinities.first,
+        opponentAttunedElement: opponentHero.terrainAffinities.first,
+        playerHero: playerHero,
+        opponentHero: opponentHero,
+      );
+    }
     _clearStaging();
+    _clearTYC3Selection();
     setState(() {});
   }
 
@@ -810,6 +1088,12 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   void _placeCardOnTile(int row, int col) {
     final match = _matchManager.currentMatch;
     if (match == null || _selectedCard == null) return;
+
+    // TYC3 Mode: Use direct placement
+    if (_useTYC3Mode) {
+      _placeCardTYC3(row, col);
+      return;
+    }
 
     // In online mode, once you've submitted, you can't place more cards this turn
     if (_isOnlineMode && _mySubmitted) {
@@ -1160,14 +1444,45 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: Text('Turn ${match.turnNumber} - ${match.currentPhase.name}'),
+          title: _useTYC3Mode
+              ? _buildTYC3Title(match)
+              : Text('Turn ${match.turnNumber} - ${match.currentPhase.name}'),
           actions: [
+            // TYC3: Show turn timer
+            if (_useTYC3Mode && !match.isGameOver && _matchManager.isPlayerTurn)
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 4,
+                ),
+                margin: const EdgeInsets.only(right: 8),
+                decoration: BoxDecoration(
+                  color: _turnSecondsRemaining <= 10
+                      ? Colors.red
+                      : Colors.green,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.timer, size: 16, color: Colors.white),
+                    const SizedBox(width: 4),
+                    Text(
+                      '$_turnSecondsRemaining s',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             if (match.isGameOver)
               IconButton(
                 icon: const Icon(Icons.refresh),
                 onPressed: _startNewMatch,
               ),
-            if (!match.isGameOver && !match.playerSubmitted)
+            if (!match.isGameOver && !_useTYC3Mode && !match.playerSubmitted)
               IconButton(
                 icon: const Icon(Icons.clear_all),
                 onPressed: () {
@@ -1179,7 +1494,9 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
           ],
         ),
         body: match.isGameOver ? _buildGameOver(match) : _buildMatchView(match),
-        floatingActionButton: match.currentPhase == MatchPhase.combatPhase
+        floatingActionButton: _useTYC3Mode
+            ? _buildTYC3ActionButton(match)
+            : match.currentPhase == MatchPhase.combatPhase
             // During combat: show skip button (combat auto-advances, but ENTER skips all)
             ? FloatingActionButton.extended(
                 onPressed: () => _matchManager.skipToEnd(),
@@ -1190,6 +1507,62 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
               )
             : _buildSubmitButton(match),
       ),
+    );
+  }
+
+  // ===== TYC3 UI Builders =====
+
+  Widget _buildTYC3Title(MatchState match) {
+    final isMyTurn = _matchManager.isPlayerTurn;
+    final turnText = isMyTurn ? 'Your Turn' : "Opponent's Turn";
+    final cardsPlayed = match.cardsPlayedThisTurn;
+    final maxCards = _matchManager.maxCardsThisTurn;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'Turn ${match.turnNumber} - $turnText',
+          style: const TextStyle(fontSize: 16),
+        ),
+        if (isMyTurn)
+          Text(
+            'Cards: $cardsPlayed/$maxCards',
+            style: const TextStyle(fontSize: 12, color: Colors.white70),
+          ),
+      ],
+    );
+  }
+
+  Widget? _buildTYC3ActionButton(MatchState match) {
+    if (match.isGameOver) return null;
+
+    // Show "End Turn" button during player's turn
+    if (_matchManager.isPlayerTurn) {
+      return FloatingActionButton.extended(
+        onPressed: _endTurnTYC3,
+        label: const Text('End Turn'),
+        icon: const Icon(Icons.skip_next),
+        backgroundColor: Colors.blue[700],
+        heroTag: 'endTurn',
+      );
+    }
+
+    // Show waiting indicator during opponent's turn
+    return FloatingActionButton.extended(
+      onPressed: null,
+      label: const Text("Opponent's Turn"),
+      icon: const SizedBox(
+        width: 16,
+        height: 16,
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+        ),
+      ),
+      backgroundColor: Colors.grey,
+      heroTag: 'waiting',
     );
   }
 
