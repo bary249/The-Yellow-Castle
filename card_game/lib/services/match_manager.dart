@@ -1319,10 +1319,12 @@ class MatchManager {
     _currentMatch!.cardsPlayedThisTurn++;
 
     // Initialize card's AP and set owner
-    card.currentAP = card.maxAP;
+    // Card starts with maxAP - 1 (placing costs 1 AP)
+    card.currentAP = card.maxAP - 1;
     card.ownerId = active.id;
 
     _log('✅ Placed ${card.name} at tile ($row, $col)');
+    _log('   AP: ${card.currentAP}/${card.maxAP} (1 AP spent on placement)');
     _log(
       '   Cards played this turn: ${_currentMatch!.cardsPlayedThisTurn}/$maxCardsThisTurn',
     );
