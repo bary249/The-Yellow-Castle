@@ -610,6 +610,204 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     });
   }
 
+  /// Show battle result dialog for AI attacks (async, waits for dismiss)
+  Future<void> _showAIBattleResultDialog(
+    AttackResult result,
+    GameCard attacker,
+    GameCard target,
+  ) async {
+    await showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) => AlertDialog(
+        title: const Text('🤖 Enemy Attack!', textAlign: TextAlign.center),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Attack damage
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.red[100],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.red, width: 2),
+              ),
+              child: Column(
+                children: [
+                  Text(
+                    attacker.name,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text('dealt '),
+                      Text(
+                        '${result.damageDealt}',
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.red,
+                        ),
+                      ),
+                      const Text(' damage to'),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    target.name,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: Colors.blue,
+                    ),
+                  ),
+                  if (result.targetDied)
+                    const Text(
+                      '💀 DESTROYED!',
+                      style: TextStyle(
+                        color: Colors.red,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+
+            // Retaliation
+            if (result.retaliationDamage > 0) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.blue[50],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      target.name,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const Text(' retaliated for '),
+                    Text(
+                      '${result.retaliationDamage}',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blue,
+                      ),
+                    ),
+                    if (result.attackerDied)
+                      const Text(' 💀', style: TextStyle(fontSize: 18)),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+
+    // Brief pause after dialog closes
+    await Future.delayed(const Duration(milliseconds: 200));
+  }
+
+  /// Show dialog when AI attacks player's base
+  Future<void> _showAIBaseAttackDialog(GameCard attacker, int damage) async {
+    final match = _matchManager.currentMatch;
+    final playerHp = match?.player.baseHP ?? 0;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) => AlertDialog(
+        title: const Text('⚠️ BASE UNDER ATTACK!', textAlign: TextAlign.center),
+        backgroundColor: Colors.red[50],
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.red[100],
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.red, width: 3),
+              ),
+              child: Column(
+                children: [
+                  Text(
+                    attacker.name,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text('attacked your base for'),
+                  const SizedBox(height: 4),
+                  Text(
+                    '$damage',
+                    style: const TextStyle(
+                      fontSize: 48,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.red,
+                    ),
+                  ),
+                  const Text(
+                    'DAMAGE!',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.red,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.favorite, color: Colors.red, size: 24),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Base HP: $playerHp',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('OK', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    // Brief pause after dialog closes
+    await Future.delayed(const Duration(milliseconds: 200));
+  }
+
   /// TYC3: Move card to adjacent tile
   void _moveCardTYC3(int toRow, int toCol) {
     if (_selectedCardForAction == null ||
@@ -804,8 +1002,11 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                   );
                   if (result != null) {
                     debugPrint('AI: ${result.message}');
-                    if (mounted) setState(() {});
-                    await Future.delayed(const Duration(milliseconds: 300));
+                    if (mounted) {
+                      setState(() {});
+                      // Show battle result dialog for AI attack
+                      await _showAIBattleResultDialog(result, card, target);
+                    }
                   }
                   break;
                 }
@@ -818,8 +1019,11 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
             final damage = _matchManager.attackBaseTYC3(card, row, col);
             if (damage > 0) {
               debugPrint('AI attacked player base for $damage damage!');
-              if (mounted) setState(() {});
-              await Future.delayed(const Duration(milliseconds: 300));
+              if (mounted) {
+                setState(() {});
+                // Show base attack dialog
+                await _showAIBaseAttackDialog(card, damage);
+              }
             }
           }
         }
