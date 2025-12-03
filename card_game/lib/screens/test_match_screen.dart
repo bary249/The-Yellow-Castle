@@ -230,6 +230,9 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         // Deselect if already selected
         _clearTYC3Selection();
       } else {
+        // Clear any hand card selection first
+        _selectedCard = null;
+
         _selectedCardForAction = card;
         _selectedCardRow = row;
         _selectedCardCol = col;
@@ -966,15 +969,8 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     );
 
     if (success) {
-      // Update selection to new position
-      _selectedCardRow = toRow;
-      _selectedCardCol = toCol;
-      // Refresh valid targets
-      _validTargets = _matchManager.getValidTargetsTYC3(
-        _selectedCardForAction!,
-        toRow,
-        toCol,
-      );
+      // Clear selection after move to avoid confusion
+      _clearTYC3Selection();
     }
 
     setState(() {});
@@ -4721,6 +4717,8 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                       return GestureDetector(
                         onTap: () {
                           setState(() {
+                            // Clear board card selection when selecting hand card
+                            _clearTYC3Selection();
                             _selectedCard = isSelected ? null : card;
                           });
                         },
