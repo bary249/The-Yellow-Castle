@@ -1388,24 +1388,19 @@ class MatchManager {
     final activeId = _currentMatch!.activePlayerId;
     if (activeId == null) return;
 
-    final isPlayer = activeId == _currentMatch!.player.id;
-
     // Iterate through all tiles on the board
     for (int row = 0; row < 3; row++) {
       for (int col = 0; col < 3; col++) {
         final tile = _currentMatch!.board.getTile(row, col);
 
         for (final card in tile.cards) {
-          // Determine if this card belongs to the active player
-          // Player cards are on rows 1-2, opponent cards are on rows 0-1
-          // More accurately: check tile ownership or card placement
-          final isPlayerCard =
-              (row == 2) || (row == 1 && tile.owner == TileOwner.player);
-          final isOpponentCard =
-              (row == 0) || (row == 1 && tile.owner == TileOwner.opponent);
-
-          if ((isPlayer && isPlayerCard) || (!isPlayer && isOpponentCard)) {
+          // Use ownerId to determine if card belongs to active player
+          if (card.ownerId == activeId && card.isAlive) {
+            final oldAP = card.currentAP;
             card.regenerateAP();
+            _log(
+              '   ⚡ ${card.name} regenerates AP: $oldAP → ${card.currentAP}/${card.maxAP}',
+            );
           }
         }
       }
@@ -1452,9 +1447,11 @@ class MatchManager {
     if (isPlayerCard && toRow == 0) return 'Cannot move into enemy base';
     if (!isPlayerCard && toRow == 2) return 'Cannot move into enemy base';
 
-    // Check destination tile for enemy cards
+    // Check destination tile for enemy cards (alive ones only)
     final destTile = _currentMatch!.board.getTile(toRow, toCol);
-    final hasEnemyCards = destTile.cards.any((c) => c.ownerId != card.ownerId);
+    final hasEnemyCards = destTile.cards.any(
+      (c) => c.ownerId != card.ownerId && c.isAlive,
+    );
     if (hasEnemyCards) {
       return 'Tile occupied by enemy - attack to clear it first';
     }
@@ -1555,13 +1552,23 @@ class MatchManager {
       targetTile.cards.remove(target);
 
       // Melee attacker advances to target's tile after kill (if not ranged and attacker survived)
+      // Only advance if no other enemy cards remain on the target tile
       if (!attacker.isRanged && !result.attackerDied && attacker.isAlive) {
-        // Move attacker to target tile (free move after kill)
-        attackerTile.cards.remove(attacker);
-        targetTile.addCard(attacker);
-        _log(
-          '   🚶 ${attacker.name} advances to (${targetRow},${targetCol}) after kill',
+        final hasOtherEnemies = targetTile.cards.any(
+          (c) => c.ownerId != attacker.ownerId && c.isAlive,
         );
+        if (!hasOtherEnemies) {
+          // Move attacker to target tile (free move after kill)
+          attackerTile.cards.remove(attacker);
+          targetTile.addCard(attacker);
+          _log(
+            '   🚶 ${attacker.name} advances to (${targetRow},${targetCol}) after kill',
+          );
+        } else {
+          _log(
+            '   ⚠️ ${attacker.name} cannot advance - other enemies remain on tile',
+          );
+        }
       }
     }
     if (result.retaliationDamage > 0) {

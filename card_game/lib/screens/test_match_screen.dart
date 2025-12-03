@@ -3944,9 +3944,9 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       final adjacentRow = (row - _selectedCardRow!).abs() == 1;
       final notEnemyBase = row != 0; // Can't move to enemy base
       final hasRoom = tile.cards.length < 4;
-      // Cannot move to tile with enemy cards
+      // Cannot move to tile with alive enemy cards
       final noEnemyCards = !tile.cards.any(
-        (c) => c.ownerId != _selectedCardForAction!.ownerId,
+        (c) => c.ownerId != _selectedCardForAction!.ownerId && c.isAlive,
       );
       canMoveTo =
           sameCol &&
