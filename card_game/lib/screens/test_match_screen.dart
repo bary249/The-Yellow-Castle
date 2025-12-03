@@ -277,6 +277,64 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     setState(() {});
   }
 
+  /// TYC3: Handle tap on a tile (place card or move to)
+  void _onTileTapTYC3(int row, int col, bool canPlace, bool canMoveTo) {
+    // If we can move to this tile, do it
+    if (canMoveTo && _selectedCardForAction != null) {
+      _moveCardTYC3(row, col);
+      return;
+    }
+
+    // If we can place a card here, do it
+    if (canPlace && _selectedCard != null) {
+      _placeCardOnTile(row, col);
+      return;
+    }
+
+    // Otherwise, clear selection if we have one
+    if (_selectedCardForAction != null) {
+      _clearTYC3Selection();
+      setState(() {});
+    }
+  }
+
+  /// TYC3: Handle tap on a card (select for action or attack target)
+  void _onCardTapTYC3(
+    GameCard card,
+    int row,
+    int col,
+    bool isPlayerCard,
+    bool isOpponent,
+  ) {
+    if (!_useTYC3Mode) return;
+
+    // Not player's turn - do nothing
+    if (!_matchManager.isPlayerTurn) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("It's not your turn!")));
+      return;
+    }
+
+    // If we have a card selected and this is a valid target, attack it
+    if (_selectedCardForAction != null && _validTargets.contains(card)) {
+      _attackTargetTYC3(card, row, col);
+      return;
+    }
+
+    // If tapping a player card, select it for action
+    if (isPlayerCard && row >= 1) {
+      // Player cards are in row 1-2
+      _selectCardForAction(card, row, col);
+      return;
+    }
+
+    // If tapping an opponent card without selection, show details
+    if (isOpponent) {
+      _showCardDetails(card);
+    }
+  }
+
   Future<void> _doAITurnTYC3() async {
     // Simple AI: place cards and attack
     final match = _matchManager.currentMatch;
@@ -2907,16 +2965,46 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         ...stagedCardsOnTile, // Player staged cards at BOTTOM (only during placement)
     ];
 
+    // TYC3: Check if this tile is a valid move destination
+    bool canMoveTo = false;
+    if (_useTYC3Mode &&
+        _selectedCardForAction != null &&
+        _selectedCardRow != null &&
+        _selectedCardCol != null) {
+      // Can move to adjacent tile in same column (forward/backward)
+      final sameCol = col == _selectedCardCol;
+      final adjacentRow = (row - _selectedCardRow!).abs() == 1;
+      final notEnemyBase = row != 0; // Can't move to enemy base
+      final hasRoom = tile.cards.length < 4;
+      canMoveTo =
+          sameCol &&
+          adjacentRow &&
+          notEnemyBase &&
+          hasRoom &&
+          _matchManager.isPlayerTurn;
+    }
+
+    // Determine border color
+    Color borderColor;
+    double borderWidth;
+    if (canMoveTo) {
+      borderColor = Colors.purple;
+      borderWidth = 3;
+    } else if (canPlace) {
+      borderColor = Colors.green;
+      borderWidth = 3;
+    } else {
+      borderColor = Colors.grey[400]!;
+      borderWidth = 1;
+    }
+
     return GestureDetector(
-      onTap: canPlace ? () => _placeCardOnTile(row, col) : null,
+      onTap: () => _onTileTapTYC3(row, col, canPlace, canMoveTo),
       child: Container(
         margin: const EdgeInsets.all(2),
         decoration: BoxDecoration(
-          color: bgColor,
-          border: Border.all(
-            color: canPlace ? Colors.green : Colors.grey[400]!,
-            width: canPlace ? 3 : 1,
-          ),
+          color: canMoveTo ? Colors.purple[50]! : bgColor,
+          border: Border.all(color: borderColor, width: borderWidth),
           borderRadius: BorderRadius.circular(6),
         ),
         child: ClipRRect(
@@ -2982,34 +3070,49 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                       final isOpponent = opponentCardsAtTile.contains(card);
                       final isPlayerCard = playerCardsAtTile.contains(card);
 
-                      // Determine position label (FRONT/BACK)
+                      // TYC3: No front/back - just show card index for reference
                       String? positionLabel;
                       bool isFrontCard = false;
 
-                      if (isOpponent && opponentCardsAtTile.isNotEmpty) {
-                        // For opponent: index 0 in original list is FRONT
-                        final originalIndex = opponentCardsAtTile.indexOf(card);
-                        isFrontCard = originalIndex == 0;
-                        if (opponentCardsAtTile.length > 1) {
-                          positionLabel = isFrontCard ? '▼ FRONT' : '▲ BACK';
-                        } else {
-                          positionLabel = '▼ FRONT';
+                      if (_useTYC3Mode) {
+                        // TYC3: Show if card is selected for action
+                        if (_selectedCardForAction == card) {
+                          positionLabel = '✓ SELECTED';
+                        } else if (isOpponent) {
+                          // Show if this is a valid target
+                          if (_validTargets.contains(card)) {
+                            positionLabel = '🎯 TARGET';
+                          }
                         }
-                      } else if (isPlayerCard && playerCardsAtTile.isNotEmpty) {
-                        // For player: index 0 in list is FRONT
-                        final idx = playerCardsAtTile.indexOf(card);
-                        isFrontCard = idx == 0;
-                        if (playerCardsAtTile.length > 1) {
-                          positionLabel = isFrontCard ? '▲ FRONT' : '▼ BACK';
-                        } else {
-                          positionLabel = '▲ FRONT';
+                      } else {
+                        // Legacy front/back logic
+                        if (isOpponent && opponentCardsAtTile.isNotEmpty) {
+                          final originalIndex = opponentCardsAtTile.indexOf(
+                            card,
+                          );
+                          isFrontCard = originalIndex == 0;
+                          if (opponentCardsAtTile.length > 1) {
+                            positionLabel = isFrontCard ? '▼ FRONT' : '▲ BACK';
+                          } else {
+                            positionLabel = '▼ FRONT';
+                          }
+                        } else if (isPlayerCard &&
+                            playerCardsAtTile.isNotEmpty) {
+                          final idx = playerCardsAtTile.indexOf(card);
+                          isFrontCard = idx == 0;
+                          if (playerCardsAtTile.length > 1) {
+                            positionLabel = isFrontCard ? '▲ FRONT' : '▼ BACK';
+                          } else {
+                            positionLabel = '▲ FRONT';
+                          }
+                        } else if (isStaged) {
+                          positionLabel = '📦 STAGED';
                         }
-                      } else if (isStaged) {
-                        positionLabel = '📦 STAGED';
                       }
 
-                      // Check if this is the opponent's back card and it's concealed
+                      // Check if this is the opponent's back card and it's concealed (legacy only)
                       final isOpponentBackCard =
+                          !_useTYC3Mode &&
                           isOpponent &&
                           opponentCardsAtTile.length >= 2 &&
                           opponentCardsAtTile.indexOf(card) == 1;
@@ -3037,12 +3140,20 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
 
                       final rarityBorder = _getRarityBorderColor(card);
 
+                      // TYC3: Highlight selected card and valid targets
+                      final isSelected =
+                          _useTYC3Mode && _selectedCardForAction == card;
+                      final isValidTarget =
+                          _useTYC3Mode && _validTargets.contains(card);
+
                       return GestureDetector(
-                        onTap:
-                            isStaged &&
-                                match.currentPhase != MatchPhase.combatPhase
-                            ? () => _removeCardFromTile(row, col, card)
-                            : null,
+                        onTap: () => _onCardTapTYC3(
+                          card,
+                          row,
+                          col,
+                          isPlayerCard,
+                          isOpponent,
+                        ),
                         onLongPress: () => _showCardDetails(card),
                         child: Stack(
                           children: [
@@ -3050,13 +3161,29 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                               margin: const EdgeInsets.symmetric(vertical: 1),
                               padding: const EdgeInsets.all(3),
                               decoration: BoxDecoration(
-                                color: cardColor,
+                                color: isSelected
+                                    ? Colors.yellow[200]!
+                                    : isValidTarget
+                                    ? Colors.orange[200]!
+                                    : cardColor,
                                 borderRadius: BorderRadius.circular(4),
-                                border: isStaged
+                                border: isSelected
+                                    ? Border.all(
+                                        color: Colors.yellow[700]!,
+                                        width: 3,
+                                      )
+                                    : isValidTarget
+                                    ? Border.all(
+                                        color: Colors.orange[700]!,
+                                        width: 2,
+                                      )
+                                    : isStaged
                                     ? Border.all(color: Colors.amber, width: 2)
                                     : Border.all(
                                         color: rarityBorder,
-                                        width: isFrontCard ? 2 : 1,
+                                        width: _useTYC3Mode
+                                            ? 1
+                                            : (isFrontCard ? 2 : 1),
                                       ),
                               ),
                               child: isConcealed
