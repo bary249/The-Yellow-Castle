@@ -189,36 +189,36 @@ These abilities from the current system need review for turn-based compatibility
 
 ## 10. Implementation Phases (Detailed)
 
-### Phase 1: Model Updates (Foundation)
-**Files to modify:**
-- `lib/models/card.dart` - Add AP fields
-- `lib/models/player.dart` - Add base HP
-- `lib/models/match_state.dart` - Add turn tracking
-- `lib/models/tile.dart` - Update capacity to 4 cards
+### Phase 1: Model Updates (Foundation) ✅ COMPLETE
+**Files modified:**
+- `lib/models/card.dart` - Added AP fields
+- `lib/models/player.dart` - Added base HP
+- `lib/models/match_state.dart` - Added turn tracking
+- `lib/models/tile.dart` - Updated capacity to 4 cards
 
 **Tasks:**
-- [ ] Add to `GameCard`: `maxAP`, `currentAP`, `attackAPCost`, `apPerTurn`
-- [ ] Add to `GameCard`: `attackRange` (1 = normal, 2 = long range)
-- [ ] Add to `Player`: `baseHP`, `maxBaseHP` (rename from crystalHP)
-- [ ] Add to `MatchState`: `activePlayerId`, `turnStartTime`, `isFirstTurn`, `cardsPlayedThisTurn`
-- [ ] Update `Tile`: change max cards from 2 to 4 (2×2 grid)
-- [ ] Update `GameCard.copy()`, `toJson()`, `fromJson()` for new fields
-- [ ] Add `GameCard.regenerateAP()` method
-- [ ] Add `GameCard.canAttack()`, `GameCard.canMove()` helpers
+- [x] Add to `GameCard`: `maxAP`, `currentAP`, `attackAPCost`, `apPerTurn`
+- [x] Add to `GameCard`: `attackRange` (1 = normal, 2 = long range)
+- [x] Add to `Player`: `baseHP`, `maxBaseHP` (renamed from crystalHP)
+- [x] Add to `MatchState`: `activePlayerId`, `turnStartTime`, `isFirstTurn`, `cardsPlayedThisTurn`
+- [x] Update `Tile`: change max cards from 2 to 4 (2×2 grid)
+- [x] Update `GameCard.copy()`, `toJson()`, `fromJson()` for new fields
+- [x] Add `GameCard.regenerateAP()` method
+- [x] Add `GameCard.canAttack()`, `GameCard.canMove()` helpers
 
-### Phase 2: Card Library Updates
-**Files to modify:**
-- `lib/data/card_library.dart` - Add AP values to all cards
+### Phase 2: Card Library Updates ✅ COMPLETE
+**Files modified:**
+- `lib/data/card_library.dart` - Added AP values to all cards
 
 **Tasks:**
-- [ ] Define AP values for each card based on current tick/moveSpeed:
-  - Tick 1-2 cards → likely 2 AP (fast attackers)
-  - Tick 3-5 cards → likely 1 AP (slower, harder hitters)
+- [x] Define AP values for each card based on current tick/moveSpeed:
+  - Tick 1-2 cards → 2 AP (fast attackers)
+  - Tick 3-5 cards → 1 AP (slower, harder hitters)
   - MoveSpeed 2 cards → 2 AP (cavalry/horsemen)
   - MoveSpeed 0 cards → 1 AP but stationary
-- [ ] Define `attackAPCost` for each card (most = 1, heavy hitters = 2)
-- [ ] Add `Long_Range` ability to cannons/artillery
-- [ ] Update ability strings: `ranged` (no retaliation), `guard`, etc.
+- [x] Define `attackAPCost` for each card (most = 1, heavy hitters = 2)
+- [x] Add `attackRange: 2` to cannons/artillery for long range
+- [x] Update ability strings: `ranged` (no retaliation), `guard`, `long_range`
 
 ### Phase 3: Turn System Overhaul
 **Files to modify:**
