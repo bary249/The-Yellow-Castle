@@ -276,6 +276,15 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       targetCol,
     );
 
+    // Calculate terrain buffs for display
+    final match = _matchManager.currentMatch;
+    final targetTile = match?.board.getTile(targetRow, targetCol);
+    final tileTerrain = targetTile?.terrain;
+    final attackerHasTerrainBuff =
+        tileTerrain != null && attacker.element == tileTerrain;
+    final defenderHasTerrainBuff =
+        tileTerrain != null && target.element == tileTerrain;
+
     final attackerHpAfter = (attacker.currentHealth - preview.retaliationDamage)
         .clamp(0, attacker.health);
     final targetHpAfter = (target.currentHealth - preview.damageDealt).clamp(
@@ -312,7 +321,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                   willDie: preview.attackerDied,
                   color: Colors.blue,
                 ),
-                // Arrow
+                // Arrow with damage info
                 Column(
                   children: [
                     Text(
@@ -323,6 +332,15 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                         color: Colors.red,
                       ),
                     ),
+                    if (attackerHasTerrainBuff)
+                      Text(
+                        '+1 $tileTerrain',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.green[700],
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     const Icon(
                       Icons.arrow_forward,
                       size: 32,
@@ -343,6 +361,15 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                           color: Colors.orange,
                         ),
                       ),
+                      if (defenderHasTerrainBuff)
+                        Text(
+                          '+1 $tileTerrain',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.green[700],
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       const Text(
                         'retaliation',
                         style: TextStyle(fontSize: 10, color: Colors.orange),
@@ -981,9 +1008,17 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     final match = _matchManager.currentMatch;
     if (match == null) return;
 
+    // Calculate terrain buff
+    final baseTile = match.board.getTile(row, col);
+    final tileTerrain = baseTile.terrain;
+    final hasTerrainBuff =
+        tileTerrain != null && attacker.element == tileTerrain;
+    final terrainBonus = hasTerrainBuff ? 1 : 0;
+
     final enemyHp = match.opponent.baseHP;
-    final damage = attacker.damage;
-    final hpAfter = (enemyHp - damage).clamp(0, 999);
+    final baseDamage = attacker.damage;
+    final totalDamage = baseDamage + terrainBonus;
+    final hpAfter = (enemyHp - totalDamage).clamp(0, 999);
     final willWin = hpAfter <= 0;
     final laneName = _getLaneName(col);
 
@@ -1024,7 +1059,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                     children: [
                       const Text('will deal '),
                       Text(
-                        '$damage',
+                        '$totalDamage',
                         style: const TextStyle(
                           fontSize: 28,
                           fontWeight: FontWeight.bold,
@@ -1034,6 +1069,19 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                       const Text(' damage'),
                     ],
                   ),
+                  // Show terrain buff breakdown
+                  if (hasTerrainBuff)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        '($baseDamage base + $terrainBonus $tileTerrain terrain)',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.green[700],
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
                   const SizedBox(height: 8),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,

@@ -1693,8 +1693,15 @@ class MatchManager {
       return 0;
     }
 
-    // Deal damage to base
-    final damage = attacker.damage;
+    // Calculate damage with terrain buff
+    int damage = attacker.damage;
+    final tileTerrain = baseTile.terrain;
+    int terrainBonus = 0;
+    if (tileTerrain != null && attacker.element == tileTerrain) {
+      terrainBonus = 1;
+      damage += terrainBonus;
+    }
+
     final targetPlayer = isPlayerAttacking
         ? _currentMatch!.opponent
         : _currentMatch!.player;
@@ -1702,7 +1709,7 @@ class MatchManager {
     targetPlayer.takeBaseDamage(damage);
 
     _log(
-      '💥 ${attacker.name} attacks ${targetPlayer.name}\'s base for $damage damage!',
+      '💥 ${attacker.name} attacks ${targetPlayer.name}\'s base for $damage damage!${terrainBonus > 0 ? " (+$terrainBonus terrain)" : ""}',
     );
     _log('   Base HP: ${targetPlayer.baseHP}/${Player.maxBaseHP}');
     _log('   AP remaining: ${attacker.currentAP}/${attacker.maxAP}');
