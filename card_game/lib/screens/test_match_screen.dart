@@ -198,6 +198,17 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     // Check if this is a player card (row 1-2)
     if (row == 0) return; // Can't select enemy cards
 
+    // Check if card has any AP to do anything
+    if (card.currentAP <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${card.name} has no AP left this turn'),
+          duration: const Duration(seconds: 1),
+        ),
+      );
+      return;
+    }
+
     setState(() {
       if (_selectedCardForAction == card) {
         // Deselect if already selected
@@ -208,8 +219,12 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         _selectedCardCol = col;
         _currentAction = null;
 
-        // Get valid targets for this card
-        _validTargets = _matchManager.getValidTargetsTYC3(card, row, col);
+        // Get valid targets for this card (only if can attack)
+        if (card.canAttack()) {
+          _validTargets = _matchManager.getValidTargetsTYC3(card, row, col);
+        } else {
+          _validTargets = []; // No targets if can't attack
+        }
       }
     });
   }
