@@ -1451,8 +1451,14 @@ class MatchManager {
     if (isPlayerCard && toRow == 0) return 'Cannot move into enemy base';
     if (!isPlayerCard && toRow == 2) return 'Cannot move into enemy base';
 
-    // Check destination tile capacity
+    // Check destination tile for enemy cards
     final destTile = _currentMatch!.board.getTile(toRow, toCol);
+    final hasEnemyCards = destTile.cards.any((c) => c.ownerId != card.ownerId);
+    if (hasEnemyCards) {
+      return 'Tile occupied by enemy - attack to clear it first';
+    }
+
+    // Check destination tile capacity (only friendly cards count)
     if (!destTile.canAddCard) return 'Destination tile is full (max 4 cards)';
 
     return null; // Can move
