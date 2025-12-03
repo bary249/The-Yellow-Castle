@@ -1117,7 +1117,8 @@ class CombatResolver {
     for (int row = minRow; row <= maxRow; row++) {
       if (row == attackerRow) continue; // Can't attack own tile
 
-      // Check if this is an enemy tile
+      // Check if this is an enemy tile (toward enemy base)
+      // Player cards attack toward row 0, AI cards attack toward row 2
       final isEnemyTile = isPlayerCard
           ? (row < attackerRow)
           : (row > attackerRow);
@@ -1126,15 +1127,21 @@ class CombatResolver {
       final cardsInTile = boardCards[row][col];
       if (cardsInTile.isEmpty) continue;
 
-      // Check for guards
-      final guards = cardsInTile.where((c) => c.isGuard && c.isAlive).toList();
+      // Filter to only enemy cards (cards with different owner)
+      final enemyCards = cardsInTile
+          .where((c) => c.isAlive && c.ownerId != attacker.ownerId)
+          .toList();
+      if (enemyCards.isEmpty) continue;
+
+      // Check for guards among enemy cards
+      final guards = enemyCards.where((c) => c.isGuard).toList();
 
       if (guards.isNotEmpty) {
         // Can only target guards
         targets.addAll(guards);
       } else {
-        // Can target any card
-        targets.addAll(cardsInTile.where((c) => c.isAlive));
+        // Can target any enemy card
+        targets.addAll(enemyCards);
       }
     }
 
