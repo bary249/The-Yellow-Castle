@@ -72,7 +72,7 @@ class GameCard {
     this.rarity = 1,
   }) : abilities = List.unmodifiable(abilities ?? const []),
        currentHealth = health,
-       currentAP = 0; // Cards start with 0 AP when placed
+       currentAP = maxAP; // Cards start with full AP
 
   /// Create a copy of this card (for deck shuffling/dealing)
   GameCard copy() {
