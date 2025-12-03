@@ -1557,21 +1557,31 @@ class MatchManager {
 
       // Melee attacker advances to target's tile after kill (if not ranged and attacker survived)
       // Only advance if no other enemy cards remain on the target tile
+      // NEVER advance into enemy base (row 0 for player, row 2 for AI)
       if (!attacker.isRanged && !result.attackerDied && attacker.isAlive) {
-        final hasOtherEnemies = targetTile.cards.any(
-          (c) => c.ownerId != attacker.ownerId && c.isAlive,
-        );
-        if (!hasOtherEnemies) {
-          // Move attacker to target tile (free move after kill)
-          attackerTile.cards.remove(attacker);
-          targetTile.addCard(attacker);
-          _log(
-            '   🚶 ${attacker.name} advances to (${targetRow},${targetCol}) after kill',
-          );
+        final isPlayerCard = attacker.ownerId == _currentMatch!.player.id;
+        final isEnemyBase =
+            (isPlayerCard && targetRow == 0) ||
+            (!isPlayerCard && targetRow == 2);
+
+        if (isEnemyBase) {
+          _log('   ⚠️ ${attacker.name} cannot advance into enemy base');
         } else {
-          _log(
-            '   ⚠️ ${attacker.name} cannot advance - other enemies remain on tile',
+          final hasOtherEnemies = targetTile.cards.any(
+            (c) => c.ownerId != attacker.ownerId && c.isAlive,
           );
+          if (!hasOtherEnemies) {
+            // Move attacker to target tile (free move after kill)
+            attackerTile.cards.remove(attacker);
+            targetTile.addCard(attacker);
+            _log(
+              '   🚶 ${attacker.name} advances to (${targetRow},${targetCol}) after kill',
+            );
+          } else {
+            _log(
+              '   ⚠️ ${attacker.name} cannot advance - other enemies remain on tile',
+            );
+          }
         }
       }
     }
