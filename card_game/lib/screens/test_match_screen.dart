@@ -844,12 +844,22 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    _buildStatIcon(Icons.timer, card.tick, size: 14),
-                    _buildStatIcon(
-                      Icons.directions_run,
-                      card.moveSpeed,
-                      size: 14,
-                    ),
+                    // TYC3: Show AP instead of tick
+                    if (_useTYC3Mode) ...[
+                      _buildStatIcon(Icons.bolt, card.maxAP, size: 14),
+                      _buildStatIcon(
+                        Icons.gps_fixed,
+                        card.attackAPCost,
+                        size: 14,
+                      ),
+                    ] else ...[
+                      _buildStatIcon(Icons.timer, card.tick, size: 14),
+                      _buildStatIcon(
+                        Icons.directions_run,
+                        card.moveSpeed,
+                        size: 14,
+                      ),
+                    ],
                   ],
                 ),
                 const SizedBox(height: 8),
@@ -2785,33 +2795,55 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     ][col];
     final lane = match.getLane(lanePos);
 
-    // Get cards at this tile based on position (using new positional system)
+    // Get cards at this tile based on position
     List<GameCard> playerCardsAtTile = [];
     List<GameCard> opponentCardsAtTile = [];
 
     // Fog of war: check if this lane's enemy base is revealed
     final isEnemyBaseRevealed = match.revealedEnemyBaseLanes.contains(lanePos);
 
-    if (row == 0) {
-      // Enemy base row - show player's attacking cards + opponent's staging cards
-      // Player cards that reached enemy base (always visible - they're YOUR cards)
-      playerCardsAtTile = lane.playerCards.enemyBaseCards.aliveCards;
-      // Opponent's staging cards (with fog of war)
-      if (isEnemyBaseRevealed) {
-        opponentCardsAtTile = lane.opponentCards.baseCards.aliveCards;
+    // TYC3 Mode: Read cards directly from tile.cards
+    if (_useTYC3Mode) {
+      final tileCards = tile.cards.where((c) => c.isAlive).toList();
+
+      if (row == 0) {
+        // Enemy base - all cards here are opponent's
+        opponentCardsAtTile = tileCards;
+      } else if (row == 2) {
+        // Player base - all cards here are player's
+        playerCardsAtTile = tileCards;
+      } else {
+        // Middle row - cards belong to tile owner
+        if (tile.owner == TileOwner.player) {
+          playerCardsAtTile = tileCards;
+        } else if (tile.owner == TileOwner.opponent) {
+          opponentCardsAtTile = tileCards;
+        } else {
+          // Contested - need to determine by who placed them
+          // For now, assume all are visible
+          playerCardsAtTile = tileCards;
+        }
       }
-    } else if (row == 1) {
-      // Middle - show both sides' middle cards
-      playerCardsAtTile = lane.playerCards.middleCards.aliveCards;
-      opponentCardsAtTile = lane.opponentCards.middleCards.aliveCards;
-    } else if (row == 2) {
-      // Player base row - show player's staging cards + opponent's attacking cards
-      playerCardsAtTile = lane.playerCards.baseCards.aliveCards;
-      // Opponent cards that reached player base
-      opponentCardsAtTile = lane.opponentCards.enemyBaseCards.aliveCards;
+    } else {
+      // Legacy mode: use lane system
+      if (row == 0) {
+        // Enemy base row - show player's attacking cards + opponent's staging cards
+        playerCardsAtTile = lane.playerCards.enemyBaseCards.aliveCards;
+        if (isEnemyBaseRevealed) {
+          opponentCardsAtTile = lane.opponentCards.baseCards.aliveCards;
+        }
+      } else if (row == 1) {
+        // Middle - show both sides' middle cards
+        playerCardsAtTile = lane.playerCards.middleCards.aliveCards;
+        opponentCardsAtTile = lane.opponentCards.middleCards.aliveCards;
+      } else if (row == 2) {
+        // Player base row - show player's staging cards + opponent's attacking cards
+        playerCardsAtTile = lane.playerCards.baseCards.aliveCards;
+        opponentCardsAtTile = lane.opponentCards.enemyBaseCards.aliveCards;
+      }
     }
 
-    // Count existing cards for placement check (only player cards count for placement)
+    // Count existing cards for placement check
     final existingPlayerCount = playerCardsAtTile.length;
 
     // Can place on player-owned tiles with room, but NOT enemy base (row 0)
@@ -3097,17 +3129,26 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                                               size: 10,
                                             ),
                                             const SizedBox(width: 2),
-                                            _buildStatIcon(
-                                              Icons.timer,
-                                              card.tick,
-                                              size: 10,
-                                            ),
-                                            const SizedBox(width: 2),
-                                            _buildStatIcon(
-                                              Icons.directions_run,
-                                              card.moveSpeed,
-                                              size: 10,
-                                            ),
+                                            // TYC3: Show AP instead of tick
+                                            if (_useTYC3Mode) ...[
+                                              _buildStatIcon(
+                                                Icons.bolt,
+                                                card.currentAP,
+                                                size: 10,
+                                              ),
+                                            ] else ...[
+                                              _buildStatIcon(
+                                                Icons.timer,
+                                                card.tick,
+                                                size: 10,
+                                              ),
+                                              const SizedBox(width: 2),
+                                              _buildStatIcon(
+                                                Icons.directions_run,
+                                                card.moveSpeed,
+                                                size: 10,
+                                              ),
+                                            ],
                                           ],
                                         ),
                                       ],
@@ -3424,17 +3465,32 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                                 Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    _buildStatIcon(
-                                      Icons.timer,
-                                      card.tick,
-                                      size: 10,
-                                    ),
-                                    const SizedBox(width: 2),
-                                    _buildStatIcon(
-                                      Icons.directions_run,
-                                      card.moveSpeed,
-                                      size: 10,
-                                    ),
+                                    // TYC3: Show AP instead of tick
+                                    if (_useTYC3Mode) ...[
+                                      _buildStatIcon(
+                                        Icons.bolt,
+                                        card.maxAP,
+                                        size: 10,
+                                      ),
+                                      const SizedBox(width: 2),
+                                      _buildStatIcon(
+                                        Icons.gps_fixed,
+                                        card.attackAPCost,
+                                        size: 10,
+                                      ),
+                                    ] else ...[
+                                      _buildStatIcon(
+                                        Icons.timer,
+                                        card.tick,
+                                        size: 10,
+                                      ),
+                                      const SizedBox(width: 2),
+                                      _buildStatIcon(
+                                        Icons.directions_run,
+                                        card.moveSpeed,
+                                        size: 10,
+                                      ),
+                                    ],
                                   ],
                                 ),
                                 if (card.abilities.isNotEmpty) ...[
