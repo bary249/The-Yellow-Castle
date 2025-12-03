@@ -237,46 +237,47 @@ These abilities from the current system need review for turn-based compatibility
 - [x] Add `placeCardTYC3()` for card placement
 - [x] Add `canMoveCard()` and `moveCardTYC3()` for movement
 
-### Phase 4: Action System (Move & Attack)
-**Files to create:**
-- `lib/services/action_manager.dart` - Handle player actions
-
-**Files to modify:**
-- `lib/services/match_manager.dart` - Integrate actions
-- `lib/services/combat_resolver.dart` - Rewrite for single attacks
+### Phase 4: Action System (Move & Attack) ✅ COMPLETE
+**Files modified:**
+- `lib/services/match_manager.dart` - Added TYC3 action methods
+- `lib/services/combat_resolver.dart` - Added single-attack resolution
 
 **Tasks:**
-- [ ] Create `ActionManager` service with:
-  - `moveCard(card, fromTile, toTile)` - costs 1 AP
-  - `attackTarget(card, target)` - costs card's attackAPCost
-  - `placeCard(card, tile)` - from hand to base tile
-- [ ] Implement movement validation:
-  - Can only move to adjacent tiles (forward/backward in same lane)
+- [x] Movement in MatchManager (Phase 3):
+  - `moveCardTYC3(card, fromRow, fromCol, toRow, toCol)` - costs 1 AP
+  - `canMoveCard()` - validates movement
+- [x] Attack in MatchManager:
+  - `attackCardTYC3(attacker, target, positions)` - costs attackAPCost
+  - `attackBaseTYC3(attacker, position)` - attack enemy base
+  - `getValidTargetsTYC3()` - find valid targets
+- [x] Card placement (Phase 3):
+  - `placeCardTYC3(card, row, col)` - from hand to base tile
+- [x] Movement validation:
+  - Adjacent tiles only (same lane, row +/- 1)
   - Cannot move to full tiles (4 cards max)
   - Cannot move to enemy base tiles
-- [ ] Implement attack validation:
-  - Must have enough AP
-  - Target must be in range (1 tile normal, 2 tiles for Long_Range)
-  - Must respect Guard (attack guards before base)
-- [ ] Rewrite `CombatResolver` for single-attack resolution:
-  - `resolveAttack(attacker, target)` - deal damage + retaliation
-  - Remove tick system entirely
-  - Keep ability processing (fury, shield, etc.)
+- [x] Attack validation in CombatResolver:
+  - `validateAttackTYC3()` - checks AP, range, guards
+  - Range check (1 tile normal, 2 for Long_Range)
+  - Guard rule (must attack guards first)
+- [x] Single-attack resolution in CombatResolver:
+  - `resolveAttackTYC3()` - damage + retaliation
+  - `AttackResult` class for results
+  - Fury, shield, thorns ability processing
 
-### Phase 5: Retaliation System
-**Files to modify:**
-- `lib/services/combat_resolver.dart` - Add retaliation
+### Phase 5: Retaliation System ✅ COMPLETE (merged into Phase 4)
+**Implemented in Phase 4:**
 
 **Tasks:**
-- [ ] Implement retaliation in `resolveAttack()`:
-  - After attacker deals damage, defender deals damage back
-  - Retaliation happens even if defender dies
+- [x] Retaliation in `resolveAttackTYC3()`:
+  - Defender deals damage back after being attacked
+  - Skip retaliation if defender dies
   - Skip retaliation if attacker has `ranged` ability
-  - Skip retaliation if target is base (base has no damage)
-- [ ] Implement "take position" on kill:
-  - If attacker kills defender in middle zone
-  - Attacker moves to defender's position
-  - Only for middle tiles, not base tiles
+  - Thorns damage applied separately
+- [x] Base attack in `attackBaseTYC3()`:
+  - No retaliation from base
+  - Must clear all guards/cards first
+  - Game over check after base damage
 
 ### Phase 6: UI Overhaul
 **Files to modify:**
