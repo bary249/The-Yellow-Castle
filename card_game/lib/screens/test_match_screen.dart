@@ -497,13 +497,17 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       targetCol,
     );
 
-    if (result != null) {
+    // Clear selection first to avoid stale references
+    _clearTYC3Selection();
+
+    if (result != null && mounted) {
       // Show battle result dialog
       _showBattleResultDialog(result, attacker, target, attackerCol);
     }
 
-    _clearTYC3Selection();
-    setState(() {});
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   /// Show battle result dialog with animation

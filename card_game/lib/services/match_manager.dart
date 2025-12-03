@@ -1546,20 +1546,29 @@ class MatchManager {
 
     _log('⚔️ ${attacker.name} attacks ${target.name}');
     _log('   Damage dealt: ${result.damageDealt}');
+
+    final attackerTile = _currentMatch!.board.getTile(attackerRow, attackerCol);
+
     if (result.targetDied) {
       _log('   💀 ${target.name} destroyed!');
       // Remove dead card from tile
       targetTile.cards.remove(target);
+
+      // Melee attacker advances to target's tile after kill (if not ranged and attacker survived)
+      if (!attacker.isRanged && !result.attackerDied && attacker.isAlive) {
+        // Move attacker to target tile (free move after kill)
+        attackerTile.cards.remove(attacker);
+        targetTile.addCard(attacker);
+        _log(
+          '   🚶 ${attacker.name} advances to (${targetRow},${targetCol}) after kill',
+        );
+      }
     }
     if (result.retaliationDamage > 0) {
       _log('   ↩️ Retaliation: ${result.retaliationDamage} damage');
       if (result.attackerDied) {
         _log('   💀 ${attacker.name} destroyed by retaliation!');
         // Remove dead attacker from tile
-        final attackerTile = _currentMatch!.board.getTile(
-          attackerRow,
-          attackerCol,
-        );
         attackerTile.cards.remove(attacker);
       }
     }
