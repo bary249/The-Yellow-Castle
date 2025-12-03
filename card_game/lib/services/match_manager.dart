@@ -1439,8 +1439,12 @@ class MatchManager {
       return "Cannot move opponent's cards";
     }
 
-    if (!card.canMove())
+    if (card.moveSpeed <= 0) {
+      return 'This card cannot move (moveSpeed: ${card.moveSpeed})';
+    }
+    if (card.currentAP < 1) {
       return 'Not enough AP to move (need 1, have ${card.currentAP})';
+    }
 
     // Must be adjacent (same column, row +/- 1)
     if (fromCol != toCol) return 'Can only move forward/backward in same lane';
