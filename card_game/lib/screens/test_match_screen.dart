@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
@@ -1279,6 +1280,18 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     }
   }
 
+  /// Count AI cards in a specific lane (all rows)
+  int _countAICardsInLane(MatchState match, int col) {
+    int count = 0;
+    for (int row = 0; row < 3; row++) {
+      final tile = match.board.getTile(row, col);
+      count += tile.cards
+          .where((c) => c.ownerId == match.opponent.id && c.isAlive)
+          .length;
+    }
+    return count;
+  }
+
   Future<void> _doAITurnTYC3() async {
     // Guard: Only run if it's actually the AI's turn
     if (!_matchManager.isOpponentTurn) {
@@ -1296,18 +1309,57 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     // Wait a bit for visual feedback
     await Future.delayed(const Duration(milliseconds: 500));
 
-    // AI places cards (simplified - just place from hand to base)
+    // AI places cards with smart lane selection
     final hand = match.opponent.hand;
     final maxCards = _matchManager.maxCardsThisTurn;
     int cardsPlaced = 0;
+    final random = Random();
 
-    for (final card in hand.toList()) {
+    // Shuffle hand for variety
+    final shuffledHand = hand.toList()..shuffle(random);
+
+    for (final card in shuffledHand) {
       if (cardsPlaced >= maxCards) break;
 
-      // Try to place on each base tile
+      // Smart lane selection: prefer lanes with fewer enemy cards or matching terrain
+      final laneScores = <int, double>{};
       for (int col = 0; col < 3; col++) {
-        if (_matchManager.placeCardTYC3(card, 0, col)) {
+        double score = random.nextDouble() * 2; // Base randomness (0-2)
+
+        // Check player presence in this lane (middle row)
+        final middleTile = match.board.getTile(1, col);
+        final playerCardsInMiddle = middleTile.cards
+            .where((c) => c.ownerId == match.player.id && c.isAlive)
+            .length;
+
+        // Prefer lanes where player has cards (to contest)
+        score += playerCardsInMiddle * 1.5;
+
+        // Check AI presence in this lane
+        final aiCardsInLane = _countAICardsInLane(match, col);
+        // Spread cards across lanes (penalty for overcrowding)
+        score -= aiCardsInLane * 0.5;
+
+        // Terrain bonus: prefer placing cards on matching terrain
+        final baseTile = match.board.getTile(0, col);
+        if (baseTile.terrain != null && card.element == baseTile.terrain) {
+          score += 2.0;
+        }
+
+        laneScores[col] = score;
+      }
+
+      // Sort lanes by score (highest first)
+      final sortedLanes = laneScores.entries.toList()
+        ..sort((a, b) => b.value.compareTo(a.value));
+
+      // Try to place in best lane
+      for (final entry in sortedLanes) {
+        if (_matchManager.placeCardTYC3(card, 0, entry.key)) {
           cardsPlaced++;
+          debugPrint(
+            'AI placed ${card.name} in lane ${entry.key} (score: ${entry.value.toStringAsFixed(1)})',
+          );
           if (mounted) setState(() {});
           await Future.delayed(const Duration(milliseconds: 200));
           break;
@@ -1315,88 +1367,129 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       }
     }
 
-    // AI moves cards forward (from row 0 to row 1)
-    // Process in order: row 0 first (base), then row 1 (middle)
+    // AI moves cards forward with smart decisions
+    // Collect all AI cards that can move
+    final movableCards = <({GameCard card, int row, int col})>[];
     for (int row = 0; row <= 1; row++) {
       for (int col = 0; col < 3; col++) {
         final tile = match.board.getTile(row, col);
-        for (final card in tile.cards.toList()) {
-          if (!card.isAlive) continue;
-          if (!card.canMove()) continue;
-
-          // AI cards move from row 0 -> 1 -> 2 (toward player base)
-          final targetRow = row + 1;
-          if (targetRow > 2) continue; // Can't go past row 2
-
-          // Try to move forward
-          if (_matchManager.moveCardTYC3(card, row, col, targetRow, col)) {
-            debugPrint('AI moved ${card.name} from row $row to row $targetRow');
-            if (mounted) setState(() {});
-            await Future.delayed(const Duration(milliseconds: 200));
+        for (final card in tile.cards) {
+          if (card.isAlive &&
+              card.canMove() &&
+              card.ownerId == match.opponent.id) {
+            movableCards.add((card: card, row: row, col: col));
           }
         }
       }
     }
 
+    // Shuffle for variety
+    movableCards.shuffle(random);
+
+    for (final entry in movableCards) {
+      final card = entry.card;
+      final row = entry.row;
+      final col = entry.col;
+
+      if (!card.canMove()) continue; // May have used AP
+
+      final targetRow = row + 1;
+      if (targetRow > 2) continue;
+
+      // Check if moving is beneficial
+      final targetTile = match.board.getTile(targetRow, col);
+      final hasEnemyCards = targetTile.cards.any(
+        (c) => c.ownerId == match.player.id && c.isAlive,
+      );
+
+      // Don't move if enemies block (need to attack first)
+      if (hasEnemyCards) continue;
+
+      // Random chance to not move (adds unpredictability)
+      if (random.nextDouble() < 0.2) continue;
+
+      if (_matchManager.moveCardTYC3(card, row, col, targetRow, col)) {
+        debugPrint('AI moved ${card.name} from row $row to row $targetRow');
+        if (mounted) setState(() {});
+        await Future.delayed(const Duration(milliseconds: 200));
+      }
+    }
+
     // AI attacks with cards that have AP
+    // Collect all AI cards that can attack
+    final attackers = <({GameCard card, int row, int col})>[];
     for (int row = 0; row < 3; row++) {
       for (int col = 0; col < 3; col++) {
         final tile = match.board.getTile(row, col);
-        for (final card in tile.cards.toList()) {
-          if (!card.isAlive) continue;
+        for (final card in tile.cards) {
+          if (card.isAlive &&
+              card.canAttack() &&
+              card.ownerId == match.opponent.id) {
+            attackers.add((card: card, row: row, col: col));
+          }
+        }
+      }
+    }
 
-          // Check if this is an AI card (row 0-1, or row 2 if it moved there)
-          // Actually for AI, cards start at row 0 and move toward row 2
-          // So AI cards can be at row 0, 1, or 2
+    // Shuffle attackers for variety
+    attackers.shuffle(random);
 
-          // Try to attack enemy cards
-          final targets = _matchManager.getValidTargetsTYC3(card, row, col);
-          if (targets.isNotEmpty && card.canAttack()) {
-            // Attack first valid target
-            final target = targets.first;
-            // Find target position
-            for (int tr = 0; tr < 3; tr++) {
-              for (int tc = 0; tc < 3; tc++) {
-                final targetTile = match.board.getTile(tr, tc);
-                if (targetTile.cards.contains(target)) {
-                  final result = _matchManager.attackCardTYC3(
-                    card,
-                    target,
-                    row,
-                    col,
-                    tr,
-                    tc,
-                  );
-                  if (result != null) {
-                    debugPrint('AI: ${result.message}');
-                    if (mounted) {
-                      setState(() {});
-                      // Show battle result dialog for AI attack
-                      await _showAIBattleResultDialog(
-                        result,
-                        card,
-                        target,
-                        col,
-                      );
-                    }
-                  }
-                  break;
+    for (final entry in attackers) {
+      final card = entry.card;
+      final row = entry.row;
+      final col = entry.col;
+
+      if (!card.canAttack()) continue; // May have used AP
+
+      // Try to attack enemy cards
+      final targets = _matchManager.getValidTargetsTYC3(card, row, col);
+      if (targets.isNotEmpty) {
+        // Smart target selection: prefer low HP targets or high damage targets
+        targets.sort((a, b) {
+          // Prioritize targets we can kill
+          final canKillA = a.currentHealth <= card.damage ? 1 : 0;
+          final canKillB = b.currentHealth <= card.damage ? 1 : 0;
+          if (canKillA != canKillB) return canKillB - canKillA;
+
+          // Then prioritize high damage targets
+          return b.damage - a.damage;
+        });
+
+        final target = targets.first;
+        // Find target position
+        for (int tr = 0; tr < 3; tr++) {
+          for (int tc = 0; tc < 3; tc++) {
+            final targetTile = match.board.getTile(tr, tc);
+            if (targetTile.cards.contains(target)) {
+              final result = _matchManager.attackCardTYC3(
+                card,
+                target,
+                row,
+                col,
+                tr,
+                tc,
+              );
+              if (result != null) {
+                debugPrint('AI: ${result.message}');
+                if (mounted) {
+                  setState(() {});
+                  await _showAIBattleResultDialog(result, card, target, col);
                 }
               }
+              break;
             }
           }
+        }
+      }
 
-          // Try to attack player base if at row 2 and no guards
-          if (row == 2 && card.canAttack()) {
-            final damage = _matchManager.attackBaseTYC3(card, row, col);
-            if (damage > 0) {
-              debugPrint('AI attacked player base for $damage damage!');
-              if (mounted) {
-                setState(() {});
-                // Show base attack dialog
-                await _showAIBaseAttackDialog(card, damage, col);
-              }
-            }
+      // Try to attack player base if at row 2
+      if (row == 2 && card.canAttack()) {
+        final damage = _matchManager.attackBaseTYC3(card, row, col);
+        if (damage > 0) {
+          debugPrint('AI attacked player base for $damage damage!');
+          if (mounted) {
+            setState(() {});
+            await _showAIBaseAttackDialog(card, damage, col);
           }
         }
       }
