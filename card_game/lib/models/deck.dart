@@ -107,4 +107,148 @@ class Deck {
       cards: deckCards.take(25).toList(),
     );
   }
+
+  /// Create a deck from card names (for online sync)
+  /// Looks up each card name in the card library and creates instances
+  factory Deck.fromCardNames({
+    required String playerId,
+    required List<String> cardNames,
+    String name = 'Synced Deck',
+  }) {
+    final cards = <GameCard>[];
+    final cardCounts = <String, int>{};
+
+    for (final cardName in cardNames) {
+      // Track how many of each card we've created (for unique IDs)
+      cardCounts[cardName] = (cardCounts[cardName] ?? 0) + 1;
+      final index = cardCounts[cardName]!;
+
+      final card = _createCardByName(cardName, index);
+      if (card != null) {
+        cards.add(card);
+      } else {
+        // Fallback: create a generic card if name not found
+        cards.add(
+          GameCard(
+            id: '${cardName.toLowerCase().replaceAll(' ', '_')}_$index',
+            name: cardName,
+            damage: 5,
+            health: 10,
+            element: 'Woods',
+            rarity: 1,
+          ),
+        );
+      }
+    }
+
+    // Pad to 25 if needed
+    while (cards.length < 25) {
+      final starterCards = buildStarterCardPool();
+      starterCards.shuffle(Random());
+      cards.add(starterCards.first.copy());
+    }
+
+    return Deck(
+      id: 'synced_$playerId',
+      name: name,
+      cards: cards.take(25).toList(),
+    );
+  }
+
+  /// Helper to create a card by name
+  static GameCard? _createCardByName(String name, int index) {
+    switch (name) {
+      // Scout
+      case 'Scout':
+        return scoutUnit(index);
+      // Common cards
+      case 'Desert Quick Strike':
+        return desertQuickStrike(index);
+      case 'Lake Quick Strike':
+        return lakeQuickStrike(index);
+      case 'Woods Quick Strike':
+        return woodsQuickStrike(index);
+      case 'Desert Warrior':
+        return desertWarrior(index);
+      case 'Lake Warrior':
+        return lakeWarrior(index);
+      case 'Woods Warrior':
+        return woodsWarrior(index);
+      case 'Desert Tank':
+        return desertTank(index);
+      case 'Lake Tank':
+        return lakeTank(index);
+      case 'Woods Tank':
+        return woodsTank(index);
+      // Rare cards
+      case 'Desert Elite Striker':
+        return desertEliteStriker(index);
+      case 'Lake Elite Striker':
+        return lakeEliteStriker(index);
+      case 'Woods Elite Striker':
+        return woodsEliteStriker(index);
+      case 'Desert Veteran':
+        return desertVeteran(index);
+      case 'Lake Veteran':
+        return lakeVeteran(index);
+      case 'Woods Veteran':
+        return woodsVeteran(index);
+      // Support cards
+      case 'Lake Shield Totem':
+        return lakeShieldTotem(index);
+      case 'Desert War Banner':
+        return desertWarBanner(index);
+      case 'Woods Healing Tree':
+        return woodsHealingTree(index);
+      // Epic cards
+      case 'Desert Berserker':
+        return desertBerserker(index);
+      case 'Lake Guardian':
+        return lakeGuardian(index);
+      case 'Woods Sentinel':
+        return woodsSentinel(index);
+      case 'Desert Shadow Scout':
+        return desertShadowScout(index);
+      case 'Lake Mist Weaver':
+        return lakeMistWeaver(index);
+      case 'Woods Shroud Walker':
+        return woodsShroudWalker(index);
+      // Napoleon cards
+      case 'Voltigeur':
+        return napoleonVoltigeur(index);
+      case 'Fusilier':
+        return napoleonFusilier(index);
+      case 'Line Infantry':
+        return napoleonLineInfantry(index);
+      case 'Field Cannon':
+        return napoleonFieldCannon(index);
+      case 'Sapper':
+        return napoleonSapper(index);
+      case 'Drummer Boy':
+        return napoleonDrummerBoy(index);
+      case 'Grenadier':
+        return napoleonGrenadier(index);
+      case 'Hussar':
+        return napoleonHussar(index);
+      case 'Cuirassier':
+        return napoleonCuirassier(index);
+      // Austrian cards
+      case 'Austrian Grenadier':
+        return austrianGrenadier(index);
+      case 'Austrian Cannon':
+        return austrianArtillery(index);
+      case 'Austrian Hussar':
+        return austrianHussar(index);
+      case 'Austrian Infantry':
+        return austrianLineInfantry(index);
+      case 'Austrian Jäger':
+        return austrianJager(index);
+      case 'Austrian Cuirassier':
+        return austrianCuirassier(index);
+      case 'Austrian Officer':
+        return austrianOfficer(index);
+      default:
+        return null;
+    }
+  }
 }

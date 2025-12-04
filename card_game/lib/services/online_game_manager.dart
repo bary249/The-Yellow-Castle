@@ -230,10 +230,18 @@ class OnlineGameManager {
 
   void _replayPlace(OnlineAction action, int Function(int?) localRow) {
     final match = _matchManager!.currentMatch;
-    if (match == null) return;
+    if (match == null) {
+      debugPrint('⚠️ Replay place: no match');
+      return;
+    }
 
+    final canonicalRow = action.toRow;
     final toRow = localRow(action.toRow);
     final toCol = action.toCol ?? 0;
+
+    debugPrint(
+      '🔍 Replay place: canonical=($canonicalRow, $toCol) -> local=($toRow, $toCol), amPlayer1=$amPlayer1',
+    );
 
     // IMPORTANT: We're replaying OPPONENT's action, so look in OPPONENT's hand
     // (not activePlayer, which changes based on whose turn it currently is)
@@ -260,10 +268,14 @@ class OnlineGameManager {
       return;
     }
 
+    debugPrint(
+      '🎯 Found card "${card.name}" in opponent hand, placing at ($toRow, $toCol)',
+    );
+
     // Place the card - use opponent's perspective for placement
     final success = _matchManager!.placeCardForOpponentTYC3(card, toRow, toCol);
     debugPrint(
-      '🎯 Replay place: ${action.cardName} @ ($toRow, $toCol) = $success',
+      '🎯 Replay place result: ${action.cardName} @ ($toRow, $toCol) = $success',
     );
   }
 

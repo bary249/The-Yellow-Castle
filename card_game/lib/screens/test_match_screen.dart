@@ -83,6 +83,9 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   List<List<String>>? _predefinedTerrains; // Terrain grid from host
   int? _predefinedRelicColumn; // Relic column from host
 
+  // Opponent's deck card names (synced from Firebase for online mode)
+  List<String>? _opponentDeckCardNames;
+
   // OnlineGameManager for action-based sync (TYC3 online mode)
   OnlineGameManager? _onlineGameManager;
 
@@ -1981,13 +1984,42 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     if (selected != null) {
       _selectedHero = selected;
 
-      // Store hero selection in Firebase
+      // Determine which deck we'll use (same logic as _startNewMatch)
+      final id = _playerId ?? 'player1';
+      final isNapoleon = selected.name.toLowerCase().contains('napoleon');
+      List<String> deckCardNames;
+
+      if (widget.forceCampaignDeck) {
+        if (isNapoleon) {
+          deckCardNames = Deck.napoleon(
+            playerId: id,
+          ).cards.map((c) => c.name).toList();
+        } else {
+          deckCardNames = Deck.starter(
+            playerId: id,
+          ).cards.map((c) => c.name).toList();
+        }
+      } else if (_savedDeck != null && _savedDeck!.isNotEmpty) {
+        deckCardNames = _savedDeck!.map((c) => c.name).toList();
+      } else if (isNapoleon) {
+        deckCardNames = Deck.napoleon(
+          playerId: id,
+        ).cards.map((c) => c.name).toList();
+      } else {
+        deckCardNames = Deck.starter(
+          playerId: id,
+        ).cards.map((c) => c.name).toList();
+      }
+
+      // Store hero selection AND deck card names in Firebase
       final myKey = _amPlayer1 ? 'player1' : 'player2';
       await _firestore.collection('matches').doc(widget.onlineMatchId).update({
         '$myKey.heroId': selected.id,
+        '$myKey.deckCardNames': deckCardNames,
       });
 
       debugPrint('Selected hero: ${selected.name}');
+      debugPrint('Stored deck with ${deckCardNames.length} cards');
     } else {
       // Default to Napoleon if dialog dismissed somehow
       _selectedHero = HeroLibrary.napoleon();
@@ -2652,6 +2684,15 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       debugPrint('✅ Opponent selected hero: ${_opponentHero?.name}');
     }
 
+    // Read opponent's deck card names from Firebase
+    final oppDeckNames = oppData?['deckCardNames'] as List<dynamic>?;
+    if (oppDeckNames != null && _opponentDeckCardNames == null) {
+      _opponentDeckCardNames = oppDeckNames.cast<String>();
+      debugPrint(
+        '✅ Received opponent deck: ${_opponentDeckCardNames!.length} cards',
+      );
+    }
+
     // Check for board setup (from Player 1 / host)
     final boardSetup = data['boardSetup'] as Map<String, dynamic>?;
     if (boardSetup != null) {
@@ -2986,12 +3027,22 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     }
     debugPrint('====================================');
 
-    // Determine enemy deck - use provided deck, or act-specific deck for campaign
+    // Determine enemy deck - use provided deck, synced deck for online, or act-specific deck for campaign
     final Deck opponentDeck;
     if (widget.enemyDeck != null) {
       opponentDeck = widget.enemyDeck!;
       debugPrint(
         '🎖️ CAMPAIGN: Using provided enemy deck: ${opponentDeck.name}',
+      );
+    } else if (_isOnlineMode && _opponentDeckCardNames != null) {
+      // Online mode: use synced deck from Firebase
+      opponentDeck = Deck.fromCardNames(
+        playerId: opponentIdFinal,
+        cardNames: _opponentDeckCardNames!,
+        name: 'Opponent Deck',
+      );
+      debugPrint(
+        '🌐 ONLINE: Using synced opponent deck (${_opponentDeckCardNames!.length} cards)',
       );
     } else if (widget.forceCampaignDeck) {
       // Campaign mode without specific deck - use act-based deck
