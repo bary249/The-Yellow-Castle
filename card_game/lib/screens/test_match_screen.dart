@@ -112,7 +112,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
 
   void _startTurnTimer() {
     _turnTimer?.cancel();
-    _turnSecondsRemaining = 30;
+    _turnSecondsRemaining = 100;
     _turnTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) {
         timer.cancel();
@@ -367,13 +367,23 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                       ),
                     ),
                     if (attackerHasTerrainBuff)
-                      Text(
-                        '+1 $tileTerrain',
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: Colors.green[700],
-                          fontWeight: FontWeight.bold,
-                        ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text(
+                            '+1 ',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Colors.green,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          Icon(
+                            _getTerrainIcon(tileTerrain!),
+                            size: 12,
+                            color: _getTerrainColor(tileTerrain),
+                          ),
+                        ],
                       ),
                     const Icon(
                       Icons.arrow_forward,
@@ -396,13 +406,23 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                         ),
                       ),
                       if (defenderHasTerrainBuff)
-                        Text(
-                          '+1 $tileTerrain',
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: Colors.green[700],
-                            fontWeight: FontWeight.bold,
-                          ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Text(
+                              '+1 ',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Colors.green,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Icon(
+                              _getTerrainIcon(tileTerrain!),
+                              size: 12,
+                              color: _getTerrainColor(tileTerrain),
+                            ),
+                          ],
                         ),
                       const Text(
                         'retaliation',
@@ -1160,13 +1180,31 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                   if (hasTerrainBuff)
                     Padding(
                       padding: const EdgeInsets.only(top: 4),
-                      child: Text(
-                        '($baseDamage base + $terrainBonus $tileTerrain terrain)',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.green[700],
-                          fontWeight: FontWeight.bold,
-                        ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '($baseDamage base + $terrainBonus ',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.green[700],
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          Icon(
+                            _getTerrainIcon(tileTerrain!),
+                            size: 14,
+                            color: _getTerrainColor(tileTerrain),
+                          ),
+                          Text(
+                            ')',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.green[700],
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   const SizedBox(height: 8),
@@ -4777,7 +4815,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                     return Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 4,
-                        vertical: 1,
+                        vertical: 2,
                       ),
                       decoration: BoxDecoration(
                         color: showTerrain
@@ -4785,14 +4823,20 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                             : Colors.grey[600],
                         borderRadius: BorderRadius.circular(4),
                       ),
-                      child: Text(
-                        showTerrain ? tile.terrain! : '???',
-                        style: const TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
+                      child: showTerrain
+                          ? Icon(
+                              _getTerrainIcon(tile.terrain!),
+                              size: 14,
+                              color: Colors.white,
+                            )
+                          : const Text(
+                              '?',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
                     );
                   },
                 ),
@@ -5028,6 +5072,29 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                                                 Icons.directions_run,
                                                 card.moveSpeed,
                                                 size: 10,
+                                              ),
+                                            ],
+                                            // Element/Terrain icon
+                                            if (card.element != null) ...[
+                                              const SizedBox(width: 2),
+                                              Container(
+                                                padding: const EdgeInsets.all(
+                                                  2,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: _getTerrainColor(
+                                                    card.element!,
+                                                  ),
+                                                  borderRadius:
+                                                      BorderRadius.circular(3),
+                                                ),
+                                                child: Icon(
+                                                  _getTerrainIcon(
+                                                    card.element!,
+                                                  ),
+                                                  size: 8,
+                                                  color: Colors.white,
+                                                ),
                                               ),
                                             ],
                                           ],
@@ -5379,6 +5446,25 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                                     ],
                                   ],
                                 ),
+                                // Element/Terrain icon
+                                if (card.element != null) ...[
+                                  const SizedBox(height: 2),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 4,
+                                      vertical: 1,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: _getTerrainColor(card.element!),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Icon(
+                                      _getTerrainIcon(card.element!),
+                                      size: 10,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ],
                                 if (card.abilities.isNotEmpty) ...[
                                   const SizedBox(height: 1),
                                   Row(
