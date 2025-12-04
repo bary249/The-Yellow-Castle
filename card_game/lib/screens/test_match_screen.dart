@@ -1984,42 +1984,13 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     if (selected != null) {
       _selectedHero = selected;
 
-      // Determine which deck we'll use (same logic as _startNewMatch)
-      final id = _playerId ?? 'player1';
-      final isNapoleon = selected.name.toLowerCase().contains('napoleon');
-      List<String> deckCardNames;
-
-      if (widget.forceCampaignDeck) {
-        if (isNapoleon) {
-          deckCardNames = Deck.napoleon(
-            playerId: id,
-          ).cards.map((c) => c.name).toList();
-        } else {
-          deckCardNames = Deck.starter(
-            playerId: id,
-          ).cards.map((c) => c.name).toList();
-        }
-      } else if (_savedDeck != null && _savedDeck!.isNotEmpty) {
-        deckCardNames = _savedDeck!.map((c) => c.name).toList();
-      } else if (isNapoleon) {
-        deckCardNames = Deck.napoleon(
-          playerId: id,
-        ).cards.map((c) => c.name).toList();
-      } else {
-        deckCardNames = Deck.starter(
-          playerId: id,
-        ).cards.map((c) => c.name).toList();
-      }
-
-      // Store hero selection AND deck card names in Firebase
+      // Store hero selection in Firebase (deck will be synced after match starts)
       final myKey = _amPlayer1 ? 'player1' : 'player2';
       await _firestore.collection('matches').doc(widget.onlineMatchId).update({
         '$myKey.heroId': selected.id,
-        '$myKey.deckCardNames': deckCardNames,
       });
 
       debugPrint('Selected hero: ${selected.name}');
-      debugPrint('Stored deck with ${deckCardNames.length} cards');
     } else {
       // Default to Napoleon if dialog dismissed somehow
       _selectedHero = HeroLibrary.napoleon();
@@ -3096,6 +3067,9 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         debugPrint('Using predefined terrains (mirrored: ${!_amPlayer1})');
       }
 
+      // Skip opponent shuffle if we have synced deck (already in correct order)
+      final skipOppShuffle = _isOnlineMode && _opponentDeckCardNames != null;
+
       _matchManager.startMatchTYC3(
         playerId: id,
         playerName: name,
@@ -3111,6 +3085,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         firstPlayerIdOverride: firstPlayerOverride,
         predefinedTerrains: terrainsToUse,
         predefinedRelicColumn: _isOnlineMode ? _predefinedRelicColumn : null,
+        skipOpponentShuffle: skipOppShuffle,
       );
 
       // Set up relic discovery callback
@@ -3372,6 +3347,8 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   // ===========================================================================
 
   /// Sync TYC3 game state to Firebase
+  bool _deckSyncedToFirebase = false; // Track if we've synced our deck order
+
   Future<void> _syncTYC3StateToFirebase() async {
     if (!_isOnlineMode || widget.onlineMatchId == null) return;
 
@@ -3392,7 +3369,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
           ? match.opponent.baseHP
           : match.player.baseHP;
 
-      await _firestore.collection('matches').doc(widget.onlineMatchId).update({
+      final updateData = <String, dynamic>{
         'tyc3State': {
           'activePlayerId': match.activePlayerId,
           'turnNumber': match.turnNumber,
@@ -3403,7 +3380,33 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
           'lastActionBy': _playerId,
           'lastActionTime': FieldValue.serverTimestamp(),
         },
-      });
+      };
+
+      // On first sync, also store our shuffled deck order (deck + hand)
+      // This allows opponent to recreate our deck in the exact same order
+      if (!_deckSyncedToFirebase) {
+        final myKey = _amPlayer1 ? 'player1' : 'player2';
+        // Get all cards: hand + remaining deck (in order)
+        final allCardNames = <String>[];
+        // First add hand cards
+        for (final card in match.player.hand) {
+          allCardNames.add(card.name);
+        }
+        // Then add remaining deck cards
+        for (final card in match.player.deck.cards) {
+          allCardNames.add(card.name);
+        }
+        updateData['$myKey.deckCardNames'] = allCardNames;
+        _deckSyncedToFirebase = true;
+        debugPrint(
+          '📦 Synced shuffled deck order (${allCardNames.length} cards)',
+        );
+      }
+
+      await _firestore
+          .collection('matches')
+          .doc(widget.onlineMatchId)
+          .update(updateData);
 
       debugPrint('🔄 Synced TYC3 state to Firebase');
     } catch (e) {

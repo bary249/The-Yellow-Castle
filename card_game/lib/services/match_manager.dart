@@ -36,6 +36,8 @@ class MatchManager {
     List<List<String>>?
     predefinedTerrains, // For online: terrain grid from host
     int? predefinedRelicColumn, // For online: relic column from host
+    bool skipOpponentShuffle =
+        false, // For online: opponent deck already in synced order
   }) {
     // Create players with heroes (copy heroes to reset ability state)
     final player = Player(
@@ -56,9 +58,13 @@ class MatchManager {
       hero: opponentHero?.copy(),
     );
 
-    // Shuffle decks
+    // Shuffle decks (skip opponent shuffle if deck is pre-ordered from online sync)
     player.deck.shuffle();
-    opponent.deck.shuffle();
+    if (!skipOpponentShuffle) {
+      opponent.deck.shuffle();
+    } else {
+      _log('⏭️ Skipping opponent deck shuffle (using synced order)');
+    }
 
     // Create the 3×3 game board
     final GameBoard board;
@@ -1213,6 +1219,8 @@ class MatchManager {
     List<List<String>>?
     predefinedTerrains, // For online: terrain grid from host
     int? predefinedRelicColumn, // For online: relic column from host
+    bool skipOpponentShuffle =
+        false, // For online: opponent deck already in synced order
   }) {
     // Use the existing startMatch logic
     startMatch(
@@ -1229,6 +1237,7 @@ class MatchManager {
       opponentHero: opponentHero,
       predefinedTerrains: predefinedTerrains,
       predefinedRelicColumn: predefinedRelicColumn,
+      skipOpponentShuffle: skipOpponentShuffle,
     );
 
     if (_currentMatch == null) return;
