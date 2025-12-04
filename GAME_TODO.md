@@ -1151,6 +1151,17 @@
 - [x] Player 2 mirrors terrain grid for correct perspective
 - [ ] Further simplify to action-only sync (remove full board state sync)
 
+### 15.5 OnlineGameManager - Shared Action-Log System (Dec 2024)
+- [x] Created `OnlineGameManager` class for action-based sync
+- [x] Defined `OnlineAction` format with types: place, move, attack, attackBase, endTurn
+- [x] Actions use card instance IDs for deterministic replay
+- [x] Canonical coords (Player 1's perspective) with automatic mirroring for Player 2
+- [x] Wired into TestMatchScreen for all TYC3 actions
+- [x] Both players apply actions locally via same MatchManager methods as vs-AI
+- [x] Actions sent to Firebase for opponent to replay
+- [ ] Test online match with new action-based system
+- [ ] Remove legacy state-sync code once action replay is stable
+
 ---
 
 ## 📦 16. Card Library Status
