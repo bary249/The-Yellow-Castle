@@ -1632,6 +1632,10 @@ class MatchManager {
   ) {
     if (_currentMatch == null) return [];
 
+    _log(
+      '🔍 getReachableTiles: ${card.name} at ($fromRow,$fromCol) with ${card.currentAP}/${card.maxAP} AP',
+    );
+
     final reachable = <({int row, int col, int apCost})>[];
     final visited = <String>{};
     final queue = <({int row, int col, int apCost})>[
@@ -1692,6 +1696,9 @@ class MatchManager {
       }
     }
 
+    _log(
+      '🔍 Reachable tiles: ${reachable.map((t) => "(${t.row},${t.col})@${t.apCost}AP").join(", ")}',
+    );
     return reachable;
   }
 
