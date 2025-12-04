@@ -10,6 +10,7 @@ import '../models/lane.dart';
 import '../models/card.dart';
 import '../models/hero.dart';
 import '../models/tile.dart';
+import '../models/game_board.dart';
 import '../data/hero_library.dart';
 import '../services/match_manager.dart';
 import '../services/simple_ai.dart';
@@ -74,11 +75,17 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   GameHero? _selectedHero;
   GameHero? _opponentHero;
   bool _heroSelectionComplete = false;
+  String?
+  _firstPlayerId; // Who goes first in online mode (determined by player1)
+
+  // Board setup for online mode (determined by Player 1)
+  List<List<String>>? _predefinedTerrains; // Terrain grid from host
+  int? _predefinedRelicColumn; // Relic column from host
 
   // ===== TYC3: Turn-based AP system state =====
   bool _useTYC3Mode = true; // Enable TYC3 by default for testing
   Timer? _turnTimer;
-  int _turnSecondsRemaining = 30;
+  int _turnSecondsRemaining = 100;
 
   // TYC3 action state
   GameCard? _selectedCardForAction; // Card selected for move/attack
@@ -133,8 +140,24 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
 
   void _endTurnTYC3() {
     _turnTimer?.cancel();
+
+    // ONLINE, non-host player: do NOT mutate MatchManager turn state.
+    // Just send endTurn action; host will call endTurnTYC3 and sync.
+    if (_isOnlineMode && !_amPlayer1) {
+      _clearTYC3Selection();
+      _selectedCard = null; // Also clear hand card selection
+
+      _syncTYC3Action('endTurn', {
+        'turnNumber': _matchManager.currentMatch?.turnNumber ?? 0,
+      });
+
+      setState(() {});
+      return;
+    }
+
     _matchManager.endTurnTYC3();
     _clearTYC3Selection();
+    _selectedCard = null; // Also clear hand card selection
 
     // Sync to Firebase if online
     if (_isOnlineMode) {
@@ -164,7 +187,9 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   void _placeCardTYC3(int row, int col) {
     if (_selectedCard == null) return;
 
-    // Check if it's player's turn
+    // Check if it's player's turn.
+    // For online non-host, host is authoritative; we still gate by isPlayerTurn
+    // (which comes from Firebase), but avoid additional local restrictions.
     if (!_matchManager.isPlayerTurn) {
       ScaffoldMessenger.of(
         context,
@@ -172,8 +197,10 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       return;
     }
 
-    // Check if can play more cards
-    if (!_matchManager.canPlayMoreCards) {
+    // Check if can play more cards for local-authoritative modes (offline/host).
+    // For online non-host, host enforces limits when applying the action.
+    final shouldCheckCardLimit = !_isOnlineMode || _amPlayer1;
+    if (shouldCheckCardLimit && !_matchManager.canPlayMoreCards) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -200,17 +227,29 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
 
     // Try to place the card
     final cardName = _selectedCard!.name;
-    final success = _matchManager.placeCardTYC3(_selectedCard!, row, col);
 
-    if (success) {
-      // Sync to Firebase if online
-      if (_isOnlineMode) {
+    bool success = false;
+
+    if (_isOnlineMode && !_amPlayer1) {
+      // ONLINE, non-host player: do NOT mutate local MatchManager.
+      // Just send the action to Firebase; host will apply it and sync state.
+      _syncTYC3Action('place', {'cardName': cardName, 'row': row, 'col': col});
+      success = true; // allow local UI to clear selection
+    } else {
+      // Offline or host: apply to local MatchManager
+      success = _matchManager.placeCardTYC3(_selectedCard!, row, col);
+
+      if (success && _isOnlineMode) {
+        // Host also logs the action
         _syncTYC3Action('place', {
           'cardName': cardName,
           'row': row,
           'col': col,
         });
       }
+    }
+
+    if (success) {
       _selectedCard = null;
       setState(() {});
     } else {
@@ -1045,17 +1084,30 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     final fromRow = _selectedCardRow!;
     final fromCol = _selectedCardCol!;
 
-    final success = _matchManager.moveCardTYC3(
-      _selectedCardForAction!,
-      fromRow,
-      fromCol,
-      toRow,
-      toCol,
-    );
+    bool success = false;
 
-    if (success) {
-      // Sync to Firebase if online
-      if (_isOnlineMode) {
+    if (_isOnlineMode && !_amPlayer1) {
+      // ONLINE, non-host player: do NOT mutate local MatchManager.
+      // Just send the action; host will apply movement and sync state.
+      _syncTYC3Action('move', {
+        'cardName': cardName,
+        'fromRow': fromRow,
+        'fromCol': fromCol,
+        'toRow': toRow,
+        'toCol': toCol,
+      });
+      success = true;
+    } else {
+      // Offline or host: apply to local MatchManager
+      success = _matchManager.moveCardTYC3(
+        _selectedCardForAction!,
+        fromRow,
+        fromCol,
+        toRow,
+        toCol,
+      );
+
+      if (success && _isOnlineMode) {
         _syncTYC3Action('move', {
           'cardName': cardName,
           'fromRow': fromRow,
@@ -1064,11 +1116,13 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
           'toCol': toCol,
         });
       }
-      // Clear selection after move to avoid confusion
-      _clearTYC3Selection();
     }
 
-    setState(() {});
+    if (success) {
+      // Clear selection after move to avoid confusion
+      _clearTYC3Selection();
+      setState(() {});
+    }
   }
 
   /// TYC3: Handle tap on a tile (place card or move to)
@@ -1269,6 +1323,18 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     final attackerRow = _selectedCardRow!;
     final attackerCol = _selectedCardCol!;
 
+    if (_isOnlineMode && !_amPlayer1) {
+      // ONLINE, non-host player: send intent only; host computes damage.
+      _syncTYC3Action('attackBase', {
+        'attackerName': attackerName,
+        'attackerRow': attackerRow,
+        'attackerCol': attackerCol,
+      });
+      // For now, skip local damage dialog – host will update HP via state sync.
+      _clearTYC3Selection();
+      return;
+    }
+
     final damage = _matchManager.attackBaseTYC3(
       attacker,
       attackerRow,
@@ -1276,7 +1342,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     );
 
     if (damage > 0) {
-      // Sync to Firebase if online
+      // Sync to Firebase if online (host only)
       if (_isOnlineMode) {
         _syncTYC3Action('attackBase', {
           'attackerName': attackerName,
@@ -2430,12 +2496,80 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       debugPrint('Opponent selected hero: ${_opponentHero?.name}');
     }
 
+    // Check for board setup (from Player 1 / host)
+    final boardSetup = data['boardSetup'] as Map<String, dynamic>?;
+    if (boardSetup != null) {
+      _firstPlayerId = boardSetup['firstPlayerId'] as String?;
+      _predefinedRelicColumn = boardSetup['relicColumn'] as int?;
+
+      // Parse terrain grid stored as a flat map: {"row_col": "terrain"}
+      final terrainsData = boardSetup['terrains'] as Map<String, dynamic>?;
+      if (terrainsData != null) {
+        _predefinedTerrains = List.generate(3, (row) {
+          return List.generate(3, (col) {
+            final key = '${row}_${col}';
+            return (terrainsData[key] as String?) ?? 'woods';
+          });
+        });
+      }
+    }
+
     // Start match when both players have selected heroes
     if (_selectedHero != null &&
         _opponentHero != null &&
         !_heroSelectionComplete) {
-      _heroSelectionComplete = true;
-      _startNewMatch();
+      // Player1 (host) sets up the board and stores in Firebase
+      if (_amPlayer1) {
+        // Player1: Create temporary board to get terrains, then store in Firebase
+        final playerTerrains = _selectedHero?.terrainAffinities ?? ['Woods'];
+        final opponentTerrains = _opponentHero?.terrainAffinities ?? ['Desert'];
+        final tempBoard = GameBoard.create(
+          playerTerrains: playerTerrains,
+          opponentTerrains: opponentTerrains,
+        );
+
+        // Get terrain grid from the board (3x3 list)
+        _predefinedTerrains = tempBoard.toTerrainGrid();
+
+        // Randomly determine relic column and first player
+        final random = Random();
+        _predefinedRelicColumn = random.nextInt(3);
+        _firstPlayerId = random.nextBool() ? _playerId : _opponentId;
+
+        // Flatten terrain grid to a map: {"row_col": "terrain"} to avoid nested arrays
+        final terrainsMap = <String, String>{};
+        if (_predefinedTerrains != null) {
+          for (int row = 0; row < 3; row++) {
+            for (int col = 0; col < 3; col++) {
+              terrainsMap['${row}_${col}'] = _predefinedTerrains![row][col];
+            }
+          }
+        }
+
+        // Store all board setup in Firebase
+        _firestore.collection('matches').doc(widget.onlineMatchId).update({
+          'boardSetup': {
+            'firstPlayerId': _firstPlayerId,
+            'relicColumn': _predefinedRelicColumn,
+            'terrains': terrainsMap,
+          },
+        });
+        debugPrint(
+          'Player1 stored board setup: firstPlayer=$_firstPlayerId, relic=$_predefinedRelicColumn',
+        );
+        _heroSelectionComplete = true;
+        _startNewMatch();
+      } else if (_predefinedTerrains != null && _firstPlayerId != null) {
+        // Player2: Use the board setup from Firebase
+        debugPrint(
+          'Player2 using board from Firebase: firstPlayer=$_firstPlayerId, relic=$_predefinedRelicColumn',
+        );
+        _heroSelectionComplete = true;
+        _startNewMatch();
+      } else {
+        // Player2: Wait for player1 to set up the board
+        debugPrint('Player2 waiting for boardSetup from Firebase...');
+      }
     }
 
     // TYC3 Mode: Handle real-time state updates
@@ -2465,6 +2599,8 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   }
 
   /// Handle TYC3 state updates from Firebase
+  int _lastProcessedActionIndex = 0; // Track which actions we've processed
+
   void _handleTYC3StateUpdate(Map<String, dynamic> data) {
     final tyc3State = data['tyc3State'] as Map<String, dynamic>?;
     if (tyc3State == null) return;
@@ -2477,17 +2613,23 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     // Opponent made an action - update local state from Firebase
     debugPrint('📥 TYC3 state update from opponent');
 
-    // Check if it's now our turn
-    final activePlayerId = tyc3State['activePlayerId'] as String?;
-    final match = _matchManager.currentMatch;
+    // Sync state first
+    _syncLocalStateFromFirebase(tyc3State);
 
-    if (match != null && activePlayerId == _playerId) {
-      // It's our turn now - sync state and start timer
-      _syncLocalStateFromFirebase(tyc3State);
-      _startTurnTimer();
-    } else {
-      // Still opponent's turn - just update display
-      _syncLocalStateFromFirebase(tyc3State);
+    // Process any new actions from the action log
+    final actions = data['tyc3Actions'] as List<dynamic>?;
+    if (actions != null && actions.length > _lastProcessedActionIndex) {
+      // Process new actions
+      for (int i = _lastProcessedActionIndex; i < actions.length; i++) {
+        final action = actions[i] as Map<String, dynamic>;
+        final actionPlayerId = action['playerId'] as String?;
+
+        // Only process opponent's actions
+        if (actionPlayerId != _playerId) {
+          _handleOpponentTYC3Action(action);
+        }
+      }
+      _lastProcessedActionIndex = actions.length;
     }
 
     setState(() {});
@@ -2519,9 +2661,73 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     if (isFirstTurn != null) match.isFirstTurn = isFirstTurn;
     if (activePlayerId != null) match.activePlayerId = activePlayerId;
 
-    // TODO: Sync board state (cards on tiles) - this is complex
-    // For now, we rely on action-by-action sync
+    // Sync board state (cards on tiles)
+    final boardData = tyc3State['board'] as Map<String, dynamic>?;
+    if (boardData != null) {
+      _syncBoardFromFirebase(boardData, match);
+    }
+
     debugPrint('🔄 Synced local state from Firebase');
+  }
+
+  /// Sync board cards from Firebase data
+  void _syncBoardFromFirebase(
+    Map<String, dynamic> boardData,
+    MatchState match,
+  ) {
+    for (int row = 0; row < 3; row++) {
+      for (int col = 0; col < 3; col++) {
+        final key = '${row}_$col';
+        final tileData = boardData[key] as Map<String, dynamic>?;
+        if (tileData == null) continue;
+
+        final cardsData = tileData['cards'] as List<dynamic>?;
+        if (cardsData == null) continue;
+
+        // For opponent's perspective, we need to mirror the board
+        // Row 0 (their base) = Row 2 (our enemy base view)
+        // Row 2 (their enemy base) = Row 0 (our base view)
+        final localRow = _amPlayer1 ? row : (2 - row);
+        final localTile = match.board.getTile(localRow, col);
+
+        // Clear existing cards and rebuild from Firebase
+        // Only update opponent's cards to avoid overwriting our own state
+        final existingPlayerCards = localTile.cards
+            .where((c) => c.ownerId == _playerId)
+            .toList();
+
+        // Rebuild opponent cards from Firebase
+        final opponentCards = <GameCard>[];
+        for (final cardData in cardsData) {
+          final data = cardData as Map<String, dynamic>;
+          final ownerId = data['ownerId'] as String?;
+
+          // Skip our own cards (we have the authoritative state)
+          if (ownerId == _playerId) continue;
+
+          final card = GameCard(
+            id: data['id'] as String,
+            name: data['name'] as String,
+            damage: data['damage'] as int,
+            health: data['health'] as int,
+            tick: 1, // Default tick
+            element: data['element'] as String?,
+            abilities: (data['abilities'] as List<dynamic>?)
+                ?.map((e) => e as String)
+                .toList(),
+          );
+          card.currentHealth = data['currentHealth'] as int? ?? card.health;
+          card.currentAP = data['currentAP'] as int? ?? card.maxAP;
+          card.ownerId = ownerId;
+          opponentCards.add(card);
+        }
+
+        // Update tile with combined cards
+        localTile.cards.clear();
+        localTile.cards.addAll(existingPlayerCards);
+        localTile.cards.addAll(opponentCards);
+      }
+    }
   }
 
   void _showError(String message) {
@@ -2634,6 +2840,30 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       debugPrint(
         '🎮 Starting TYC3 turn-based match${_isOnlineMode ? " (ONLINE)" : ""}',
       );
+
+      // For online mode, use the coordinated settings from host
+      // For AI mode, let the match manager randomly decide
+      final String? firstPlayerOverride = _isOnlineMode ? _firstPlayerId : null;
+      debugPrint('First player override: $firstPlayerOverride');
+
+      // For online mode, use predefined board setup from host
+      // Player 2 needs to mirror the terrain grid (swap rows 0 and 2)
+      List<List<String>>? terrainsToUse;
+      if (_isOnlineMode && _predefinedTerrains != null) {
+        if (_amPlayer1) {
+          // Player 1: use terrains as-is
+          terrainsToUse = _predefinedTerrains;
+        } else {
+          // Player 2: mirror the terrain grid (row 0 <-> row 2)
+          terrainsToUse = [
+            _predefinedTerrains![2], // P1's base -> P2's enemy base (row 0)
+            _predefinedTerrains![1], // Middle stays same
+            _predefinedTerrains![0], // P1's enemy base -> P2's base (row 2)
+          ];
+        }
+        debugPrint('Using predefined terrains (mirrored: ${!_amPlayer1})');
+      }
+
       _matchManager.startMatchTYC3(
         playerId: id,
         playerName: name,
@@ -2646,6 +2876,9 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         opponentAttunedElement: opponentHero.terrainAffinities.first,
         playerHero: playerHero,
         opponentHero: opponentHero,
+        firstPlayerIdOverride: firstPlayerOverride,
+        predefinedTerrains: terrainsToUse,
+        predefinedRelicColumn: _isOnlineMode ? _predefinedRelicColumn : null,
       );
 
       // Set up relic discovery callback
@@ -2657,7 +2890,10 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       if (_isOnlineMode) {
         // Online TYC3: Sync initial state and listen for opponent actions
         _syncTYC3StateToFirebase();
-        _startTurnTimer();
+        // Only start timer if it's our turn
+        if (_matchManager.isPlayerTurn) {
+          _startTurnTimer();
+        }
       } else {
         // Single player: Start turn timer if it's player's turn
         if (_matchManager.isPlayerTurn) {
@@ -2684,6 +2920,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     }
     _clearStaging();
     _clearTYC3Selection();
+    _lastProcessedActionIndex = 0; // Reset action tracking for new match
     setState(() {});
   }
 
@@ -2901,14 +3138,24 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       // Serialize board state
       final boardState = _serializeBoardState(match);
 
+      // Store HP in canonical format (Player 1's perspective)
+      // For Player 1: player = player1, opponent = player2
+      // For Player 2: player = player2, opponent = player1
+      final player1HP = _amPlayer1
+          ? match.player.baseHP
+          : match.opponent.baseHP;
+      final player2HP = _amPlayer1
+          ? match.opponent.baseHP
+          : match.player.baseHP;
+
       await _firestore.collection('matches').doc(widget.onlineMatchId).update({
         'tyc3State': {
           'activePlayerId': match.activePlayerId,
           'turnNumber': match.turnNumber,
           'isFirstTurn': match.isFirstTurn,
           'board': boardState,
-          'player1BaseHP': match.player.baseHP,
-          'player2BaseHP': match.opponent.baseHP,
+          'player1BaseHP': player1HP,
+          'player2BaseHP': player2HP,
           'lastActionBy': _playerId,
           'lastActionTime': FieldValue.serverTimestamp(),
         },
@@ -2921,13 +3168,21 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   }
 
   /// Serialize board state for Firebase
+  /// IMPORTANT: Always store in Player 1's perspective (canonical format)
+  /// Player 2 must mirror rows when serializing
   Map<String, dynamic> _serializeBoardState(MatchState match) {
     final board = <String, dynamic>{};
 
     for (int row = 0; row < 3; row++) {
       for (int col = 0; col < 3; col++) {
         final tile = match.board.getTile(row, col);
-        final key = '${row}_$col';
+
+        // Convert to Player 1's perspective for storage
+        // Player 1: row stays the same
+        // Player 2: row 0 (their enemy base) -> row 2, row 2 (their base) -> row 0
+        final canonicalRow = _amPlayer1 ? row : (2 - row);
+        final key = '${canonicalRow}_$col';
+
         board[key] = {
           'terrain': tile.terrain,
           'owner': tile.owner.toString(),
@@ -2979,8 +3234,10 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         ]),
       });
 
-      // Also sync full state
-      await _syncTYC3StateToFirebase();
+      // Host: also sync full state snapshot for opponent
+      if (_amPlayer1) {
+        await _syncTYC3StateToFirebase();
+      }
     } catch (e) {
       debugPrint('Error syncing TYC3 action: $e');
     }
@@ -3036,9 +3293,25 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   }
 
   void _handleOpponentEndTurn(Map<String, dynamic> action) {
-    debugPrint('Opponent ended turn');
-    // It's now our turn
-    _startTurnTimer();
+    debugPrint('Opponent ended turn (action from Firebase)');
+    final match = _matchManager.currentMatch;
+    if (match == null) return;
+
+    // IMPORTANT (online mode):
+    // - Turn switching, turnNumber, isFirstTurn, AP regen and card draw
+    //   are all handled by MatchManager.endTurnTYC3() on the ACTIVE client
+    //   (the one who actually ended their turn) and then synced via Firebase.
+    // - On the listening client we ONLY react to the new state and update UI.
+
+    // If after processing this action Firebase says it's now OUR turn,
+    // just (re)start our local turn timer.
+    if (match.activePlayerId == _playerId) {
+      debugPrint('🎯 It is now MY turn (after opponent ended)');
+
+      // Ensure any old timer is cleared and start a fresh one
+      _turnTimer?.cancel();
+      _startTurnTimer();
+    }
   }
 
   // ===========================================================================

@@ -113,6 +113,13 @@ class RelicManager {
     middleRelic = Relic.randomCard(id: 'middle_relic');
   }
 
+  /// Set the relic column to a specific value (for online multiplayer sync).
+  /// Used when Player 2 receives the relic location from the host.
+  void setRelicColumn(int column) {
+    relicColumn = column;
+    middleRelic = Relic.randomCard(id: 'middle_relic');
+  }
+
   /// Check if there's an unclaimed relic at the given position.
   /// Returns the relic if found and unclaimed, null otherwise.
   Relic? getRelicAt(int row, int col) {

@@ -1128,6 +1128,29 @@
 ### 15.2 Small UI Additions
 - [ ] Add UI tags/badges for front and back cards in stacks
 
+### 15.3 TYC3 Online PvP Fixes (Dec 2024)
+- [x] Turn timer set to 100 seconds (was 30)
+- [x] Card deselection when ending turn (both hand and board cards)
+- [x] Board state sync from Firebase (opponent cards now properly synced)
+- [x] Fixed turn progression in online mode (activePlayerId properly tracked)
+- [x] Fixed both players starting as "player 1" - now player1 determines who goes first and stores in Firebase
+- [x] Fixed turns not progressing - now processing opponent actions from Firebase action log
+- [x] Fixed isFirstTurn not updating - proper turn transition with card draw and AP regen
+- [x] Fixed timer initial value mismatch (30 vs 100) - now consistent 100s
+- [x] Fixed isFirstTurn logic for online mode - first turn ends after first player's turn
+- [x] Fixed board sync using canonical format (Player 1's perspective) - Player 2 mirrors rows when serializing
+- [x] Fixed HP sync using canonical format - Player 2 swaps player/opponent HP when storing
+
+### 15.4 Host-Authoritative Board System (Dec 2024)
+- [x] Added `GameBoard.fromTerrains()` factory for creating board from predefined terrains
+- [x] Added `GameBoard.toTerrainGrid()` for serializing terrain layout
+- [x] Added `RelicManager.setRelicColumn()` for setting predefined relic location
+- [x] Player 1 (host) generates board, terrains, and relic location
+- [x] Board setup stored in Firebase under `boardSetup` field
+- [x] Player 2 reads board setup from Firebase and uses predefined values
+- [x] Player 2 mirrors terrain grid for correct perspective
+- [ ] Further simplify to action-only sync (remove full board state sync)
+
 ---
 
 ## 📦 16. Card Library Status

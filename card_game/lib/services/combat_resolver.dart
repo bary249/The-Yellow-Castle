@@ -849,6 +849,14 @@ class CombatResolver {
         retaliationDamage += 1;
       }
 
+      // Scale retaliation based on defender's current HP (soft floor 50%-100%)
+      final defenderMaxHp = target.health;
+      if (defenderMaxHp > 0) {
+        final defenderHpRatio = target.currentHealth / defenderMaxHp;
+        final hpMultiplier = 0.5 + 0.5 * defenderHpRatio;
+        retaliationDamage = (retaliationDamage * hpMultiplier).ceil();
+      }
+
       // Apply attacker's shield
       final attackerShield = _getShieldValue(attacker);
       final attackerShieldBonus = isPlayerAttacking
@@ -988,6 +996,14 @@ class CombatResolver {
       // Apply terrain buff for defender (+1 if defender's element matches tile terrain)
       if (tileTerrain != null && target.element == tileTerrain) {
         retaliationDamage += 1;
+      }
+
+      // Scale retaliation based on defender's current HP (soft floor 50%-100%)
+      final defenderMaxHp = target.health;
+      if (defenderMaxHp > 0) {
+        final defenderHpRatio = target.currentHealth / defenderMaxHp;
+        final hpMultiplier = 0.5 + 0.5 * defenderHpRatio;
+        retaliationDamage = (retaliationDamage * hpMultiplier).ceil();
       }
 
       // Apply attacker's shield

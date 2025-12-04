@@ -62,6 +62,49 @@ class GameBoard {
     return GameBoard._(tiles: tiles);
   }
 
+  /// Create a board from predefined terrains (for online multiplayer sync).
+  /// [terrainGrid] is a 3x3 list of terrain strings, indexed as [row][col].
+  /// The grid is in canonical format (Player 1's perspective).
+  factory GameBoard.fromTerrains(List<List<String>> terrainGrid) {
+    final tiles = <List<Tile>>[];
+
+    for (int row = 0; row < 3; row++) {
+      final rowTiles = <Tile>[];
+      for (int col = 0; col < 3; col++) {
+        TileOwner owner;
+        if (row == 0) {
+          owner = TileOwner.opponent;
+        } else if (row == 2) {
+          owner = TileOwner.player;
+        } else {
+          owner = TileOwner.neutral;
+        }
+
+        final terrain = terrainGrid[row][col];
+        rowTiles.add(
+          Tile(row: row, column: col, terrain: terrain, owner: owner),
+        );
+      }
+      tiles.add(rowTiles);
+    }
+
+    return GameBoard._(tiles: tiles);
+  }
+
+  /// Serialize the terrain grid for Firebase storage.
+  /// Returns a 3x3 list of terrain strings in canonical format (Player 1's perspective).
+  List<List<String>> toTerrainGrid() {
+    final grid = <List<String>>[];
+    for (int row = 0; row < 3; row++) {
+      final rowTerrains = <String>[];
+      for (int col = 0; col < 3; col++) {
+        rowTerrains.add(tiles[row][col].terrain ?? 'woods');
+      }
+      grid.add(rowTerrains);
+    }
+    return grid;
+  }
+
   /// Get a specific tile by row and column.
   Tile getTile(int row, int col) => tiles[row][col];
 

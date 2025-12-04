@@ -52,7 +52,7 @@ class MatchState {
   int cardsPlayedThisTurn = 0;
 
   /// Turn duration in seconds
-  static const int turnDurationSeconds = 30;
+  static const int turnDurationSeconds = 100;
 
   // ===== END TYC3 =====
 

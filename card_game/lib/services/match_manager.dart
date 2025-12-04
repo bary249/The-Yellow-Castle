@@ -19,6 +19,8 @@ class MatchManager {
   bool _playerDamageBoostActive = false;
 
   /// Start a new match
+  /// For online mode, pass [predefinedTerrains] and [predefinedRelicColumn] to use
+  /// the board setup from the host (Player 1).
   void startMatch({
     required String playerId,
     required String playerName,
@@ -31,6 +33,9 @@ class MatchManager {
     String? opponentAttunedElement,
     GameHero? playerHero,
     GameHero? opponentHero,
+    List<List<String>>?
+    predefinedTerrains, // For online: terrain grid from host
+    int? predefinedRelicColumn, // For online: relic column from host
   }) {
     // Create players with heroes (copy heroes to reset ability state)
     final player = Player(
@@ -55,13 +60,21 @@ class MatchManager {
     player.deck.shuffle();
     opponent.deck.shuffle();
 
-    // Create the 3×3 game board with terrain from hero affinities
-    final playerTerrains = playerHero?.terrainAffinities ?? ['Woods'];
-    final opponentTerrains = opponentHero?.terrainAffinities ?? ['Desert'];
-    final board = GameBoard.create(
-      playerTerrains: playerTerrains,
-      opponentTerrains: opponentTerrains,
-    );
+    // Create the 3×3 game board
+    final GameBoard board;
+    if (predefinedTerrains != null) {
+      // Online mode: use predefined terrains from host (Player 1)
+      board = GameBoard.fromTerrains(predefinedTerrains);
+      _log('📋 Using predefined board from host');
+    } else {
+      // Local mode: generate random terrains
+      final playerTerrains = playerHero?.terrainAffinities ?? ['Woods'];
+      final opponentTerrains = opponentHero?.terrainAffinities ?? ['Desert'];
+      board = GameBoard.create(
+        playerTerrains: playerTerrains,
+        opponentTerrains: opponentTerrains,
+      );
+    }
 
     // Create match state
     _currentMatch = MatchState(
@@ -70,9 +83,16 @@ class MatchManager {
       board: board,
     );
 
-    // Initialize relics on the battlefield (random middle tile)
-    _currentMatch!.relicManager.initializeRelics();
-    _log('🏺 Relic hidden on a middle tile (location unknown)');
+    // Initialize relics on the battlefield
+    if (predefinedRelicColumn != null) {
+      // Online mode: use predefined relic column from host
+      _currentMatch!.relicManager.setRelicColumn(predefinedRelicColumn);
+      _log('🏺 Relic placed at column $predefinedRelicColumn (from host)');
+    } else {
+      // Local mode: random relic placement
+      _currentMatch!.relicManager.initializeRelics();
+      _log('🏺 Relic hidden on a middle tile (location unknown)');
+    }
 
     // Draw initial hands
     player.drawInitialHand();
@@ -1175,6 +1195,8 @@ class MatchManager {
   onRelicDiscovered;
 
   /// Start a new match with TYC3 turn-based system
+  /// If [firstPlayerId] is provided (for online mode), use it instead of random selection
+  /// For online mode, pass [predefinedTerrains] and [predefinedRelicColumn] from host
   void startMatchTYC3({
     required String playerId,
     required String playerName,
@@ -1187,6 +1209,10 @@ class MatchManager {
     String? opponentAttunedElement,
     GameHero? playerHero,
     GameHero? opponentHero,
+    String? firstPlayerIdOverride, // For online mode: who goes first
+    List<List<String>>?
+    predefinedTerrains, // For online: terrain grid from host
+    int? predefinedRelicColumn, // For online: relic column from host
   }) {
     // Use the existing startMatch logic
     startMatch(
@@ -1201,6 +1227,8 @@ class MatchManager {
       opponentAttunedElement: opponentAttunedElement,
       playerHero: playerHero,
       opponentHero: opponentHero,
+      predefinedTerrains: predefinedTerrains,
+      predefinedRelicColumn: predefinedRelicColumn,
     );
 
     if (_currentMatch == null) return;
@@ -1208,9 +1236,14 @@ class MatchManager {
     // Enable TYC3 mode
     useTurnBasedSystem = true;
 
-    // Random first player selection
-    final random = DateTime.now().millisecondsSinceEpoch % 2 == 0;
-    final firstPlayerId = random ? playerId : opponentId;
+    // Use provided first player ID (online mode) or random selection (AI mode)
+    final String firstPlayerId;
+    if (firstPlayerIdOverride != null) {
+      firstPlayerId = firstPlayerIdOverride;
+    } else {
+      final random = DateTime.now().millisecondsSinceEpoch % 2 == 0;
+      firstPlayerId = random ? playerId : opponentId;
+    }
 
     // Initialize TYC3 turn state
     _currentMatch!.activePlayerId = firstPlayerId;
@@ -1353,24 +1386,25 @@ class MatchManager {
     if (_currentMatch == null) return;
     if (!useTurnBasedSystem) return;
 
-    final wasPlayerTurn = isPlayerTurn;
     final wasFirstTurn = _currentMatch!.isFirstTurn;
 
     // Switch active player
     if (_currentMatch!.activePlayerId == _currentMatch!.player.id) {
       _currentMatch!.activePlayerId = _currentMatch!.opponent.id;
       _currentMatch!.currentPhase = MatchPhase.opponentTurn;
+
+      // First turn ends after the first player has had their turn
+      // (opponent will now have their first turn, then first turn phase is over)
+      if (wasFirstTurn) {
+        _currentMatch!.isFirstTurn = false;
+        _log('📍 First turn phase complete');
+      }
     } else {
       _currentMatch!.activePlayerId = _currentMatch!.player.id;
       _currentMatch!.currentPhase = MatchPhase.playerTurn;
 
       // Increment turn number when it comes back to player
       _currentMatch!.turnNumber++;
-    }
-
-    // First turn is over after both players have had a turn
-    if (wasFirstTurn && !wasPlayerTurn) {
-      _currentMatch!.isFirstTurn = false;
     }
 
     // Reset turn state
@@ -1403,9 +1437,15 @@ class MatchManager {
   /// Regenerate AP for all cards belonging to the active player
   void _regenerateAPForActivePlayer() {
     if (_currentMatch == null) return;
-
     final activeId = _currentMatch!.activePlayerId;
     if (activeId == null) return;
+    regenerateAPForPlayer(activeId);
+  }
+
+  /// Regenerate AP for all cards belonging to a specific player
+  /// Public method for online mode to call when turn switches
+  void regenerateAPForPlayer(String playerId) {
+    if (_currentMatch == null) return;
 
     int cardsRegen = 0;
 
@@ -1415,8 +1455,8 @@ class MatchManager {
         final tile = _currentMatch!.board.getTile(row, col);
 
         for (final card in tile.cards) {
-          // Use ownerId to determine if card belongs to active player
-          if (card.ownerId == activeId && card.isAlive) {
+          // Use ownerId to determine if card belongs to the player
+          if (card.ownerId == playerId && card.isAlive) {
             card.regenerateAP();
             cardsRegen++;
           }
