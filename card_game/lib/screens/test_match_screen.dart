@@ -1900,13 +1900,21 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       _opponentId = opponentData?['userId'] as String?;
       _opponentName = opponentData?['displayName'] as String? ?? 'Opponent';
 
+      // Check if opponent already selected hero (before we start listening)
+      final oppHeroId = opponentData?['heroId'] as String?;
+      if (oppHeroId != null) {
+        _opponentHero = HeroLibrary.getHeroById(oppHeroId);
+        debugPrint('Opponent already selected hero: ${_opponentHero?.name}');
+      }
+
+      // Start listening to Firebase BEFORE showing hero selection dialog
+      // This ensures we don't miss opponent's hero selection
+      _listenToMatchUpdates();
+
       // Show hero selection dialog
       if (mounted) {
         await _showHeroSelectionDialog();
       }
-
-      // Listen to Firebase match updates (including hero selection)
-      _listenToMatchUpdates();
 
       if (mounted) {
         setState(() {});
@@ -2626,9 +2634,12 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
 
     // Check for hero selection (for starting match)
     final oppHeroId = oppData?['heroId'] as String?;
+    debugPrint(
+      '🔍 Hero check: oppHeroId=$oppHeroId, _opponentHero=${_opponentHero?.name}, _selectedHero=${_selectedHero?.name}',
+    );
     if (oppHeroId != null && _opponentHero == null) {
       _opponentHero = HeroLibrary.getHeroById(oppHeroId);
-      debugPrint('Opponent selected hero: ${_opponentHero?.name}');
+      debugPrint('✅ Opponent selected hero: ${_opponentHero?.name}');
     }
 
     // Check for board setup (from Player 1 / host)
@@ -2650,6 +2661,12 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     }
 
     // Start match when both players have selected heroes
+    debugPrint(
+      '🔍 Match start check: selectedHero=${_selectedHero?.name}, opponentHero=${_opponentHero?.name}, heroSelectionComplete=$_heroSelectionComplete, amPlayer1=$_amPlayer1',
+    );
+    debugPrint(
+      '🔍 Board setup: predefinedTerrains=${_predefinedTerrains != null}, firstPlayerId=$_firstPlayerId',
+    );
     if (_selectedHero != null &&
         _opponentHero != null &&
         !_heroSelectionComplete) {
