@@ -128,6 +128,9 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   // ===== TYC3: Turn timer methods =====
 
   void _startTurnTimer() {
+    // Only use timer in online mode - no timer for vs AI
+    if (!_isOnlineMode) return;
+
     _turnTimer?.cancel();
     _turnSecondsRemaining = 100;
     _turnTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
@@ -388,12 +391,14 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         _selectedCardCol = col;
         _currentAction = null;
 
-        // Get valid targets for this card (only if can attack)
-        if (card.canAttack()) {
-          _validTargets = _matchManager.getValidTargetsTYC3(card, row, col);
-        } else {
-          _validTargets = []; // No targets if can't attack
-        }
+        // Get all reachable attack targets (including move+attack combinations)
+        // This shows all enemies the card can attack using its full AP
+        final reachableTargets = _matchManager.getReachableAttackTargets(
+          card,
+          row,
+          col,
+        );
+        _validTargets = reachableTargets.map((t) => t.target).toList();
       }
     });
   }
@@ -728,14 +733,72 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     int targetRow,
     int targetCol,
   ) {
+    // Check if we need to move first to reach the target
+    // Find the best position to attack from (may require moving)
+    final reachableTargets = _matchManager.getReachableAttackTargets(
+      attacker,
+      attackerRow,
+      attackerCol,
+    );
+
+    final targetInfo = reachableTargets
+        .where((t) => t.target == target)
+        .firstOrNull;
+    if (targetInfo == null) {
+      debugPrint('❌ Target not reachable');
+      _clearTYC3Selection();
+      setState(() {});
+      return;
+    }
+
+    // Move to attack position if needed
+    int currentRow = attackerRow;
+    int currentCol = attackerCol;
+    if (targetInfo.moveCost > 0) {
+      // Need to move first - find path to attack position
+      final destRow = targetInfo.row;
+      final destCol = targetInfo.col;
+
+      // Move step by step (simplified - just move directly if adjacent)
+      while (currentRow != destRow || currentCol != destCol) {
+        int nextRow = currentRow;
+        int nextCol = currentCol;
+
+        if (currentRow > destRow)
+          nextRow--;
+        else if (currentRow < destRow)
+          nextRow++;
+        else if (currentCol > destCol)
+          nextCol--;
+        else if (currentCol < destCol)
+          nextCol++;
+
+        final moved = _matchManager.moveCardTYC3(
+          attacker,
+          currentRow,
+          currentCol,
+          nextRow,
+          nextCol,
+        );
+
+        if (!moved) {
+          debugPrint('❌ Move failed during attack approach');
+          break;
+        }
+
+        currentRow = nextRow;
+        currentCol = nextCol;
+      }
+    }
+
     // NEW: Use OnlineGameManager for online mode if available
     if (_onlineGameManager != null) {
       // Apply locally first (same logic as vs-AI)
       final result = _matchManager.attackCardTYC3(
         attacker,
         target,
-        attackerRow,
-        attackerCol,
+        currentRow,
+        currentCol,
         targetRow,
         targetCol,
       );
@@ -745,7 +808,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         _syncOnlineState();
 
         // Show battle result dialog (same as vs-AI)
-        _showBattleResultDialog(result, attacker, target, attackerCol);
+        _showBattleResultDialog(result, attacker, target, currentCol);
       }
 
       _clearTYC3Selection();
@@ -760,8 +823,8 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     final result = _matchManager.attackCardTYC3(
       attacker,
       target,
-      attackerRow,
-      attackerCol,
+      currentRow,
+      currentCol,
       targetRow,
       targetCol,
     );
@@ -3884,8 +3947,11 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
               ? _buildTYC3Title(match)
               : Text('Turn ${match.turnNumber} - ${match.currentPhase.name}'),
           actions: [
-            // TYC3: Show turn timer
-            if (_useTYC3Mode && !match.isGameOver && _matchManager.isPlayerTurn)
+            // TYC3: Show turn timer (only in online mode)
+            if (_useTYC3Mode &&
+                _isOnlineMode &&
+                !match.isGameOver &&
+                _matchManager.isPlayerTurn)
               Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 12,
@@ -5373,38 +5439,51 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         ...stagedCardsOnTile, // Player staged cards at BOTTOM (only during placement)
     ];
 
-    // TYC3: Check if this tile is a valid move destination
+    // TYC3: Check if this tile is a valid move destination (including multi-AP moves)
     bool canMoveTo = false;
     bool canAttackBase = false;
     if (_useTYC3Mode &&
         _selectedCardForAction != null &&
         _selectedCardRow != null &&
         _selectedCardCol != null) {
-      // Use MatchManager's getMoveError for consistent validation
-      // This handles same-lane, cross-lane (if enabled), and all other rules
-      final moveError = _matchManager.getMoveError(
+      // Get all reachable tiles with their AP costs
+      final reachableTiles = _matchManager.getReachableTiles(
         _selectedCardForAction!,
         _selectedCardRow!,
         _selectedCardCol!,
-        row,
-        col,
       );
-      canMoveTo = moveError == null && _matchManager.isPlayerTurn;
 
-      // Check if can attack enemy base (row 0)
-      final sameCol = col == _selectedCardCol;
-      if (row == 0 &&
-          sameCol &&
-          _selectedCardForAction!.canAttack() &&
-          _matchManager.isPlayerTurn) {
-        // Check range
-        final distance = (_selectedCardRow! - 0).abs();
-        if (distance <= _selectedCardForAction!.attackRange) {
-          // Check no enemy cards blocking in base tile
-          final baseTile = _matchManager.currentMatch!.board.getTile(0, col);
-          final hasEnemyCards = baseTile.cards.any((c) => c.isAlive);
-          if (!hasEnemyCards) {
-            canAttackBase = true;
+      // Check if this tile is reachable
+      final reachable = reachableTiles.where(
+        (t) => t.row == row && t.col == col,
+      );
+      if (reachable.isNotEmpty && _matchManager.isPlayerTurn) {
+        canMoveTo = true;
+      }
+
+      // Check if can attack enemy base (row 0) - considering multi-move
+      if (row == 0 && _matchManager.isPlayerTurn) {
+        // Check from current position and all reachable positions
+        final positions = [
+          (row: _selectedCardRow!, col: _selectedCardCol!, apCost: 0),
+          ...reachableTiles,
+        ];
+
+        for (final pos in positions) {
+          if (pos.col != col) continue; // Must be same lane for base attack
+          final apAfterMove = _selectedCardForAction!.currentAP - pos.apCost;
+          if (apAfterMove < _selectedCardForAction!.attackAPCost) continue;
+
+          // Check range from this position
+          final distance = (pos.row - 0).abs();
+          if (distance <= _selectedCardForAction!.attackRange) {
+            // Check no enemy cards blocking in base tile
+            final baseTile = _matchManager.currentMatch!.board.getTile(0, col);
+            final hasEnemyCards = baseTile.cards.any((c) => c.isAlive);
+            if (!hasEnemyCards) {
+              canAttackBase = true;
+              break;
+            }
           }
         }
       }

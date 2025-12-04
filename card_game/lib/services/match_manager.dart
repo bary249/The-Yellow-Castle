@@ -1623,6 +1623,185 @@ class MatchManager {
     return null; // Can move
   }
 
+  /// TYC3: Get all tiles reachable with current AP (for multi-move display)
+  /// Returns list of (row, col, apCost) tuples
+  List<({int row, int col, int apCost})> getReachableTiles(
+    GameCard card,
+    int fromRow,
+    int fromCol,
+  ) {
+    if (_currentMatch == null) return [];
+
+    final reachable = <({int row, int col, int apCost})>[];
+    final visited = <String>{};
+    final queue = <({int row, int col, int apCost})>[
+      (row: fromRow, col: fromCol, apCost: 0),
+    ];
+
+    final isPlayerCard = card.ownerId == _currentMatch!.player.id;
+    final hasFlanking = card.abilities.contains('flanking');
+    final canCrossLane = allowCrossLaneMovement || hasFlanking;
+
+    while (queue.isNotEmpty) {
+      final current = queue.removeAt(0);
+      final key = '${current.row},${current.col}';
+
+      if (visited.contains(key)) continue;
+      visited.add(key);
+
+      // Add to reachable if not starting position
+      if (current.row != fromRow || current.col != fromCol) {
+        reachable.add(current);
+      }
+
+      // Don't explore further if we've used all AP
+      if (current.apCost >= card.currentAP) continue;
+
+      // Check adjacent tiles
+      final directions = <({int dr, int dc})>[
+        (dr: -1, dc: 0), // Forward (toward enemy)
+        (dr: 1, dc: 0), // Backward
+        if (canCrossLane) (dr: 0, dc: -1), // Left
+        if (canCrossLane) (dr: 0, dc: 1), // Right
+      ];
+
+      for (final dir in directions) {
+        final newRow = current.row + dir.dr;
+        final newCol = current.col + dir.dc;
+
+        // Bounds check
+        if (newRow < 0 || newRow > 2 || newCol < 0 || newCol > 2) continue;
+
+        // Can't move into enemy base
+        if (isPlayerCard && newRow == 0) continue;
+        if (!isPlayerCard && newRow == 2) continue;
+
+        // Check destination tile
+        final destTile = _currentMatch!.board.getTile(newRow, newCol);
+
+        // Can't move through enemy cards
+        final hasEnemyCards = destTile.cards.any(
+          (c) => c.ownerId != card.ownerId && c.isAlive,
+        );
+        if (hasEnemyCards) continue;
+
+        // Check capacity
+        if (!destTile.canAddCard) continue;
+
+        queue.add((row: newRow, col: newCol, apCost: current.apCost + 1));
+      }
+    }
+
+    return reachable;
+  }
+
+  /// TYC3: Get all attack targets reachable with current AP (move + attack)
+  /// Returns list of (target, row, col, moveCost) where moveCost is AP spent moving
+  List<({GameCard target, int row, int col, int moveCost})>
+  getReachableAttackTargets(GameCard card, int fromRow, int fromCol) {
+    if (_currentMatch == null) return [];
+
+    final targets = <({GameCard target, int row, int col, int moveCost})>[];
+    final isPlayerCard = card.ownerId == _currentMatch!.player.id;
+
+    // Get all positions we can reach (including current position with 0 move cost)
+    final positions = [
+      (row: fromRow, col: fromCol, apCost: 0),
+      ...getReachableTiles(card, fromRow, fromCol),
+    ];
+
+    for (final pos in positions) {
+      // Check if we have enough AP left to attack from this position
+      final apAfterMove = card.currentAP - pos.apCost;
+      if (apAfterMove < card.attackAPCost) continue;
+
+      // Get valid targets from this position
+      final targetsFromPos = _getAttackTargetsFromPosition(
+        card,
+        pos.row,
+        pos.col,
+        isPlayerCard,
+      );
+
+      for (final target in targetsFromPos) {
+        // Avoid duplicates (same target might be reachable from multiple positions)
+        if (!targets.any((t) => t.target == target)) {
+          targets.add((
+            target: target,
+            row: pos.row,
+            col: pos.col,
+            moveCost: pos.apCost,
+          ));
+        }
+      }
+    }
+
+    return targets;
+  }
+
+  /// Helper: Get attack targets from a specific position
+  /// Cross-lane attacks follow same rules as movement: only adjacent tiles (Manhattan distance 1)
+  /// Forward attacks can go up to attackRange tiles ahead in same lane
+  List<GameCard> _getAttackTargetsFromPosition(
+    GameCard attacker,
+    int row,
+    int col,
+    bool isPlayerCard,
+  ) {
+    final targets = <GameCard>[];
+    final hasCrossAttack = attacker.abilities.contains('cross_attack');
+    final canAttackCrossLane = allowCrossLaneAttack || hasCrossAttack;
+
+    // Forward direction: player attacks toward row 0, opponent toward row 2
+    final forwardDir = isPlayerCard ? -1 : 1;
+
+    // 1) Forward attacks in same lane (up to attackRange)
+    for (int dist = 1; dist <= attacker.attackRange; dist++) {
+      final targetRow = row + (forwardDir * dist);
+      if (targetRow < 0 || targetRow > 2) break;
+
+      _addTargetsFromTile(targets, attacker, targetRow, col);
+    }
+
+    // 2) Cross-lane attacks: only adjacent tiles (same row, different col)
+    // This is like side movement - can only attack tiles directly to the left/right
+    if (canAttackCrossLane) {
+      // Left
+      if (col > 0) {
+        _addTargetsFromTile(targets, attacker, row, col - 1);
+      }
+      // Right
+      if (col < 2) {
+        _addTargetsFromTile(targets, attacker, row, col + 1);
+      }
+    }
+
+    return targets;
+  }
+
+  /// Helper: Add enemy targets from a specific tile
+  void _addTargetsFromTile(
+    List<GameCard> targets,
+    GameCard attacker,
+    int row,
+    int col,
+  ) {
+    final tile = _currentMatch!.board.getTile(row, col);
+    final enemyCards = tile.cards
+        .where((card) => card.isAlive && card.ownerId != attacker.ownerId)
+        .toList();
+
+    if (enemyCards.isEmpty) return;
+
+    // Check for guards
+    final guards = enemyCards.where((c) => c.isGuard).toList();
+    if (guards.isNotEmpty) {
+      targets.addAll(guards);
+    } else {
+      targets.addAll(enemyCards);
+    }
+  }
+
   /// TYC3: Move a card to an adjacent tile (costs 1 AP)
   bool moveCardTYC3(
     GameCard card,
@@ -1857,6 +2036,7 @@ class MatchManager {
       targetRow: targetRow,
       targetCol: targetCol,
       guardsInTargetTile: guardsInTile,
+      allowCrossLane: allowCrossLaneAttack,
     );
 
     if (error != null) {
@@ -1950,11 +2130,18 @@ class MatchManager {
       _log(
         '   ↩️ Retaliation$retaliationNote: ${target.name} deals ${result.retaliationDamage} to ${attacker.name}',
       );
+    }
+    if (result.thornsDamage > 0) {
+      _log(
+        '   🌿 Thorns: ${target.name} reflects ${result.thornsDamage} damage to ${attacker.name}',
+      );
+    }
+    if (result.retaliationDamage > 0 || result.thornsDamage > 0) {
       _log(
         '   ${attacker.name} now ${attacker.currentHealth}/${attacker.health} HP',
       );
       if (result.attackerDied) {
-        _log('   💀 ${attacker.name} destroyed by retaliation!');
+        _log('   💀 ${attacker.name} destroyed!');
         // Remove dead attacker from tile
         attackerTile.cards.remove(attacker);
       }

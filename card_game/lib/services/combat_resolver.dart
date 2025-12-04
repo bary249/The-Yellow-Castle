@@ -6,6 +6,7 @@ class AttackResult {
   final bool success;
   final int damageDealt;
   final int retaliationDamage;
+  final int thornsDamage; // Separate from retaliation for logging
   final bool targetDied;
   final bool attackerDied;
   final String message;
@@ -14,6 +15,7 @@ class AttackResult {
     required this.success,
     this.damageDealt = 0,
     this.retaliationDamage = 0,
+    this.thornsDamage = 0,
     this.targetDied = false,
     this.attackerDied = false,
     this.message = '',
@@ -909,11 +911,12 @@ class CombatResolver {
     }
 
     // Apply thorns damage if target has thorns ability
+    int actualThornsDamage = 0;
     if (!attackerDied && target.isAlive) {
-      final thornsDamage = _getThornsDamage(target);
-      if (thornsDamage > 0) {
+      actualThornsDamage = _getThornsDamage(target);
+      if (actualThornsDamage > 0) {
         final attackerHpBefore = attacker.currentHealth;
-        attackerDied = attacker.takeDamage(thornsDamage);
+        attackerDied = attacker.takeDamage(actualThornsDamage);
         final attackerHpAfter = attacker.currentHealth;
 
         combatLog.add(
@@ -922,7 +925,7 @@ class CombatResolver {
             laneDescription: 'TYC3',
             action: '🌿 ${target.name} THORNS',
             details:
-                '${attacker.name} takes $thornsDamage thorns damage | HP: $attackerHpBefore → $attackerHpAfter${attackerDied ? " 💀" : ""}',
+                '${attacker.name} takes $actualThornsDamage thorns damage | HP: $attackerHpBefore → $attackerHpAfter${attackerDied ? " 💀" : ""}',
             isImportant: attackerDied,
             level: attackerDied ? LogLevel.important : LogLevel.normal,
           ),
@@ -934,6 +937,7 @@ class CombatResolver {
       success: true,
       damageDealt: damage,
       retaliationDamage: retaliationDamage,
+      thornsDamage: actualThornsDamage,
       targetDied: targetDied,
       attackerDied: attackerDied,
       message:
@@ -1055,7 +1059,7 @@ class CombatResolver {
           attacker.health,
         );
         attackerDied = attackerHpAfter <= 0;
-        retaliationDamage += thornsDamage;
+        // Don't add thorns to retaliation - keep them separate
       }
     }
 
@@ -1063,6 +1067,7 @@ class CombatResolver {
       success: true,
       damageDealt: damage,
       retaliationDamage: retaliationDamage,
+      thornsDamage: thornsDamage,
       targetDied: targetDied,
       attackerDied: attackerDied,
       message: 'Preview: ${attacker.name} → $damage dmg → ${target.name}',
@@ -1100,6 +1105,8 @@ class CombatResolver {
   }
 
   /// TYC3: Check if attacker can attack target based on range and position
+  /// Cross-lane attacks follow same rules as movement: only adjacent tiles (same row, different col)
+  /// Forward attacks can go up to attackRange tiles ahead in same lane
   /// Returns null if valid, or an error message if invalid
   String? validateAttackTYC3({
     required GameCard attacker,
@@ -1109,6 +1116,7 @@ class CombatResolver {
     required int targetRow,
     required int targetCol,
     required List<GameCard> guardsInTargetTile,
+    bool allowCrossLane = false,
   }) {
     // Check if attacker has enough AP
     if (!attacker.canAttack()) {
@@ -1119,14 +1127,27 @@ class CombatResolver {
     final rowDistance = (targetRow - attackerRow).abs();
     final colDistance = (targetCol - attackerCol).abs();
 
-    // Must be in same column (lane) for now
-    if (colDistance != 0) {
-      return 'Can only attack in the same lane';
-    }
+    // Check if this is a valid attack pattern:
+    // 1) Forward attack: same column, within range
+    // 2) Cross-lane attack: same row, adjacent column (if allowed)
+    final hasCrossAttack = attacker.abilities.contains('cross_attack');
+    final canAttackCrossLane = allowCrossLane || hasCrossAttack;
 
-    // Check range
-    if (rowDistance > attacker.attackRange) {
-      return 'Target is out of range (range: ${attacker.attackRange}, distance: $rowDistance)';
+    final isForwardAttack =
+        colDistance == 0 && rowDistance <= attacker.attackRange;
+    final isCrossLaneAttack =
+        canAttackCrossLane && rowDistance == 0 && colDistance == 1;
+
+    if (!isForwardAttack && !isCrossLaneAttack) {
+      if (colDistance > 0 && rowDistance > 0) {
+        return 'Cannot attack diagonally';
+      } else if (colDistance > 1) {
+        return 'Cross-lane attack only works on adjacent lanes';
+      } else if (colDistance > 0 && !canAttackCrossLane) {
+        return 'Cannot attack cross-lane (no cross_attack ability)';
+      } else {
+        return 'Target is out of range (range: ${attacker.attackRange}, distance: $rowDistance)';
+      }
     }
 
     // Check guard rule - must attack guards first
@@ -1139,8 +1160,8 @@ class CombatResolver {
   }
 
   /// TYC3: Get all valid attack targets for a card
-  /// [allowCrossLane] - if true, can attack enemies in adjacent lanes
-  /// [hasCrossAttack] - if true, this unit has the cross_attack ability
+  /// Cross-lane attacks follow same rules as movement: only adjacent tiles (same row, different col)
+  /// Forward attacks can go up to attackRange tiles ahead in same lane
   List<GameCard> getValidTargetsTYC3({
     required GameCard attacker,
     required int attackerRow,
@@ -1155,51 +1176,68 @@ class CombatResolver {
     final hasCrossAttack = attacker.abilities.contains('cross_attack');
     final canAttackCrossLane = allowCrossLane || hasCrossAttack;
 
-    // Determine which rows to check based on range
-    final minRow = (attackerRow - attacker.attackRange).clamp(0, 2);
-    final maxRow = (attackerRow + attacker.attackRange).clamp(0, 2);
+    // Forward direction: player attacks toward row 0, opponent toward row 2
+    final forwardDir = isPlayerCard ? -1 : 1;
 
-    // Determine which columns to check
-    final minCol = canAttackCrossLane
-        ? (attackerCol - 1).clamp(0, 2)
-        : attackerCol;
-    final maxCol = canAttackCrossLane
-        ? (attackerCol + 1).clamp(0, 2)
-        : attackerCol;
+    // 1) Forward attacks in same lane (up to attackRange)
+    for (int dist = 1; dist <= attacker.attackRange; dist++) {
+      final targetRow = attackerRow + (forwardDir * dist);
+      if (targetRow < 0 || targetRow > 2) break;
 
-    for (int row = minRow; row <= maxRow; row++) {
-      if (row == attackerRow) continue; // Can't attack own row
+      _addTargetsFromBoardTile(
+        targets,
+        attacker,
+        boardCards[targetRow][attackerCol],
+      );
+    }
 
-      // Check if this is an enemy tile (toward enemy base)
-      // Player cards attack toward row 0, AI cards attack toward row 2
-      final isEnemyTile = isPlayerCard
-          ? (row < attackerRow)
-          : (row > attackerRow);
-      if (!isEnemyTile) continue;
-
-      for (int col = minCol; col <= maxCol; col++) {
-        final cardsInTile = boardCards[row][col];
-        if (cardsInTile.isEmpty) continue;
-
-        // Filter to only enemy cards (cards with different owner)
-        final enemyCards = cardsInTile
-            .where((c) => c.isAlive && c.ownerId != attacker.ownerId)
-            .toList();
-        if (enemyCards.isEmpty) continue;
-
-        // Check for guards among enemy cards
-        final guards = enemyCards.where((c) => c.isGuard).toList();
-
-        if (guards.isNotEmpty) {
-          // Can only target guards
-          targets.addAll(guards);
-        } else {
-          // Can target any enemy card
-          targets.addAll(enemyCards);
-        }
+    // 2) Cross-lane attacks: only adjacent tiles (same row, different col)
+    // This is like side movement - can only attack tiles directly to the left/right
+    if (canAttackCrossLane) {
+      // Left
+      if (attackerCol > 0) {
+        _addTargetsFromBoardTile(
+          targets,
+          attacker,
+          boardCards[attackerRow][attackerCol - 1],
+        );
+      }
+      // Right
+      if (attackerCol < 2) {
+        _addTargetsFromBoardTile(
+          targets,
+          attacker,
+          boardCards[attackerRow][attackerCol + 1],
+        );
       }
     }
 
     return targets;
+  }
+
+  /// Helper: Add enemy targets from a board tile's card list
+  void _addTargetsFromBoardTile(
+    List<GameCard> targets,
+    GameCard attacker,
+    List<GameCard> cardsInTile,
+  ) {
+    if (cardsInTile.isEmpty) return;
+
+    // Filter to only enemy cards (cards with different owner)
+    final enemyCards = cardsInTile
+        .where((c) => c.isAlive && c.ownerId != attacker.ownerId)
+        .toList();
+    if (enemyCards.isEmpty) return;
+
+    // Check for guards among enemy cards
+    final guards = enemyCards.where((c) => c.isGuard).toList();
+
+    if (guards.isNotEmpty) {
+      // Can only target guards
+      targets.addAll(guards);
+    } else {
+      // Can target any enemy card
+      targets.addAll(enemyCards);
+    }
   }
 }
