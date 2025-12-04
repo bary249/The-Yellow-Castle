@@ -202,4 +202,62 @@ class GameBoard {
     }
     print('==================\n');
   }
+
+  /// Serialize to JSON for Firebase
+  /// Note: Firestore doesn't support nested arrays, so we flatten the 3x3 grid
+  /// into a 1D array of 9 tiles, each with row/col embedded
+  Map<String, dynamic> toJson() {
+    final flatTiles = <Map<String, dynamic>>[];
+    for (int row = 0; row < 3; row++) {
+      for (int col = 0; col < 3; col++) {
+        flatTiles.add(tiles[row][col].toJson());
+      }
+    }
+    return {'tiles': flatTiles};
+  }
+
+  /// Create from JSON
+  factory GameBoard.fromJson(Map<String, dynamic> json) {
+    final tilesData = json['tiles'] as List<dynamic>;
+
+    // Reconstruct 3x3 grid from flat array
+    final grid = List.generate(
+      3,
+      (row) => List.generate(3, (col) {
+        final index = row * 3 + col;
+        return Tile.fromJson(tilesData[index] as Map<String, dynamic>);
+      }),
+    );
+
+    return GameBoard._(tiles: grid);
+  }
+
+  /// Create a mirrored copy of the board (swap rows 0 and 2)
+  /// Used for Player 2's perspective so their base is always at the bottom
+  GameBoard mirrored() {
+    final mirroredGrid = List.generate(3, (row) {
+      final sourceRow = 2 - row; // Row 0 becomes 2, row 2 becomes 0
+      return List.generate(3, (col) {
+        final sourceTile = tiles[sourceRow][col];
+        // Create new tile with mirrored row position and swapped owner
+        final mirroredOwner = sourceTile.owner == TileOwner.player
+            ? TileOwner.opponent
+            : sourceTile.owner == TileOwner.opponent
+            ? TileOwner.player
+            : TileOwner.neutral;
+        final newTile = Tile(
+          row: row,
+          column: col,
+          terrain: sourceTile.terrain,
+          owner: mirroredOwner,
+        );
+        // Copy cards to new tile
+        for (final card in sourceTile.cards) {
+          newTile.cards.add(card);
+        }
+        return newTile;
+      });
+    });
+    return GameBoard._(tiles: mirroredGrid);
+  }
 }

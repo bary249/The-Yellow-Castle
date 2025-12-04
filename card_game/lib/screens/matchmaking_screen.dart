@@ -93,6 +93,24 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> {
             }
           });
 
+      // TESTING: Delete any existing matches for this user before searching
+      // This ensures we always get a fresh match for testing
+      try {
+        final existingMatches = await _firestore
+            .collection('matches')
+            .where('playerIds', arrayContains: user.uid)
+            .get();
+        for (final doc in existingMatches.docs) {
+          final status = doc.data()['status'] as String?;
+          if (status == 'waiting' || status == 'active') {
+            print('🧹 Deleting old match: ${doc.id}');
+            await doc.reference.delete();
+          }
+        }
+      } catch (e) {
+        print('⚠️ Could not delete old matches (continuing anyway): $e');
+      }
+
       // Also listen for matches where we're a player
       _matchListener = _firestore
           .collection('matches')

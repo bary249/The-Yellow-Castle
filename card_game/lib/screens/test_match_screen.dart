@@ -86,8 +86,9 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   // Opponent's deck card names (synced from Firebase for online mode)
   List<String>? _opponentDeckCardNames;
 
-  // OnlineGameManager for action-based sync (TYC3 online mode)
+  // OnlineGameManager for state-based sync (TYC3 online mode)
   OnlineGameManager? _onlineGameManager;
+  StreamSubscription<MatchState>? _onlineStateSubscription;
 
   // ===== TYC3: Turn-based AP system state =====
   bool _useTYC3Mode = true; // Enable TYC3 by default for testing
@@ -119,6 +120,8 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   void dispose() {
     _matchListener?.cancel();
     _turnTimer?.cancel();
+    _onlineStateSubscription?.cancel();
+    _onlineGameManager?.dispose();
     super.dispose();
   }
 
@@ -145,6 +148,53 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     });
   }
 
+  /// Sync current game state to Firebase (for online mode)
+  /// Call this after every action (place, move, attack, end turn)
+  /// Only syncs if it's currently our turn (we're the authority)
+  void _syncOnlineState() {
+    if (_onlineGameManager == null || _matchManager.currentMatch == null)
+      return;
+
+    // Only sync if it's our turn - we're the authority during our turn
+    if (!_matchManager.isPlayerTurn) {
+      debugPrint('⚠️ Not syncing - not our turn');
+      return;
+    }
+
+    _onlineGameManager!.syncState(_matchManager.currentMatch!);
+  }
+
+  /// Handle incoming state update from opponent (via Firebase stream)
+  void _onOpponentStateUpdate(MatchState newState) {
+    debugPrint('📥 Received opponent state update');
+    debugPrint(
+      '📥 New state: turnNumber=${newState.turnNumber}, activePlayerId=${newState.activePlayerId}, player.id=${newState.player.id}, opponent.id=${newState.opponent.id}',
+    );
+
+    // Check if it's currently our turn locally
+    final wasMyTurn = _matchManager.isPlayerTurn;
+
+    // Replace local match state with the received state
+    _matchManager.replaceMatchState(newState);
+
+    // Check if turn changed
+    final isMyTurnNow = _matchManager.isPlayerTurn;
+    debugPrint('📥 Turn state: wasMyTurn=$wasMyTurn, isMyTurnNow=$isMyTurnNow');
+
+    if (isMyTurnNow && !wasMyTurn) {
+      // Turn just switched to us - start timer
+      debugPrint('🔄 Turn switched to us!');
+      _startTurnTimer();
+    } else if (!isMyTurnNow && wasMyTurn) {
+      // Turn just switched away from us - stop timer
+      debugPrint('🔄 Turn switched to opponent');
+      _turnTimer?.cancel();
+    }
+
+    // Refresh UI
+    if (mounted) setState(() {});
+  }
+
   void _endTurnTYC3() {
     _turnTimer?.cancel();
 
@@ -155,13 +205,14 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       _clearTYC3Selection();
       _selectedCard = null;
 
-      // Send action to Firebase for opponent to replay
-      final action = _onlineGameManager!.createEndTurnAction(
-        turnNumber: _matchManager.currentMatch?.turnNumber ?? 0,
-      );
-      _onlineGameManager!.sendAction(action);
+      // FORCE sync the end turn state - this is critical because after endTurnTYC3(),
+      // isPlayerTurn becomes false, but we MUST sync to notify opponent it's their turn
+      if (_matchManager.currentMatch != null) {
+        debugPrint('🔄 Force syncing end turn state');
+        _onlineGameManager!.syncState(_matchManager.currentMatch!);
+      }
 
-      // Timer will be managed by _handleTYC3StateUpdate when turn changes
+      // Timer will be managed by stream listener when turn changes
       setState(() {});
       return;
     }
@@ -259,13 +310,8 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       // Apply locally first (same logic as vs-AI)
       final success = _matchManager.placeCardTYC3(card, row, col);
       if (success) {
-        // Send action to Firebase for opponent to replay
-        final action = _onlineGameManager!.createPlaceAction(
-          card: card,
-          toRow: row,
-          toCol: col,
-        );
-        _onlineGameManager!.sendAction(action);
+        // Sync state to Firebase so opponent sees the action
+        _syncOnlineState();
         _selectedCard = null;
         setState(() {});
       } else {
@@ -691,16 +737,8 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       );
 
       if (result != null) {
-        // Send action to Firebase for opponent to replay
-        final action = _onlineGameManager!.createAttackAction(
-          attacker: attacker,
-          attackerRow: attackerRow,
-          attackerCol: attackerCol,
-          target: target,
-          targetRow: targetRow,
-          targetCol: targetCol,
-        );
-        _onlineGameManager!.sendAction(action);
+        // Sync state to Firebase so opponent sees the action
+        _syncOnlineState();
 
         // Show battle result dialog (same as vs-AI)
         _showBattleResultDialog(result, attacker, target, attackerCol);
@@ -1179,15 +1217,8 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         toCol,
       );
       if (success) {
-        // Send action to Firebase for opponent to replay
-        final action = _onlineGameManager!.createMoveAction(
-          card: card,
-          fromRow: fromRow,
-          fromCol: fromCol,
-          toRow: toRow,
-          toCol: toCol,
-        );
-        _onlineGameManager!.sendAction(action);
+        // Sync state to Firebase so opponent sees the action
+        _syncOnlineState();
         _clearTYC3Selection();
         setState(() {});
       }
@@ -1443,17 +1474,10 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         attackerCol,
       );
       if (damage > 0) {
-        // Send action to Firebase for opponent to replay
-        final action = _onlineGameManager!.createAttackBaseAction(
-          attacker: attacker,
-          attackerRow: attackerRow,
-          attackerCol: attackerCol,
-        );
-        _onlineGameManager!.sendAction(action);
-        // Note: Dialog will be shown in the legacy path below since we fall through
+        // Sync state to Firebase so opponent sees the action
+        _syncOnlineState();
       }
       _clearTYC3Selection();
-      // For now, skip showing dialog in new path - opponent sees HP change via replay
       setState(() {});
       return;
     }
@@ -1922,9 +1946,10 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       if (mounted) {
         setState(() {});
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
       debugPrint('Error initializing online match: $e');
-      _showError('Failed to join match');
+      debugPrint('Stack trace: $stackTrace');
+      _showError('Failed to join match: $e');
     }
   }
 
@@ -2776,21 +2801,11 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   int _lastProcessedActionIndex = 0; // Track which actions we've processed
 
   void _handleTYC3StateUpdate(Map<String, dynamic> data) {
-    // NEW: Use OnlineGameManager for action-based replay if available
+    // NEW: OnlineGameManager now uses stream-based sync, so this method
+    // is only used for legacy state sync. The stream listener handles
+    // state updates from the opponent automatically.
     if (_onlineGameManager != null) {
-      final actions = data['tyc3Actions'] as List<dynamic>?;
-      if (actions != null) {
-        _onlineGameManager!.onActionsUpdate(actions);
-      }
-      // Timer management: start timer when it becomes our turn
-      if (_matchManager.isPlayerTurn) {
-        if (_turnTimer == null || !_turnTimer!.isActive) {
-          _startTurnTimer();
-        }
-      } else {
-        _turnTimer?.cancel();
-      }
-      setState(() {});
+      // Stream-based sync handles updates - nothing to do here
       return;
     }
 
@@ -3095,23 +3110,39 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
           };
 
       if (_isOnlineMode) {
-        // Online TYC3: Initialize OnlineGameManager for action-based sync
+        // Online TYC3: Initialize OnlineGameManager for state-based sync
         _onlineGameManager = OnlineGameManager(
           matchId: widget.onlineMatchId!,
           myPlayerId: _playerId!,
-          amPlayer1: _amPlayer1,
         );
-        _onlineGameManager!.attachToMatch(_matchManager);
-        _onlineGameManager!.onStateChanged = () {
-          if (mounted) setState(() {});
-        };
-        debugPrint('🎮 OnlineGameManager initialized');
 
-        // Sync initial state (will be replaced by action-only sync later)
-        _syncTYC3StateToFirebase();
-        // Only start timer if it's our turn
+        // Subscribe to opponent state updates
+        _onlineStateSubscription = _onlineGameManager!.stateStream.listen(
+          _onOpponentStateUpdate,
+          onError: (e) => debugPrint('❌ State stream error: $e'),
+        );
+
+        // Start listening to Firebase
+        _onlineGameManager!.startListening();
+        debugPrint('🎮 OnlineGameManager initialized with stream listener');
+
+        // Debug turn state
+        final match = _matchManager.currentMatch!;
+        debugPrint(
+          '🎮 Turn debug: activePlayerId=${match.activePlayerId}, player.id=${match.player.id}, opponent.id=${match.opponent.id}',
+        );
+        debugPrint(
+          '🎮 Turn debug: isPlayerTurn=${_matchManager.isPlayerTurn}, firstPlayerId=$_firstPlayerId',
+        );
+
+        // Sync initial state to Firebase (force sync regardless of turn)
+        // This ensures the first player's state is written
         if (_matchManager.isPlayerTurn) {
+          debugPrint('🎮 It is our turn - syncing initial state');
+          _onlineGameManager!.syncState(_matchManager.currentMatch!);
           _startTurnTimer();
+        } else {
+          debugPrint('🎮 It is opponent turn - waiting for their state');
         }
       } else {
         // Single player: Start turn timer if it's player's turn

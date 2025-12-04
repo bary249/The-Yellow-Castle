@@ -177,6 +177,33 @@ class Tile {
   @override
   String toString() =>
       'Tile($shortName, owner: $owner, cards: ${cards.length})';
+
+  /// Serialize to JSON for Firebase
+  Map<String, dynamic> toJson() => {
+    'row': row,
+    'column': column,
+    'terrain': terrain,
+    'owner': owner.name,
+    'cards': cards.map((c) => c.toJson()).toList(),
+  };
+
+  /// Create from JSON
+  factory Tile.fromJson(Map<String, dynamic> json) {
+    final tile = Tile(
+      row: json['row'] as int,
+      column: json['column'] as int,
+      terrain: json['terrain'] as String?,
+      owner: TileOwner.values.firstWhere(
+        (o) => o.name == json['owner'],
+        orElse: () => TileOwner.neutral,
+      ),
+    );
+    final cardsData = json['cards'] as List<dynamic>? ?? [];
+    for (final cardJson in cardsData) {
+      tile.cards.add(GameCard.fromJson(cardJson as Map<String, dynamic>));
+    }
+    return tile;
+  }
 }
 
 /// Column positions (lanes).

@@ -173,6 +173,7 @@ class GameCard {
     'rarity': rarity,
     'currentHealth': currentHealth,
     'currentAP': currentAP,
+    'ownerId': ownerId,
   };
 
   /// Create from JSON
@@ -196,6 +197,7 @@ class GameCard {
     );
     card.currentHealth = json['currentHealth'] as int? ?? json['health'] as int;
     card.currentAP = json['currentAP'] as int? ?? 0;
+    card.ownerId = json['ownerId'] as String?;
     return card;
   }
 

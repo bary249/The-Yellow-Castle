@@ -149,6 +149,15 @@
 - [x] Survivors retreat to middle after dealing crystal damage
 - [x] Updated GAME_RULES.md and GAME_LOGIC_SPEC.md with clarified zone mechanics
 
+### Online Game Sync Refactor ✅
+- [x] Refactored OnlineGameManager from action-replay to full state sync
+- [x] Added `toJson`/`fromJson` to MatchState, Player, GameBoard, Tile models
+- [x] Implemented stream-based listener for real-time UI updates
+- [x] Full game state written to Firebase after every action (place, move, attack, end turn)
+- [x] Opponent receives state via Firestore stream and replaces local state
+- [x] VS AI mode remains untouched (no Firebase calls when offline)
+- [x] Added `replaceMatchState()` to MatchManager for online sync
+
 ---
 
 ## 🏗️ 1. Project Setup & Architecture

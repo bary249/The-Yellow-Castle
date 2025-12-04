@@ -15,6 +15,13 @@ class MatchManager {
 
   MatchState? get currentMatch => _currentMatch;
 
+  /// Replace the current match state (for online sync)
+  /// This completely replaces the local state with the received state
+  void replaceMatchState(MatchState newState) {
+    _currentMatch = newState;
+    _log('🔄 Match state replaced from online sync');
+  }
+
   /// Tracks if player has a damage boost active for this turn (from hero ability).
   bool _playerDamageBoostActive = false;
 
@@ -1456,10 +1463,11 @@ class MatchManager {
     } else {
       _currentMatch!.activePlayerId = _currentMatch!.player.id;
       _currentMatch!.currentPhase = MatchPhase.playerTurn;
-
-      // Increment turn number when it comes back to player
-      _currentMatch!.turnNumber++;
     }
+
+    // Increment turn number every time a turn ends (not just when it comes back to player)
+    // This ensures both players see the same turn count
+    _currentMatch!.turnNumber++;
 
     // Reset turn state
     _currentMatch!.cardsPlayedThisTurn = 0;

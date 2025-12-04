@@ -1,498 +1,145 @@
-/// OnlineGameManager: Shared action-log based sync for online TYC3 matches.
+/// OnlineGameManager: Simple state-sync for online TYC3 matches.
 ///
-/// This class enables the same MatchManager logic to be used across all modes:
-/// - Simulation: offline script feeds actions into MatchManager.
-/// - Vs AI: local human + AI, both run through MatchManager.
-/// - Online PvP: two humans, each running a local MatchManager, with actions
-///   synced via Firebase and replayed deterministically.
+/// Design principle: Write FULL game state to Firebase after every action.
+/// The opponent receives the state via a Firestore stream and replaces their
+/// local state entirely. No action replay, no coordinate conversion during sync.
 ///
-/// Core principle: "Every mode gets an ordered list of actions, feeds them
-/// into MatchManager." Online just adds a network layer to share that list.
+/// This is simpler and more robust than action-replay because:
+/// - Turn-based game = only one player acts at a time
+/// - Full state sync = no desync possible
+/// - Stream-based = UI updates automatically
 
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
-import 'match_manager.dart';
-import '../models/card.dart';
+import '../models/match_state.dart';
 
-// ============================================================================
-// OnlineAction: A single game action that can be serialized, sent to Firebase,
-// and replayed deterministically on any client.
-// ============================================================================
-
-enum OnlineActionType { place, move, attack, attackBase, endTurn }
-
-class OnlineAction {
-  final OnlineActionType type;
-  final String byPlayerId;
-  final int actionIndex; // Position in the action log (for ordering)
-
-  // For place/move/attack actions
-  final String? cardInstanceId;
-  final String? cardName; // For logging/debugging
-
-  // Positions (canonical coords, Player 1's perspective)
-  final int? fromRow;
-  final int? fromCol;
-  final int? toRow;
-  final int? toCol;
-
-  // For attack actions
-  final String? targetId;
-  final int? targetRow;
-  final int? targetCol;
-
-  // For endTurn
-  final int? turnNumber;
-
-  OnlineAction({
-    required this.type,
-    required this.byPlayerId,
-    this.actionIndex = 0,
-    this.cardInstanceId,
-    this.cardName,
-    this.fromRow,
-    this.fromCol,
-    this.toRow,
-    this.toCol,
-    this.targetId,
-    this.targetRow,
-    this.targetCol,
-    this.turnNumber,
-  });
-
-  /// Create from Firebase document data
-  factory OnlineAction.fromMap(Map<String, dynamic> map, int index) {
-    final typeStr = map['type'] as String? ?? 'endTurn';
-    final type = OnlineActionType.values.firstWhere(
-      (t) => t.name == typeStr,
-      orElse: () => OnlineActionType.endTurn,
-    );
-
-    return OnlineAction(
-      type: type,
-      byPlayerId: map['byPlayerId'] as String? ?? '',
-      actionIndex: index,
-      cardInstanceId: map['cardInstanceId'] as String?,
-      cardName: map['cardName'] as String?,
-      fromRow: map['fromRow'] as int?,
-      fromCol: map['fromCol'] as int?,
-      toRow: map['toRow'] as int?,
-      toCol: map['toCol'] as int?,
-      targetId: map['targetId'] as String?,
-      targetRow: map['targetRow'] as int?,
-      targetCol: map['targetCol'] as int?,
-      turnNumber: map['turnNumber'] as int?,
-    );
-  }
-
-  /// Convert to Firebase-compatible map
-  Map<String, dynamic> toMap() {
-    return {
-      'type': type.name,
-      'byPlayerId': byPlayerId,
-      if (cardInstanceId != null) 'cardInstanceId': cardInstanceId,
-      if (cardName != null) 'cardName': cardName,
-      if (fromRow != null) 'fromRow': fromRow,
-      if (fromCol != null) 'fromCol': fromCol,
-      if (toRow != null) 'toRow': toRow,
-      if (toCol != null) 'toCol': toCol,
-      if (targetId != null) 'targetId': targetId,
-      if (targetRow != null) 'targetRow': targetRow,
-      if (targetCol != null) 'targetCol': targetCol,
-      if (turnNumber != null) 'turnNumber': turnNumber,
-    };
-  }
-
-  @override
-  String toString() {
-    switch (type) {
-      case OnlineActionType.place:
-        return 'Place($cardName @ $toRow,$toCol by $byPlayerId)';
-      case OnlineActionType.move:
-        return 'Move($cardName $fromRow,$fromCol → $toRow,$toCol by $byPlayerId)';
-      case OnlineActionType.attack:
-        return 'Attack($cardName → target $targetId by $byPlayerId)';
-      case OnlineActionType.attackBase:
-        return 'AttackBase($cardName by $byPlayerId)';
-      case OnlineActionType.endTurn:
-        return 'EndTurn(turn $turnNumber by $byPlayerId)';
-    }
-  }
-}
-
-// ============================================================================
-// OnlineGameManager: Manages action sync between Firebase and local MatchManager
-// ============================================================================
-
+/// Manages online game state synchronization via Firebase.
+///
+/// Usage:
+/// 1. Create instance with matchId and myPlayerId
+/// 2. Call syncState() after every local action (place, move, attack, end turn)
+/// 3. Listen to stateStream for opponent's updates
+/// 4. When stream emits, replace local MatchState with the received one
 class OnlineGameManager {
   final FirebaseFirestore _firestore;
   final String matchId;
   final String myPlayerId;
-  final bool amPlayer1; // True if this client is Player 1 (for coord mirroring)
 
-  MatchManager? _matchManager;
-  int _lastReplayedIndex = 0;
+  /// Stream controller for game state updates
+  StreamSubscription<DocumentSnapshot>? _subscription;
+  final _stateController = StreamController<MatchState>.broadcast();
 
-  /// Callback when actions are replayed (for UI refresh)
-  VoidCallback? onStateChanged;
+  /// Stream of game state updates from Firebase
+  /// Emits whenever the opponent updates the game state
+  Stream<MatchState> get stateStream => _stateController.stream;
+
+  /// Last known state version to detect changes
+  int _lastSyncedVersion = 0;
 
   OnlineGameManager({
     required this.matchId,
     required this.myPlayerId,
-    required this.amPlayer1,
     FirebaseFirestore? firestore,
   }) : _firestore = firestore ?? FirebaseFirestore.instance;
 
-  /// Attach to a MatchManager instance
-  void attachToMatch(MatchManager manager) {
-    _matchManager = manager;
-    _lastReplayedIndex = 0;
-    debugPrint('🎮 OnlineGameManager attached to match');
+  /// Start listening to Firebase for state updates
+  void startListening() {
+    debugPrint('📡 OnlineGameManager: Starting Firebase listener for $matchId');
+
+    _subscription = _firestore
+        .collection('matches')
+        .doc(matchId)
+        .snapshots()
+        .listen(
+          _onSnapshot,
+          onError: (e) {
+            debugPrint('❌ OnlineGameManager: Firebase error: $e');
+          },
+        );
   }
 
-  /// Send a local action to Firebase
-  Future<void> sendAction(OnlineAction action) async {
-    debugPrint('📤 Sending action: $action');
-
-    await _firestore.collection('matches').doc(matchId).update({
-      'tyc3Actions': FieldValue.arrayUnion([action.toMap()]),
-    });
-
-    debugPrint('✅ Action sent to Firebase');
+  /// Stop listening to Firebase
+  void stopListening() {
+    _subscription?.cancel();
+    _subscription = null;
+    debugPrint('� OnlineGameManager: Stopped listening');
   }
 
-  /// Called when Firebase actions list updates
-  /// Replays any new actions into the local MatchManager
-  void onActionsUpdate(List<dynamic> actionsData) {
-    if (_matchManager == null) {
-      debugPrint('⚠️ OnlineGameManager: No MatchManager attached');
+  /// Handle incoming Firebase snapshot
+  void _onSnapshot(DocumentSnapshot snapshot) {
+    if (!snapshot.exists) {
+      debugPrint('⚠️ OnlineGameManager: Match document does not exist');
       return;
     }
 
-    final actions = actionsData
-        .asMap()
-        .entries
-        .map(
-          (e) => OnlineAction.fromMap(e.value as Map<String, dynamic>, e.key),
-        )
-        .toList();
+    final data = snapshot.data() as Map<String, dynamic>?;
+    if (data == null) return;
 
-    // Replay any actions we haven't processed yet
-    for (int i = _lastReplayedIndex; i < actions.length; i++) {
-      final action = actions[i];
+    // Check if there's game state to sync
+    final gameState = data['gameState'] as Map<String, dynamic>?;
+    if (gameState == null) {
+      debugPrint('📡 OnlineGameManager: No gameState in document yet');
+      return;
+    }
 
-      // CRITICAL: Skip our own actions - we already applied them locally
-      if (action.byPlayerId == myPlayerId) {
-        debugPrint('⏭️ Skipping own action $i: ${action.type.name}');
-        _lastReplayedIndex = i + 1;
-        continue;
+    // Check version to avoid processing our own updates
+    final version = gameState['version'] as int? ?? 0;
+    final lastUpdatedBy = gameState['lastUpdatedBy'] as String?;
+
+    debugPrint(
+      '📡 OnlineGameManager: Received state v$version (last: $_lastSyncedVersion, by: $lastUpdatedBy)',
+    );
+
+    // Only process if this is a newer version AND it wasn't us who updated it
+    if (version > _lastSyncedVersion && lastUpdatedBy != myPlayerId) {
+      _lastSyncedVersion = version;
+
+      try {
+        final matchState = MatchState.fromJson(
+          gameState,
+          myPlayerId: myPlayerId,
+        );
+        debugPrint(
+          '✅ OnlineGameManager: Parsed opponent state, emitting to stream',
+        );
+        _stateController.add(matchState);
+      } catch (e) {
+        debugPrint('❌ OnlineGameManager: Failed to parse state: $e');
       }
-
-      debugPrint('🔄 Replaying opponent action $i: $action');
-      _replayAction(action);
-      _lastReplayedIndex = i + 1;
-    }
-
-    // Notify UI to refresh
-    onStateChanged?.call();
-  }
-
-  /// Replay a single action into the MatchManager
-  /// Uses the SAME logic as vs-AI mode
-  void _replayAction(OnlineAction action) {
-    if (_matchManager == null) return;
-
-    // Convert canonical coords to local coords if needed
-    // (Player 2 sees the board mirrored)
-    int localRow(int? canonicalRow) {
-      if (canonicalRow == null) return 0;
-      return amPlayer1 ? canonicalRow : (2 - canonicalRow);
-    }
-
-    switch (action.type) {
-      case OnlineActionType.place:
-        _replayPlace(action, localRow);
-        break;
-      case OnlineActionType.move:
-        _replayMove(action, localRow);
-        break;
-      case OnlineActionType.attack:
-        _replayAttack(action, localRow);
-        break;
-      case OnlineActionType.attackBase:
-        _replayAttackBase(action, localRow);
-        break;
-      case OnlineActionType.endTurn:
-        _replayEndTurn(action);
-        break;
+    } else if (lastUpdatedBy == myPlayerId) {
+      // Update our version tracker when we see our own update confirmed
+      _lastSyncedVersion = version;
+      debugPrint('📡 OnlineGameManager: Confirmed our own update v$version');
     }
   }
 
-  void _replayPlace(OnlineAction action, int Function(int?) localRow) {
-    final match = _matchManager!.currentMatch;
-    if (match == null) {
-      debugPrint('⚠️ Replay place: no match');
-      return;
-    }
+  /// Sync the current game state to Firebase
+  /// Call this after every action (place, move, attack, end turn)
+  Future<void> syncState(MatchState state) async {
+    _lastSyncedVersion++;
 
-    final canonicalRow = action.toRow;
-    final toRow = localRow(action.toRow);
-    final toCol = action.toCol ?? 0;
+    final stateJson = state.toJson();
+    stateJson['version'] = _lastSyncedVersion;
+    stateJson['lastUpdatedBy'] = myPlayerId;
+    stateJson['updatedAt'] = FieldValue.serverTimestamp();
 
-    debugPrint(
-      '🔍 Replay place: canonical=($canonicalRow, $toCol) -> local=($toRow, $toCol), amPlayer1=$amPlayer1',
-    );
+    debugPrint('📤 OnlineGameManager: Syncing state v$_lastSyncedVersion');
 
-    // IMPORTANT: We're replaying OPPONENT's action, so look in OPPONENT's hand
-    // (not activePlayer, which changes based on whose turn it currently is)
-    final opponent = match.opponent;
-
-    // Find card by name (first matching card with that name)
-    final cardName = action.cardName;
-    GameCard? card;
-    for (final c in opponent.hand) {
-      if (c.name == cardName) {
-        card = c;
-        break;
-      }
-    }
-
-    if (card == null) {
-      debugPrint(
-        '⚠️ Replay place: card "$cardName" not found in opponent hand (${opponent.hand.length} cards)',
-      );
-      // Debug: list cards in hand
-      for (final c in opponent.hand) {
-        debugPrint('   - ${c.name} (${c.id})');
-      }
-      return;
-    }
-
-    debugPrint(
-      '🎯 Found card "${card.name}" in opponent hand, placing at ($toRow, $toCol)',
-    );
-
-    // Place the card - use opponent's perspective for placement
-    final success = _matchManager!.placeCardForOpponentTYC3(card, toRow, toCol);
-    debugPrint(
-      '🎯 Replay place result: ${action.cardName} @ ($toRow, $toCol) = $success',
-    );
-  }
-
-  void _replayMove(OnlineAction action, int Function(int?) localRow) {
-    final match = _matchManager!.currentMatch;
-    if (match == null) return;
-
-    final fromRow = localRow(action.fromRow);
-    final fromCol = action.fromCol ?? 0;
-    final toRow = localRow(action.toRow);
-    final toCol = action.toCol ?? 0;
-
-    // Find the card on the board by instanceId
-    final card = _findCardOnBoard(match, action.cardInstanceId);
-    if (card == null) {
-      debugPrint(
-        '⚠️ Replay move: card ${action.cardInstanceId} not found on board',
-      );
-      return;
-    }
-
-    final success = _matchManager!.moveCardTYC3(
-      card,
-      fromRow,
-      fromCol,
-      toRow,
-      toCol,
-    );
-    debugPrint(
-      '🎯 Replay move: ${action.cardName} ($fromRow,$fromCol) → ($toRow,$toCol) = $success',
-    );
-  }
-
-  void _replayAttack(OnlineAction action, int Function(int?) localRow) {
-    final match = _matchManager!.currentMatch;
-    if (match == null) return;
-
-    // Convert coords for local perspective
-    final attackerRow = localRow(action.fromRow);
-    final attackerCol = action.fromCol ?? 0;
-    final targetRow = localRow(action.targetRow);
-    final targetCol = action.targetCol ?? 0;
-
-    // Find attacker and target cards
-    final attacker = _findCardOnBoard(match, action.cardInstanceId);
-    final target = _findCardOnBoard(match, action.targetId);
-
-    if (attacker == null || target == null) {
-      debugPrint('⚠️ Replay attack: attacker or target not found');
-      return;
-    }
-
-    // Call MatchManager's attack method (same as vs-AI)
-    final result = _matchManager!.attackCardTYC3(
-      attacker,
-      target,
-      attackerRow,
-      attackerCol,
-      targetRow,
-      targetCol,
-    );
-    debugPrint(
-      '🎯 Replay attack: ${action.cardName} → ${target.name} = ${result != null ? "success" : "failed"}',
-    );
-  }
-
-  void _replayAttackBase(OnlineAction action, int Function(int?) localRow) {
-    final match = _matchManager!.currentMatch;
-    if (match == null) return;
-
-    final attackerRow = localRow(action.fromRow);
-    final attackerCol = action.fromCol ?? 0;
-
-    final attacker = _findCardOnBoard(match, action.cardInstanceId);
-    if (attacker == null) {
-      debugPrint('⚠️ Replay attackBase: attacker not found');
-      return;
-    }
-
-    final damage = _matchManager!.attackBaseTYC3(
-      attacker,
-      attackerRow,
-      attackerCol,
-    );
-    debugPrint('🎯 Replay attackBase: ${action.cardName} dealt $damage damage');
-  }
-
-  void _replayEndTurn(OnlineAction action) {
-    _matchManager!.endTurnTYC3();
-    debugPrint('🎯 Replay endTurn: turn ${action.turnNumber}');
-  }
-
-  // -------------------------------------------------------------------------
-  // Helper: Find a card by instanceId
-  // -------------------------------------------------------------------------
-
-  GameCard? _findCardInHand(List<GameCard> hand, String? instanceId) {
-    if (instanceId == null) return null;
     try {
-      return hand.firstWhere((c) => c.id == instanceId);
-    } catch (_) {
-      return null;
+      await _firestore.collection('matches').doc(matchId).update({
+        'gameState': stateJson,
+      });
+      debugPrint('✅ OnlineGameManager: State synced successfully');
+    } catch (e) {
+      debugPrint('❌ OnlineGameManager: Failed to sync state: $e');
+      rethrow;
     }
   }
 
-  GameCard? _findCardOnBoard(dynamic match, String? instanceId) {
-    if (instanceId == null || match == null) return null;
-
-    // Search all tiles for the card
-    for (int row = 0; row < 3; row++) {
-      for (int col = 0; col < 3; col++) {
-        final tile = match.board.getTile(row, col);
-        for (final card in tile.cards) {
-          if (card.id == instanceId) {
-            return card;
-          }
-        }
-      }
-    }
-    return null;
-  }
-
-  // -------------------------------------------------------------------------
-  // Action factory methods (for TestMatchScreen to use)
-  // -------------------------------------------------------------------------
-
-  /// Create a place action
-  OnlineAction createPlaceAction({
-    required GameCard card,
-    required int toRow,
-    required int toCol,
-  }) {
-    // Convert local coords to canonical (Player 1's perspective)
-    final canonicalRow = amPlayer1 ? toRow : (2 - toRow);
-
-    return OnlineAction(
-      type: OnlineActionType.place,
-      byPlayerId: myPlayerId,
-      cardInstanceId: card.id,
-      cardName: card.name,
-      toRow: canonicalRow,
-      toCol: toCol,
-    );
-  }
-
-  /// Create a move action
-  OnlineAction createMoveAction({
-    required GameCard card,
-    required int fromRow,
-    required int fromCol,
-    required int toRow,
-    required int toCol,
-  }) {
-    final canonicalFromRow = amPlayer1 ? fromRow : (2 - fromRow);
-    final canonicalToRow = amPlayer1 ? toRow : (2 - toRow);
-
-    return OnlineAction(
-      type: OnlineActionType.move,
-      byPlayerId: myPlayerId,
-      cardInstanceId: card.id,
-      cardName: card.name,
-      fromRow: canonicalFromRow,
-      fromCol: fromCol,
-      toRow: canonicalToRow,
-      toCol: toCol,
-    );
-  }
-
-  /// Create an attack action
-  OnlineAction createAttackAction({
-    required GameCard attacker,
-    required int attackerRow,
-    required int attackerCol,
-    required GameCard target,
-    required int targetRow,
-    required int targetCol,
-  }) {
-    final canonicalAttackerRow = amPlayer1 ? attackerRow : (2 - attackerRow);
-    final canonicalTargetRow = amPlayer1 ? targetRow : (2 - targetRow);
-
-    return OnlineAction(
-      type: OnlineActionType.attack,
-      byPlayerId: myPlayerId,
-      cardInstanceId: attacker.id,
-      cardName: attacker.name,
-      fromRow: canonicalAttackerRow,
-      fromCol: attackerCol,
-      targetId: target.id,
-      targetRow: canonicalTargetRow,
-      targetCol: targetCol,
-    );
-  }
-
-  /// Create an attackBase action
-  OnlineAction createAttackBaseAction({
-    required GameCard attacker,
-    required int attackerRow,
-    required int attackerCol,
-  }) {
-    final canonicalRow = amPlayer1 ? attackerRow : (2 - attackerRow);
-
-    return OnlineAction(
-      type: OnlineActionType.attackBase,
-      byPlayerId: myPlayerId,
-      cardInstanceId: attacker.id,
-      cardName: attacker.name,
-      fromRow: canonicalRow,
-      fromCol: attackerCol,
-    );
-  }
-
-  /// Create an endTurn action
-  OnlineAction createEndTurnAction({required int turnNumber}) {
-    return OnlineAction(
-      type: OnlineActionType.endTurn,
-      byPlayerId: myPlayerId,
-      turnNumber: turnNumber,
-    );
+  /// Dispose resources
+  void dispose() {
+    stopListening();
+    _stateController.close();
   }
 }

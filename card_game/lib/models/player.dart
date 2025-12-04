@@ -105,4 +105,58 @@ class Player {
   @override
   String toString() =>
       '$name (Base: $baseHP HP, Hand: ${hand.length}, Deck: ${deck.remainingCards})';
+
+  /// Serialize to JSON for Firebase (runtime state only, not full deck)
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'isHuman': isHuman,
+    'baseHP': baseHP,
+    'gold': gold,
+    'attunedElement': attunedElement,
+    'heroId': hero?.id,
+    'hand': hand.map((c) => c.toJson()).toList(),
+    'deckCards': deck.cards.map((c) => c.toJson()).toList(),
+  };
+
+  /// Create from JSON (for syncing online state)
+  factory Player.fromJson(Map<String, dynamic> json, {GameHero? hero}) {
+    final playerId = json['id'] as String;
+    final playerName = json['name'] as String;
+    final deckCards = (json['deckCards'] as List<dynamic>? ?? [])
+        .map((c) => GameCard.fromJson(c as Map<String, dynamic>))
+        .toList();
+
+    // Ensure deck has 25 cards (pad if needed)
+    while (deckCards.length < 25) {
+      deckCards.add(
+        GameCard(
+          id: 'filler_${deckCards.length}',
+          name: 'Filler',
+          damage: 1,
+          health: 1,
+        ),
+      );
+    }
+
+    final player = Player(
+      id: playerId,
+      name: playerName,
+      deck: Deck(
+        id: 'deck_$playerId',
+        name: '$playerName Deck',
+        cards: deckCards,
+      ),
+      isHuman: json['isHuman'] as bool? ?? true,
+      baseHP: json['baseHP'] as int? ?? maxBaseHP,
+      gold: json['gold'] as int? ?? 0,
+      attunedElement: json['attunedElement'] as String?,
+      hero: hero,
+    );
+    final handData = json['hand'] as List<dynamic>? ?? [];
+    for (final cardJson in handData) {
+      player.hand.add(GameCard.fromJson(cardJson as Map<String, dynamic>));
+    }
+    return player;
+  }
 }

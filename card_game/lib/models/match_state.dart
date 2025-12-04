@@ -3,6 +3,8 @@ import 'lane.dart';
 import 'game_board.dart';
 import 'tile.dart';
 import 'relic.dart';
+import 'hero.dart';
+import '../data/hero_library.dart';
 
 /// Current phase of the match
 /// TYC3: Updated for turn-based system
@@ -186,5 +188,99 @@ class MatchState {
     return 'Match: Turn $turnNumber, Phase: $currentPhase\n'
         'Player: ${player.name} (${player.crystalHP} HP)\n'
         'Opponent: ${opponent.name} (${opponent.crystalHP} HP)';
+  }
+
+  /// Serialize to JSON for Firebase
+  /// This captures the FULL game state for online sync
+  Map<String, dynamic> toJson() => {
+    'player': player.toJson(),
+    'opponent': opponent.toJson(),
+    'board': board.toJson(),
+    'currentPhase': currentPhase.name,
+    'turnNumber': turnNumber,
+    'winnerId': winnerId,
+    'activePlayerId': activePlayerId,
+    'isFirstTurn': isFirstTurn,
+    'cardsPlayedThisTurn': cardsPlayedThisTurn,
+    'revealedEnemyBaseLanes': revealedEnemyBaseLanes
+        .map((l) => l.name)
+        .toList(),
+    'relicColumn': relicManager.relicColumn,
+    'relicClaimed': relicManager.isRelicClaimed,
+    'relicClaimedBy': relicManager.relicClaimedBy,
+  };
+
+  /// Create from JSON (for online sync)
+  /// [myPlayerId] is used to determine which player data maps to 'player' vs 'opponent'
+  factory MatchState.fromJson(
+    Map<String, dynamic> json, {
+    required String myPlayerId,
+  }) {
+    final playerData = json['player'] as Map<String, dynamic>;
+    final opponentData = json['opponent'] as Map<String, dynamic>;
+
+    // Determine which is "me" and which is "opponent" based on player IDs
+    final bool iAmPlayer = playerData['id'] == myPlayerId;
+
+    final myData = iAmPlayer ? playerData : opponentData;
+    final theirData = iAmPlayer ? opponentData : playerData;
+
+    // Get heroes from library
+    final myHeroId = myData['heroId'] as String?;
+    final theirHeroId = theirData['heroId'] as String?;
+    final myHero = myHeroId != null ? HeroLibrary.getHeroById(myHeroId) : null;
+    final theirHero = theirHeroId != null
+        ? HeroLibrary.getHeroById(theirHeroId)
+        : null;
+
+    final player = Player.fromJson(myData, hero: myHero);
+    final opponent = Player.fromJson(theirData, hero: theirHero);
+
+    // Parse board - if we're not the original "player", we need to mirror it
+    // so our base is always at row 2 (bottom)
+    var board = GameBoard.fromJson(json['board'] as Map<String, dynamic>);
+    if (!iAmPlayer) {
+      // Mirror the board for Player 2's perspective
+      board = board.mirrored();
+    }
+
+    final match = MatchState(
+      player: player,
+      opponent: opponent,
+      board: board,
+      currentPhase: MatchPhase.values.firstWhere(
+        (p) => p.name == json['currentPhase'],
+        orElse: () => MatchPhase.playerTurn,
+      ),
+      turnNumber: json['turnNumber'] as int? ?? 0,
+    );
+
+    match.winnerId = json['winnerId'] as String?;
+    match.activePlayerId = json['activePlayerId'] as String?;
+    match.isFirstTurn = json['isFirstTurn'] as bool? ?? false;
+    match.cardsPlayedThisTurn = json['cardsPlayedThisTurn'] as int? ?? 0;
+
+    // Restore revealed lanes
+    final revealedLanes =
+        json['revealedEnemyBaseLanes'] as List<dynamic>? ?? [];
+    for (final laneName in revealedLanes) {
+      match.revealedEnemyBaseLanes.add(
+        LanePosition.values.firstWhere((l) => l.name == laneName),
+      );
+    }
+
+    // Restore relic state
+    final relicColumn = json['relicColumn'] as int?;
+    if (relicColumn != null) {
+      match.relicManager.setRelicColumn(relicColumn);
+    }
+    // If relic was claimed, mark it as claimed
+    final claimedBy = json['relicClaimedBy'] as String?;
+    if (claimedBy != null && match.relicManager.middleRelic != null) {
+      match.relicManager.middleRelic!.isClaimed = true;
+      match.relicManager.middleRelic!.claimedByPlayerId = claimedBy;
+    }
+
+    return match;
   }
 }
