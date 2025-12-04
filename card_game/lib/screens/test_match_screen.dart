@@ -2610,11 +2610,18 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   void _listenToMatchUpdates() {
     if (widget.onlineMatchId == null) return;
 
+    debugPrint(
+      '📡 Starting Firebase listener for match: ${widget.onlineMatchId}',
+    );
+
     _matchListener = _firestore
         .collection('matches')
         .doc(widget.onlineMatchId)
         .snapshots()
         .listen((snapshot) {
+          debugPrint(
+            '📡 Firebase snapshot received, exists=${snapshot.exists}',
+          );
           if (!mounted || !snapshot.exists) return;
 
           final data = snapshot.data()!;
@@ -2631,6 +2638,9 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
 
     final myData = data[myKey] as Map<String, dynamic>?;
     final oppData = data[oppKey] as Map<String, dynamic>?;
+
+    debugPrint('🔍 Firebase data keys: ${data.keys.toList()}');
+    debugPrint('🔍 oppData ($oppKey): $oppData');
 
     // Check for hero selection (for starting match)
     final oppHeroId = oppData?['heroId'] as String?;

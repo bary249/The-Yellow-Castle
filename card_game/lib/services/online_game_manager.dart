@@ -180,7 +180,15 @@ class OnlineGameManager {
     // Replay any actions we haven't processed yet
     for (int i = _lastReplayedIndex; i < actions.length; i++) {
       final action = actions[i];
-      debugPrint('🔄 Replaying action $i: $action');
+
+      // CRITICAL: Skip our own actions - we already applied them locally
+      if (action.byPlayerId == myPlayerId) {
+        debugPrint('⏭️ Skipping own action $i: ${action.type.name}');
+        _lastReplayedIndex = i + 1;
+        continue;
+      }
+
+      debugPrint('🔄 Replaying opponent action $i: $action');
       _replayAction(action);
       _lastReplayedIndex = i + 1;
     }
@@ -227,15 +235,29 @@ class OnlineGameManager {
     final toRow = localRow(action.toRow);
     final toCol = action.toCol ?? 0;
 
-    // Find the card in the active player's hand by instanceId
+    // For opponent's place action, we need to find a card by NAME in their hand
+    // (card instance IDs are different per player since each has their own deck)
     final activePlayer = _matchManager!.activePlayer;
     if (activePlayer == null) return;
 
-    final card = _findCardInHand(activePlayer.hand, action.cardInstanceId);
+    // Find card by name (first matching card with that name)
+    final cardName = action.cardName;
+    GameCard? card;
+    for (final c in activePlayer.hand) {
+      if (c.name == cardName) {
+        card = c;
+        break;
+      }
+    }
+
     if (card == null) {
       debugPrint(
-        '⚠️ Replay place: card ${action.cardInstanceId} not found in hand',
+        '⚠️ Replay place: card "$cardName" not found in opponent hand (${activePlayer.hand.length} cards)',
       );
+      // Debug: list cards in hand
+      for (final c in activePlayer.hand) {
+        debugPrint('   - ${c.name} (${c.id})');
+      }
       return;
     }
 
