@@ -235,15 +235,14 @@ class OnlineGameManager {
     final toRow = localRow(action.toRow);
     final toCol = action.toCol ?? 0;
 
-    // For opponent's place action, we need to find a card by NAME in their hand
-    // (card instance IDs are different per player since each has their own deck)
-    final activePlayer = _matchManager!.activePlayer;
-    if (activePlayer == null) return;
+    // IMPORTANT: We're replaying OPPONENT's action, so look in OPPONENT's hand
+    // (not activePlayer, which changes based on whose turn it currently is)
+    final opponent = match.opponent;
 
     // Find card by name (first matching card with that name)
     final cardName = action.cardName;
     GameCard? card;
-    for (final c in activePlayer.hand) {
+    for (final c in opponent.hand) {
       if (c.name == cardName) {
         card = c;
         break;
@@ -252,16 +251,17 @@ class OnlineGameManager {
 
     if (card == null) {
       debugPrint(
-        '⚠️ Replay place: card "$cardName" not found in opponent hand (${activePlayer.hand.length} cards)',
+        '⚠️ Replay place: card "$cardName" not found in opponent hand (${opponent.hand.length} cards)',
       );
       // Debug: list cards in hand
-      for (final c in activePlayer.hand) {
+      for (final c in opponent.hand) {
         debugPrint('   - ${c.name} (${c.id})');
       }
       return;
     }
 
-    final success = _matchManager!.placeCardTYC3(card, toRow, toCol);
+    // Place the card - use opponent's perspective for placement
+    final success = _matchManager!.placeCardForOpponentTYC3(card, toRow, toCol);
     debugPrint(
       '🎯 Replay place: ${action.cardName} @ ($toRow, $toCol) = $success',
     );

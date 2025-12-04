@@ -1381,6 +1381,51 @@ class MatchManager {
     return true;
   }
 
+  /// TYC3: Place a card for the OPPONENT (used when replaying opponent's actions)
+  /// This bypasses turn validation since we're replaying a past action
+  bool placeCardForOpponentTYC3(GameCard card, int row, int col) {
+    if (_currentMatch == null) return false;
+    if (!useTurnBasedSystem) return false;
+
+    final opponent = _currentMatch!.opponent;
+
+    // Get the tile
+    final tile = _currentMatch!.board.getTile(row, col);
+
+    // Check tile capacity
+    if (!tile.canAddCard) {
+      _log('❌ Replay: Tile is full (max ${Tile.maxCards} cards)');
+      return false;
+    }
+
+    // Remove card from opponent's hand
+    if (!opponent.playCard(card)) {
+      _log('❌ Replay: Card not in opponent hand');
+      return false;
+    }
+
+    // Place card on tile
+    tile.addCard(card);
+
+    // Initialize card's AP and set owner
+    card.currentAP = card.maxAP - 1;
+    card.ownerId = opponent.id;
+
+    _log(
+      '✅ [Opponent Replay] Placed ${card.name} (${card.damage}/${card.health}) at ($row, $col)',
+    );
+
+    // Check for relic pickup
+    _checkRelicPickup(row, col, card.ownerId!);
+
+    // Update scout visibility
+    if (card.abilities.contains('scout')) {
+      _updateScoutVisibility(row, col, card.ownerId!);
+    }
+
+    return true;
+  }
+
   /// TYC3: End the current player's turn
   void endTurnTYC3() {
     if (_currentMatch == null) return;
