@@ -675,6 +675,40 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     int targetRow,
     int targetCol,
   ) {
+    // NEW: Use OnlineGameManager for online mode if available
+    if (_onlineGameManager != null) {
+      // Apply locally first (same logic as vs-AI)
+      final result = _matchManager.attackCardTYC3(
+        attacker,
+        target,
+        attackerRow,
+        attackerCol,
+        targetRow,
+        targetCol,
+      );
+
+      if (result != null) {
+        // Send action to Firebase for opponent to replay
+        final action = _onlineGameManager!.createAttackAction(
+          attacker: attacker,
+          attackerRow: attackerRow,
+          attackerCol: attackerCol,
+          target: target,
+          targetRow: targetRow,
+          targetCol: targetCol,
+        );
+        _onlineGameManager!.sendAction(action);
+
+        // Show battle result dialog (same as vs-AI)
+        _showBattleResultDialog(result, attacker, target, attackerCol);
+      }
+
+      _clearTYC3Selection();
+      setState(() {});
+      return;
+    }
+
+    // LEGACY: Old online mode path
     final attackerName = attacker.name;
     final targetName = target.name;
 
