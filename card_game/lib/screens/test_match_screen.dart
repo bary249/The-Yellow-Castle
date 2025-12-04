@@ -17,6 +17,7 @@ import '../services/simple_ai.dart';
 import '../services/auth_service.dart';
 import '../services/deck_storage_service.dart';
 import '../services/combat_resolver.dart' show AttackResult;
+import '../services/online_game_manager.dart';
 
 /// Test screen for playing a match vs AI opponent or online multiplayer
 class TestMatchScreen extends StatefulWidget {
@@ -82,6 +83,9 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   List<List<String>>? _predefinedTerrains; // Terrain grid from host
   int? _predefinedRelicColumn; // Relic column from host
 
+  // OnlineGameManager for action-based sync (TYC3 online mode)
+  OnlineGameManager? _onlineGameManager;
+
   // ===== TYC3: Turn-based AP system state =====
   bool _useTYC3Mode = true; // Enable TYC3 by default for testing
   Timer? _turnTimer;
@@ -141,6 +145,25 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   void _endTurnTYC3() {
     _turnTimer?.cancel();
 
+    // NEW: Use OnlineGameManager for online mode if available
+    if (_onlineGameManager != null) {
+      // Apply locally first (same logic as vs-AI)
+      _matchManager.endTurnTYC3();
+      _clearTYC3Selection();
+      _selectedCard = null;
+
+      // Send action to Firebase for opponent to replay
+      final action = _onlineGameManager!.createEndTurnAction(
+        turnNumber: _matchManager.currentMatch?.turnNumber ?? 0,
+      );
+      _onlineGameManager!.sendAction(action);
+
+      // Timer will be managed by _handleTYC3StateUpdate when turn changes
+      setState(() {});
+      return;
+    }
+
+    // LEGACY: Old online mode path
     // ONLINE, non-host player: do NOT mutate MatchManager turn state.
     // Just send endTurn action; host will call endTurnTYC3 and sync.
     if (_isOnlineMode && !_amPlayer1) {
@@ -226,9 +249,33 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     }
 
     // Try to place the card
-    final cardName = _selectedCard!.name;
+    final card = _selectedCard!;
 
+    // NEW: Use OnlineGameManager for online mode if available
+    if (_onlineGameManager != null) {
+      // Apply locally first (same logic as vs-AI)
+      final success = _matchManager.placeCardTYC3(card, row, col);
+      if (success) {
+        // Send action to Firebase for opponent to replay
+        final action = _onlineGameManager!.createPlaceAction(
+          card: card,
+          toRow: row,
+          toCol: col,
+        );
+        _onlineGameManager!.sendAction(action);
+        _selectedCard = null;
+        setState(() {});
+      } else {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Cannot place card here')));
+      }
+      return;
+    }
+
+    // LEGACY: Old online mode path (will be removed once OnlineGameManager is stable)
     bool success = false;
+    final cardName = card.name;
 
     if (_isOnlineMode && !_amPlayer1) {
       // ONLINE, non-host player: do NOT mutate local MatchManager.
@@ -237,7 +284,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       success = true; // allow local UI to clear selection
     } else {
       // Offline or host: apply to local MatchManager
-      success = _matchManager.placeCardTYC3(_selectedCard!, row, col);
+      success = _matchManager.placeCardTYC3(card, row, col);
 
       if (success && _isOnlineMode) {
         // Host also logs the action
@@ -1080,11 +1127,39 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       return;
     }
 
-    final cardName = _selectedCardForAction!.name;
+    final card = _selectedCardForAction!;
     final fromRow = _selectedCardRow!;
     final fromCol = _selectedCardCol!;
 
+    // NEW: Use OnlineGameManager for online mode if available
+    if (_onlineGameManager != null) {
+      // Apply locally first (same logic as vs-AI)
+      final success = _matchManager.moveCardTYC3(
+        card,
+        fromRow,
+        fromCol,
+        toRow,
+        toCol,
+      );
+      if (success) {
+        // Send action to Firebase for opponent to replay
+        final action = _onlineGameManager!.createMoveAction(
+          card: card,
+          fromRow: fromRow,
+          fromCol: fromCol,
+          toRow: toRow,
+          toCol: toCol,
+        );
+        _onlineGameManager!.sendAction(action);
+        _clearTYC3Selection();
+        setState(() {});
+      }
+      return;
+    }
+
+    // LEGACY: Old online mode path (will be removed once OnlineGameManager is stable)
     bool success = false;
+    final cardName = card.name;
 
     if (_isOnlineMode && !_amPlayer1) {
       // ONLINE, non-host player: do NOT mutate local MatchManager.
@@ -1100,7 +1175,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     } else {
       // Offline or host: apply to local MatchManager
       success = _matchManager.moveCardTYC3(
-        _selectedCardForAction!,
+        card,
         fromRow,
         fromCol,
         toRow,
@@ -1319,9 +1394,35 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       return;
 
     final attacker = _selectedCardForAction!;
-    final attackerName = attacker.name;
     final attackerRow = _selectedCardRow!;
     final attackerCol = _selectedCardCol!;
+
+    // NEW: Use OnlineGameManager for online mode if available
+    if (_onlineGameManager != null) {
+      // Apply locally first (same logic as vs-AI)
+      final damage = _matchManager.attackBaseTYC3(
+        attacker,
+        attackerRow,
+        attackerCol,
+      );
+      if (damage > 0) {
+        // Send action to Firebase for opponent to replay
+        final action = _onlineGameManager!.createAttackBaseAction(
+          attacker: attacker,
+          attackerRow: attackerRow,
+          attackerCol: attackerCol,
+        );
+        _onlineGameManager!.sendAction(action);
+        // Note: Dialog will be shown in the legacy path below since we fall through
+      }
+      _clearTYC3Selection();
+      // For now, skip showing dialog in new path - opponent sees HP change via replay
+      setState(() {});
+      return;
+    }
+
+    // LEGACY: Old online mode path
+    final attackerName = attacker.name;
 
     if (_isOnlineMode && !_amPlayer1) {
       // ONLINE, non-host player: send intent only; host computes damage.
@@ -2602,6 +2703,25 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   int _lastProcessedActionIndex = 0; // Track which actions we've processed
 
   void _handleTYC3StateUpdate(Map<String, dynamic> data) {
+    // NEW: Use OnlineGameManager for action-based replay if available
+    if (_onlineGameManager != null) {
+      final actions = data['tyc3Actions'] as List<dynamic>?;
+      if (actions != null) {
+        _onlineGameManager!.onActionsUpdate(actions);
+      }
+      // Timer management: start timer when it becomes our turn
+      if (_matchManager.isPlayerTurn) {
+        if (_turnTimer == null || !_turnTimer!.isActive) {
+          _startTurnTimer();
+        }
+      } else {
+        _turnTimer?.cancel();
+      }
+      setState(() {});
+      return;
+    }
+
+    // LEGACY: Fall back to old state-sync approach if OnlineGameManager not initialized
     final tyc3State = data['tyc3State'] as Map<String, dynamic>?;
     if (tyc3State == null) return;
 
@@ -2888,7 +3008,19 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
           };
 
       if (_isOnlineMode) {
-        // Online TYC3: Sync initial state and listen for opponent actions
+        // Online TYC3: Initialize OnlineGameManager for action-based sync
+        _onlineGameManager = OnlineGameManager(
+          matchId: widget.onlineMatchId!,
+          myPlayerId: _playerId!,
+          amPlayer1: _amPlayer1,
+        );
+        _onlineGameManager!.attachToMatch(_matchManager);
+        _onlineGameManager!.onStateChanged = () {
+          if (mounted) setState(() {});
+        };
+        debugPrint('🎮 OnlineGameManager initialized');
+
+        // Sync initial state (will be replaced by action-only sync later)
         _syncTYC3StateToFirebase();
         // Only start timer if it's our turn
         if (_matchManager.isPlayerTurn) {
