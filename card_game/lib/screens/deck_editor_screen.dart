@@ -811,19 +811,6 @@ class _DeckEditorScreenState extends State<DeckEditorScreen> {
       // Support abilities
       case 'heal':
         return 'Heals friendly cards for $value HP';
-      case 'stack':
-        if (ability.contains('buff')) {
-          return 'Buffs all friendly cards in stack';
-        } else if (ability.contains('debuff')) {
-          return 'Debuffs all enemy cards in lane';
-        }
-        return 'Affects card stack';
-
-      // Combined abilities
-      case 'stack_buff_damage':
-        return '+$value damage to all friendly cards in stack';
-      case 'stack_debuff_enemy_damage':
-        return '-$value damage to all enemy cards in lane';
       case 'heal_ally':
         return 'Heals friendly cards by $value HP per tick';
 

@@ -123,7 +123,7 @@ class Deck {
       cardCounts[cardName] = (cardCounts[cardName] ?? 0) + 1;
       final index = cardCounts[cardName]!;
 
-      final card = _createCardByName(cardName, index);
+      final card = createCardByName(cardName, index);
       if (card != null) {
         cards.add(card);
       } else {
@@ -155,8 +155,8 @@ class Deck {
     );
   }
 
-  /// Helper to create a card by name
-  static GameCard? _createCardByName(String name, int index) {
+  /// Helper to create a card by name (public for use by other services)
+  static GameCard? createCardByName(String name, int index) {
     switch (name) {
       // Scout
       case 'Scout':
@@ -247,6 +247,20 @@ class Deck {
         return austrianCuirassier(index);
       case 'Austrian Officer':
         return austrianOfficer(index);
+      // Legendary cards
+      case 'Sunfire Warlord':
+        return sunfireWarlord();
+      case 'Tidal Leviathan':
+        return tidalLeviathan();
+      case 'Ancient Treant':
+        return ancientTreant();
+      case 'Shadow Assassin':
+        return shadowAssassin();
+      // Napoleon legendary/epic cards
+      case 'Siege Cannon':
+        return napoleonSiegeCannon(index);
+      case "Napoleon's Guard":
+        return napoleonsGuard();
       default:
         return null;
     }

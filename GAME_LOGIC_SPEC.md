@@ -2,10 +2,6 @@
 
 This document captures the **implemented and intended logic** of the game, mapped to current code where possible.
 
-> **Terminology note:**
-> The gameplay and UI refer to stack positions as **Front**/**Back**.
-> The underlying code still uses `topCard`/`bottomCard` for those positions.
-
 - High-level rules & player-facing view → see `GAME_RULES.md`.
 - This file → dev-facing reference for match flow, combat math, and lane logic.
 
@@ -27,10 +23,11 @@ This document captures the **implemented and intended logic** of the game, mappe
   - 3 = Epic (max 2 copies)
   - 4 = Legendary (max 1 copy)
 - `abilities` (list of string tags):
-  - Offensive: `fury_X`, `cleave`, `thorns_X`
-  - Defensive: `shield_X`, `regen_X`, `regenerate`
-  - Support: `heal_ally_X`, `stack_buff_damage_X`, `stack_debuff_enemy_damage_X`
-  - Tactical: `conceal_back` (when front + has back card, hides back card identity from enemy)
+  - Offensive: `fury_X`, `cleave`, `thorns_X`, `first_strike`
+  - Defensive: `shield_X`, `regen_X`, `regenerate`, `guard`
+  - Support: `heal_ally_X`, `inspire_X`, `fortify_X`, `rally_X`, `command_X`
+  - Attack Style: `ranged` (no retaliation), `far_attack` (attacks from distance)
+  - Tactical: `conceal_back`, `scout`, `paratrooper`, `stealth_pass`
 - `isAlive` (derived from `currentHealth > 0`).
 
 **Important behavior:**
@@ -105,7 +102,19 @@ This document captures the **implemented and intended logic** of the game, mappe
 
 ---
 
-### 1.5 Lanes & CardStacks (`Lane`, `CardStack`)
+### 1.5 Lanes & Tiles (`Lane`, `Tile`, `GameBoard`)
+
+**GameBoard**
+- 3×3 grid of tiles.
+- Rows: 0 = opponent base, 1 = middle, 2 = player base.
+- Columns: 0 = west, 1 = center, 2 = east.
+
+**Tile**
+- Each tile has:
+  - `row`, `col` (position).
+  - `terrain` (woods, lake, desert, marsh).
+  - `owner` (player or opponent - only middle tiles can change ownership).
+  - `cards` (list of cards on this tile, max 2).
 
 **Lane**
 - `LanePosition` enum: `west`, `center`, `east`.
@@ -130,38 +139,12 @@ This document captures the **implemented and intended logic** of the game, mappe
 - This applies to **ANY tile** (base or middle), not just bases.
 - Example: A "woods" element card fighting on a "woods" terrain tile gets +1 damage.
 
-**CardStack**
-- Conceptually holds up to **2 cards** per side:
-  - **Front card** (closest to the enemy, active first).
-  - **Back card** (behind the front card, comes in when front dies).
-- In code these are currently named:
-  - `topCard` (used as the **front** card).
-  - `bottomCard` (used as the **back** card).
-  - `isPlayerOwned` (bool).
-
-**Key methods:**
-- `isEmpty` → both front/back slots null.
-- `isFull` → both front/back slots non-null.
-- `activeCard`:
-  - Returns `topCard` (front card) if it exists and `isAlive`.
-  - Else `bottomCard` (back card) if exists and `isAlive`.
-  - Else `null`.
-- `addCard(GameCard card, {bool asTopCard = true})`:
-  - If stack empty → new card becomes `topCard` (front).
-  - If only `topCard` (front) present:
-    - `asTopCard == true` → move existing `topCard` to `bottomCard` (back), new card becomes `topCard` (front).
-    - `asTopCard == false` → new card becomes `bottomCard` (back).
-  - If both occupied → returns `false`.
-- `cleanup()` after tick/combat:
-  - Clears dead `bottomCard` (back card).
-  - If `topCard` (front) is dead → promotes `bottomCard` (back) to `topCard` (front), nulls `bottomCard`.
-  - If new `topCard` (front) still dead → clears it.
+**Tile Card Limits:**
+- Max 2 cards per tile per side.
+- Cards are placed on tiles, not in stacks.
 
 **Lane winner:**
-- Getter `playerWon`:
-  - `true` if `playerStack.activeCard != null` and `opponentStack.activeCard == null`.
-  - `false` if reverse.
-  - `null` otherwise (tie / both alive / both dead).
+- Determined by which side has surviving cards after combat.
 
 **Zone advancement:**
 - `advanceZone(bool playerWon)`:
@@ -229,20 +212,13 @@ Note: Lane `reset()` clears cards but **does not reset `currentZone`**.
   - Get `Lane` via `getLane()`.
   - For each `card`:
     - If `player.playCard(card)` succeeds (card was in hand):
-      - Check `hasSurvivors = lane.playerStack.topCard != null`.
-      - **Rule:** if there are survivors already in this lane stack, **fresh cards go to bottom**.
-      - Call `lane.playerStack.addCard(card, asTopCard: !hasSurvivors)`.
+      - Place card on the appropriate tile in the lane.
 - Set `playerSubmitted = true`.
 - If `bothPlayersSubmitted` → call `_resolveCombat()`.
 
 **AI / opponent submission** `submitOpponentMoves(...)` and `submitOnlineOpponentMoves(...)`:
-- Similar logic but:
-  - AI version checks `opponent.playCard(card)`.
-  - Online version trusts cards (assumes already validated via network) and calls `lane.opponentStack.addCard(card)` directly.
+- Similar logic for opponent cards.
 - Set `opponentSubmitted = true` and resolve combat when both have submitted.
-
-**Important rule enforced here:**
-- **Surviving cards stay on top; new cards naturally stack underneath** when there are survivors.
 
 ---
 
@@ -330,40 +306,27 @@ For `tick` from 1 to 5:
        - `damage += 1` (+1 terrain-attuned base buff in that base).
 
 2. **Fury**
-   - If `attacker.abilities` contains `fury_2` → `damage += 2` (+2 fury).
+   - If `attacker.abilities` contains `fury_X` → `damage += X` (+X fury).
 
-3. **Stack Buff** `stack_buff_damage_2`
-   - Look at `topCard` (front) and `bottomCard` (back) of **attackerStack** (excluding attacker itself).
-   - If any has `stack_buff_damage_2` → `damage += 2` (+2 stack buff).
+3. **Lane-wide Buffs**
+   - `inspire_X`: +X damage to ALL allies in this lane.
+   - `fortify_X`: +X shield to ALL allies in this lane.
+   - `command_X`: +X damage AND +X shield to all allies in lane.
 
-4. **Stack Debuff** `stack_debuff_enemy_damage_2`
-   - Look at `topCard` (front) / `bottomCard` (back) of **targetStack**.
-   - If any has this ability → reduce damage by 2 (min 1) (−2 stack debuff).
+4. **Shield** `shield_X`
+   - If `target.abilities` contains `shield_X` → reduce damage by X (min 1).
 
-5. **Shield** `shield_2`
-   - If `target.abilities` contains `shield_2` → reduce damage by 2 (min 1) (−2 shield).
-
-6. **Apply damage & overflow**
+5. **Apply damage**
    - Store `hpBefore`.
    - `targetDied = target.takeDamage(damage)`.
    - Store `hpAfter`.
    - Log attack result; mark as important in log if target died.
 
-7. **Overflow damage**
-   - If `targetDied`:
-     - Compute `overflowDamage = -target.currentHealth` (excess into negative).
-     - If `overflowDamage > 0` and `targetStack.bottomCard` (back card) exists and is alive:
-       - Call `_applyOverflowDamage(overflowDamage, targetStack, tick, laneName)`.
-
-`_applyOverflowDamage` then:
-- Applies full `damage` to `stack.bottomCard` (back card).
-- Logs overflow event.
-
 ---
 
 ### 3.4 Lane Battle End
 
-When either stack becomes empty or ticks 1–5 finish:
+When either side has no surviving cards or ticks 1–5 finish:
 - `lane.playerWon` is evaluated.
 - `_logBattleEnd` writes a final message:
   - Victory / Defeat / Draw for that lane.

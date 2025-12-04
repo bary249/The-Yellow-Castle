@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/card.dart';
+import '../models/deck.dart';
 import '../data/card_library.dart';
 
 /// Service for persisting player decks to Firebase Firestore
@@ -44,17 +45,38 @@ class DeckStorageService {
   };
 
   /// Convert Firestore map to GameCard
-  GameCard _mapToCard(Map<String, dynamic> data) => GameCard(
-    id: data['id'] as String,
-    name: data['name'] as String,
-    damage: data['damage'] as int,
-    health: data['health'] as int,
-    tick: data['tick'] as int,
-    element: data['element'] as String?,
-    abilities: List<String>.from(data['abilities'] ?? []),
-    cost: data['cost'] as int? ?? 1,
-    rarity: data['rarity'] as int? ?? 1,
-  );
+  /// Looks up the card by name from the card library to get full definition
+  GameCard _mapToCard(Map<String, dynamic> data) {
+    final name = data['name'] as String;
+    // Try to get the card from the library by name (uses Deck._createCardByName)
+    final libraryCard = _getCardFromLibrary(name);
+    if (libraryCard != null) {
+      return libraryCard;
+    }
+    // Fallback: create from stored data (may have incomplete AP fields)
+    return GameCard(
+      id: data['id'] as String,
+      name: name,
+      damage: data['damage'] as int,
+      health: data['health'] as int,
+      tick: data['tick'] as int,
+      moveSpeed: data['moveSpeed'] as int? ?? 1,
+      maxAP: data['maxAP'] as int? ?? 1,
+      apPerTurn: data['apPerTurn'] as int? ?? 1,
+      attackAPCost: data['attackAPCost'] as int? ?? 1,
+      attackRange: data['attackRange'] as int? ?? 1,
+      element: data['element'] as String?,
+      abilities: List<String>.from(data['abilities'] ?? []),
+      cost: data['cost'] as int? ?? 1,
+      rarity: data['rarity'] as int? ?? 1,
+    );
+  }
+
+  /// Get a card from the library by name
+  GameCard? _getCardFromLibrary(String name) {
+    // Use the same lookup as Deck.fromCardNames
+    return Deck.createCardByName(name, 1);
+  }
 
   /// Save deck to Firebase
   /// [deckId] - optional deck name, defaults to 'default'

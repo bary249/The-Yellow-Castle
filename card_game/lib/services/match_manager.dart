@@ -13,6 +13,20 @@ class MatchManager {
   MatchState? _currentMatch;
   final CombatResolver _combatResolver = CombatResolver();
 
+  // ============================================================================
+  // MOVEMENT & ATTACK CONFIGURATION
+  // ============================================================================
+
+  /// If true, units can move to adjacent lanes (left/right).
+  /// If false, units can only move forward/backward in the same lane.
+  /// Can be enabled globally or per-unit via 'flanking' ability.
+  static bool allowCrossLaneMovement = true;
+
+  /// If true, units can attack enemies in adjacent lanes.
+  /// If false, units can only attack enemies in the same lane.
+  /// Can be enabled globally or per-unit via 'cross_attack' ability.
+  static bool allowCrossLaneAttack = true;
+
   MatchState? get currentMatch => _currentMatch;
 
   /// Replace the current match state (for online sync)
@@ -134,9 +148,8 @@ class MatchManager {
     final hero = _currentMatch?.player.hero;
     if (hero == null) return false;
     if (hero.abilityUsed) return false;
-    // Can only use during staging phase (before submission)
-    if (_currentMatch?.playerSubmitted == true) return false;
-    if (_currentMatch?.currentPhase != MatchPhase.turnPhase) return false;
+    // TYC3: Can use during player's turn
+    if (!isPlayerTurn) return false;
     return true;
   }
 
@@ -169,11 +182,21 @@ class MatchManager {
       case HeroAbilityType.healUnits:
         // Heal all surviving units by 3 HP
         int healed = 0;
-        for (final lane in _currentMatch!.lanes) {
-          for (final card in lane.playerStack.aliveCards) {
-            final before = card.currentHealth;
-            card.currentHealth = (card.currentHealth + 3).clamp(0, card.health);
-            if (card.currentHealth > before) healed++;
+        // TYC3: Iterate over all tiles to find player cards
+        for (int row = 0; row < 3; row++) {
+          for (int col = 0; col < 3; col++) {
+            final tile = _currentMatch!.board.getTile(row, col);
+            for (final card in tile.cards) {
+              // Only heal player's cards
+              if (card.ownerId == _currentMatch!.player.id && card.isAlive) {
+                final before = card.currentHealth;
+                card.currentHealth = (card.currentHealth + 3).clamp(
+                  0,
+                  card.health,
+                );
+                if (card.currentHealth > before) healed++;
+              }
+            }
           }
         }
         _log('   Healed $healed surviving units by up to 3 HP.');
@@ -1562,9 +1585,23 @@ class MatchManager {
       return 'Not enough AP to move (need 1, have ${card.currentAP})';
     }
 
-    // Must be adjacent (same column, row +/- 1)
-    if (fromCol != toCol) return 'Can only move forward/backward in same lane';
-    if ((toRow - fromRow).abs() != 1) return 'Can only move to adjacent tile';
+    // Calculate distance
+    final rowDist = (toRow - fromRow).abs();
+    final colDist = (toCol - fromCol).abs();
+
+    // Must be adjacent (Manhattan distance of 1)
+    if (rowDist + colDist != 1) {
+      return 'Can only move to adjacent tile';
+    }
+
+    // Check cross-lane movement (column change)
+    if (colDist > 0) {
+      // Check if cross-lane movement is allowed globally or via ability
+      final hasFlanking = card.abilities.contains('flanking');
+      if (!allowCrossLaneMovement && !hasFlanking) {
+        return 'Cannot move to other lanes (no flanking ability)';
+      }
+    }
 
     // Cannot move to enemy base (row 0 for player, row 2 for opponent)
     final isPlayerCard = card.ownerId == _currentMatch!.player.id;
@@ -1850,12 +1887,13 @@ class MatchManager {
       '   Position: ($attackerRow,$attackerCol) → ($targetRow,$targetCol) | Terrain: ${tileTerrain ?? "none"}',
     );
 
-    // Resolve the attack
+    // Resolve the attack (pass hero damage boost if player is attacking)
     final result = _combatResolver.resolveAttackTYC3(
       attacker,
       target,
       isPlayerAttacking: isPlayerAttacking,
       tileTerrain: tileTerrain,
+      playerDamageBoost: isPlayerAttacking ? playerDamageBoost : 0,
     );
 
     _log(
@@ -1943,6 +1981,7 @@ class MatchManager {
       target,
       isPlayerAttacking: isPlayerTurn,
       tileTerrain: tileTerrain,
+      playerDamageBoost: isPlayerTurn ? playerDamageBoost : 0,
     );
   }
 
@@ -1971,6 +2010,7 @@ class MatchManager {
       attackerCol: col,
       boardCards: boardCards,
       isPlayerCard: isPlayerCard,
+      allowCrossLane: allowCrossLaneAttack,
     );
   }
 

@@ -590,54 +590,7 @@ class CombatResolver {
       }
     }
 
-    // 5) Stack buff: if a DIFFERENT card in the same stack has stack_buff_damage_X.
-    int _getStackBuffDamage(CardStack stack) {
-      int buff = 0;
-      final top = stack.topCard;
-      final bottom = stack.bottomCard;
-      for (final card in [top, bottom].whereType<GameCard>()) {
-        if (card != attacker) {
-          for (final ability in card.abilities) {
-            if (ability.startsWith('stack_buff_damage_')) {
-              buff += int.tryParse(ability.split('_').last) ?? 0;
-            }
-          }
-        }
-      }
-      return buff;
-    }
-
-    final stackBuff = _getStackBuffDamage(attackerStack);
-    if (stackBuff > 0) {
-      damage += stackBuff;
-      _append(' (+$stackBuff stack buff)');
-    }
-
-    // 6) Debuff from defending stack: stack_debuff_enemy_damage_X
-    int _getStackDebuff(CardStack stack) {
-      int debuff = 0;
-      final top = stack.topCard;
-      final bottom = stack.bottomCard;
-      for (final card in [top, bottom].whereType<GameCard>()) {
-        for (final ability in card.abilities) {
-          if (ability.startsWith('stack_debuff_enemy_damage_')) {
-            debuff += int.tryParse(ability.split('_').last) ?? 0;
-          }
-        }
-      }
-      return debuff;
-    }
-
-    final stackDebuff = _getStackDebuff(targetStack);
-    if (stackDebuff > 0) {
-      final reduced = (damage - stackDebuff).clamp(1, 9999);
-      if (reduced != damage) {
-        damage = reduced;
-        _append(' (-$stackDebuff stack debuff)');
-      }
-    }
-
-    // 7) Lane-wide shield bonus from fortify/command abilities
+    // 5) Lane-wide shield bonus from fortify/command abilities
     final laneShieldBonus = isPlayerAttacking
         ? _opponentLaneShieldBonus
         : _playerLaneShieldBonus;
@@ -694,6 +647,37 @@ class CombatResolver {
         targetDied: targetDied,
       ),
     );
+
+    // Handle cleave: also damage the second card on the tile
+    if (attacker.abilities.contains('cleave')) {
+      final secondTarget = targetStack.bottomCard;
+      if (secondTarget != null &&
+          secondTarget.isAlive &&
+          secondTarget != target) {
+        // Cleave deals same damage to second target
+        final cleaveHpBefore = secondTarget.currentHealth;
+        final cleaveDied = secondTarget.takeDamage(damage);
+        final cleaveHpAfter = secondTarget.currentHealth;
+
+        combatLog.add(
+          BattleLogEntry(
+            tick: tick,
+            laneDescription: laneName,
+            action: '🌀 CLEAVE → ${secondTarget.name}',
+            details:
+                '$damage cleave damage | HP: $cleaveHpBefore → $cleaveHpAfter | ${cleaveDied ? "💀 DESTROYED" : "✓ Hit"}',
+            isImportant: cleaveDied,
+            level: LogLevel.important,
+            damageDealt: damage,
+            attackerName: attacker.name,
+            targetName: secondTarget.name,
+            targetHpBefore: cleaveHpBefore,
+            targetHpAfter: cleaveHpAfter,
+            targetDied: cleaveDied,
+          ),
+        );
+      }
+    }
 
     // Handle overflow damage
     if (targetDied) {
@@ -771,11 +755,13 @@ class CombatResolver {
   /// TYC3: Resolve a single attack from attacker to target
   /// Handles damage, abilities (fury, shield, ranged), terrain buffs, and retaliation
   /// tileTerrain is the terrain of the tile where combat occurs (target's tile)
+  /// playerDamageBoost is the hero ability damage boost (if active)
   AttackResult resolveAttackTYC3(
     GameCard attacker,
     GameCard target, {
     bool isPlayerAttacking = true,
     String? tileTerrain,
+    int playerDamageBoost = 0,
   }) {
     // Calculate base damage
     int damage = attacker.damage;
@@ -786,9 +772,16 @@ class CombatResolver {
 
     // Apply terrain buff for attacker (+1 if attacker's element matches tile terrain)
     int attackerTerrainBonus = 0;
-    if (tileTerrain != null && attacker.element == tileTerrain) {
+    if (tileTerrain != null &&
+        attacker.element != null &&
+        attacker.element!.toLowerCase() == tileTerrain.toLowerCase()) {
       attackerTerrainBonus = 1;
       damage += attackerTerrainBonus;
+    }
+
+    // Apply hero ability damage boost (player only)
+    if (isPlayerAttacking && playerDamageBoost > 0) {
+      damage += playerDamageBoost;
     }
 
     // Apply lane damage bonus if set
@@ -796,6 +789,14 @@ class CombatResolver {
       damage += _playerLaneDamageBonus;
     } else {
       damage += _opponentLaneDamageBonus;
+    }
+
+    // Scale damage based on attacker's current HP (soft floor 50%-100%)
+    final attackerMaxHp = attacker.health;
+    if (attackerMaxHp > 0) {
+      final attackerHpRatio = attacker.currentHealth / attackerMaxHp;
+      final hpMultiplier = 0.5 + 0.5 * attackerHpRatio;
+      damage = (damage * hpMultiplier).ceil();
     }
 
     // Apply shield reduction on target
@@ -845,7 +846,9 @@ class CombatResolver {
       retaliationDamage += _getFuryBonus(target);
 
       // Apply terrain buff for defender (+1 if defender's element matches tile terrain)
-      if (tileTerrain != null && target.element == tileTerrain) {
+      if (tileTerrain != null &&
+          target.element != null &&
+          target.element!.toLowerCase() == tileTerrain.toLowerCase()) {
         retaliationDamage += 1;
       }
 
@@ -945,6 +948,7 @@ class CombatResolver {
     GameCard target, {
     bool isPlayerAttacking = true,
     String? tileTerrain,
+    int playerDamageBoost = 0,
   }) {
     // Calculate base damage
     int damage = attacker.damage;
@@ -954,8 +958,15 @@ class CombatResolver {
     damage += furyBonus;
 
     // Apply terrain buff for attacker (+1 if attacker's element matches tile terrain)
-    if (tileTerrain != null && attacker.element == tileTerrain) {
+    if (tileTerrain != null &&
+        attacker.element != null &&
+        attacker.element!.toLowerCase() == tileTerrain.toLowerCase()) {
       damage += 1;
+    }
+
+    // Apply hero ability damage boost (player only)
+    if (isPlayerAttacking && playerDamageBoost > 0) {
+      damage += playerDamageBoost;
     }
 
     // Apply lane damage bonus if set
@@ -963,6 +974,14 @@ class CombatResolver {
       damage += _playerLaneDamageBonus;
     } else {
       damage += _opponentLaneDamageBonus;
+    }
+
+    // Scale damage based on attacker's current HP (soft floor 50%-100%)
+    final attackerMaxHp = attacker.health;
+    if (attackerMaxHp > 0) {
+      final attackerHpRatio = attacker.currentHealth / attackerMaxHp;
+      final hpMultiplier = 0.5 + 0.5 * attackerHpRatio;
+      damage = (damage * hpMultiplier).ceil();
     }
 
     // Apply shield reduction on target
@@ -994,7 +1013,9 @@ class CombatResolver {
       retaliationDamage += _getFuryBonus(target);
 
       // Apply terrain buff for defender (+1 if defender's element matches tile terrain)
-      if (tileTerrain != null && target.element == tileTerrain) {
+      if (tileTerrain != null &&
+          target.element != null &&
+          target.element!.toLowerCase() == tileTerrain.toLowerCase()) {
         retaliationDamage += 1;
       }
 
@@ -1118,24 +1139,36 @@ class CombatResolver {
   }
 
   /// TYC3: Get all valid attack targets for a card
+  /// [allowCrossLane] - if true, can attack enemies in adjacent lanes
+  /// [hasCrossAttack] - if true, this unit has the cross_attack ability
   List<GameCard> getValidTargetsTYC3({
     required GameCard attacker,
     required int attackerRow,
     required int attackerCol,
     required List<List<List<GameCard>>> boardCards, // [row][col][cards]
     required bool isPlayerCard,
+    bool allowCrossLane = false,
   }) {
     final targets = <GameCard>[];
+
+    // Check if this unit can attack cross-lane
+    final hasCrossAttack = attacker.abilities.contains('cross_attack');
+    final canAttackCrossLane = allowCrossLane || hasCrossAttack;
 
     // Determine which rows to check based on range
     final minRow = (attackerRow - attacker.attackRange).clamp(0, 2);
     final maxRow = (attackerRow + attacker.attackRange).clamp(0, 2);
 
-    // Only check same column (lane)
-    final col = attackerCol;
+    // Determine which columns to check
+    final minCol = canAttackCrossLane
+        ? (attackerCol - 1).clamp(0, 2)
+        : attackerCol;
+    final maxCol = canAttackCrossLane
+        ? (attackerCol + 1).clamp(0, 2)
+        : attackerCol;
 
     for (int row = minRow; row <= maxRow; row++) {
-      if (row == attackerRow) continue; // Can't attack own tile
+      if (row == attackerRow) continue; // Can't attack own row
 
       // Check if this is an enemy tile (toward enemy base)
       // Player cards attack toward row 0, AI cards attack toward row 2
@@ -1144,24 +1177,26 @@ class CombatResolver {
           : (row > attackerRow);
       if (!isEnemyTile) continue;
 
-      final cardsInTile = boardCards[row][col];
-      if (cardsInTile.isEmpty) continue;
+      for (int col = minCol; col <= maxCol; col++) {
+        final cardsInTile = boardCards[row][col];
+        if (cardsInTile.isEmpty) continue;
 
-      // Filter to only enemy cards (cards with different owner)
-      final enemyCards = cardsInTile
-          .where((c) => c.isAlive && c.ownerId != attacker.ownerId)
-          .toList();
-      if (enemyCards.isEmpty) continue;
+        // Filter to only enemy cards (cards with different owner)
+        final enemyCards = cardsInTile
+            .where((c) => c.isAlive && c.ownerId != attacker.ownerId)
+            .toList();
+        if (enemyCards.isEmpty) continue;
 
-      // Check for guards among enemy cards
-      final guards = enemyCards.where((c) => c.isGuard).toList();
+        // Check for guards among enemy cards
+        final guards = enemyCards.where((c) => c.isGuard).toList();
 
-      if (guards.isNotEmpty) {
-        // Can only target guards
-        targets.addAll(guards);
-      } else {
-        // Can target any enemy card
-        targets.addAll(enemyCards);
+        if (guards.isNotEmpty) {
+          // Can only target guards
+          targets.addAll(guards);
+        } else {
+          // Can target any enemy card
+          targets.addAll(enemyCards);
+        }
       }
     }
 

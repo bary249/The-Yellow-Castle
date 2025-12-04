@@ -293,7 +293,7 @@ GameCard woodsVeteran(int index) => GameCard(
 // EPIC CARDS (Rarity 3) - Max 2 copies each - Specialists with abilities
 // ============================================================================
 
-/// Support card: defensive buffs/debuffs
+/// Support card: tile-wide defensive aura
 GameCard lakeShieldTotem(int index) => GameCard(
   id: 'lake_shield_$index',
   name: 'Lake Shield Totem',
@@ -305,7 +305,9 @@ GameCard lakeShieldTotem(int index) => GameCard(
   apPerTurn: 1,
   attackAPCost: 1,
   element: 'Lake',
-  abilities: const ['shield_2', 'stack_debuff_enemy_damage_2'],
+  abilities: const [
+    'tile_shield_6',
+  ], // Protects all units on this tile with +6 defense
   cost: 2,
   rarity: 3, // Epic - support cards are valuable
 );
@@ -322,7 +324,7 @@ GameCard desertWarBanner(int index) => GameCard(
   apPerTurn: 1,
   attackAPCost: 1,
   element: 'Desert',
-  abilities: const ['fury_2', 'stack_buff_damage_2'],
+  abilities: const ['fury_2'],
   cost: 2,
   rarity: 3, // Epic - support cards are valuable
 );
@@ -432,7 +434,7 @@ GameCard lakeMistWeaver(int index) => GameCard(
 );
 
 /// Tactical support - Woods Shroud Walker
-/// When in front with a back card, hides the back card's identity from enemy
+/// Regenerates HP each turn
 GameCard woodsShroudWalker(int index) => GameCard(
   id: 'woods_shroud_$index',
   name: 'Woods Shroud Walker',
@@ -444,7 +446,7 @@ GameCard woodsShroudWalker(int index) => GameCard(
   apPerTurn: 1,
   attackAPCost: 1,
   element: 'Woods',
-  abilities: const ['conceal_back', 'regen_1'], // Conceals and regenerates
+  abilities: const ['regen_1'], // Regenerates 1 HP per turn
   cost: 3,
   rarity: 3, // Epic
 );

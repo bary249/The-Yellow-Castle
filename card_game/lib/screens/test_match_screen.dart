@@ -688,7 +688,11 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.flash_on, size: 12, color: Colors.orange),
+                  const Icon(
+                    Icons.local_fire_department,
+                    size: 12,
+                    color: Colors.orange,
+                  ),
                   Text('${card.damage}', style: const TextStyle(fontSize: 12)),
                 ],
               ),
@@ -2120,14 +2124,18 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   }
 
   IconData _abilityIconData(String ability) {
+    if (ability == 'guard') return Icons.security; // Shield/tank icon
+    if (ability == 'scout') return Icons.visibility; // Eye icon for scouting
+    if (ability == 'long_range') return Icons.gps_fixed; // Target icon
+    if (ability == 'flanking') return Icons.swap_horiz; // Side movement
+    if (ability.startsWith('tile_shield'))
+      return Icons.shield_outlined; // Tile-wide shield aura
     if (ability.startsWith('shield')) return Icons.shield;
     if (ability.startsWith('fury')) return Icons.whatshot;
     if (ability.startsWith('regen') || ability.startsWith('regenerate')) {
       return Icons.autorenew;
     }
     if (ability.startsWith('heal')) return Icons.healing;
-    if (ability.startsWith('stack_buff')) return Icons.trending_up;
-    if (ability.startsWith('stack_debuff')) return Icons.trending_down;
     if (ability == 'cleave') return Icons.all_inclusive;
     if (ability.startsWith('thorns')) return Icons.grass;
     if (ability == 'conceal_back') return Icons.visibility_off;
@@ -2135,8 +2143,8 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     if (ability == 'paratrooper') return Icons.flight_takeoff;
     // New Napoleon abilities
     if (ability == 'first_strike') return Icons.bolt;
-    if (ability == 'ranged') return Icons.gps_fixed;
-    if (ability == 'far_attack') return Icons.radar;
+    if (ability == 'ranged') return Icons.arrow_forward; // Bow-like
+    if (ability == 'far_attack') return Icons.adjust; // Cannonball-like
     if (ability == 'cross_attack') return Icons.swap_horiz;
     if (ability.startsWith('inspire')) return Icons.music_note;
     if (ability.startsWith('fortify')) return Icons.security;
@@ -2145,9 +2153,73 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     return Icons.star;
   }
 
+  /// Determine attack style from card abilities
+  /// Returns: 'melee' (sword), 'ranged' (bow), or 'far_attack' (cannon)
+  String _getAttackStyle(GameCard card) {
+    if (card.abilities.contains('far_attack')) return 'far_attack';
+    if (card.abilities.contains('ranged')) return 'ranged';
+    return 'melee';
+  }
+
+  /// Get icon for attack style
+  /// - Melee: Sword (gets retaliation)
+  /// - Ranged: Bow (no retaliation)
+  /// - Far Attack: Cannonball (attacks from distance, no retaliation)
+  IconData _getAttackStyleIcon(String attackStyle) {
+    switch (attackStyle) {
+      case 'far_attack':
+        return Icons.adjust; // Cannonball
+      case 'ranged':
+        return Icons.arrow_forward; // Bow
+      case 'melee':
+      default:
+        return Icons
+            .content_cut; // Sword (rotated scissors look like crossed swords)
+    }
+  }
+
+  /// Get color for attack style icon
+  Color _getAttackStyleColor(String attackStyle) {
+    switch (attackStyle) {
+      case 'far_attack':
+        return Colors.orange[700]!; // Cannon = orange
+      case 'ranged':
+        return Colors.green[700]!; // Bow = green
+      case 'melee':
+      default:
+        return Colors.grey[700]!; // Sword = grey/steel
+    }
+  }
+
+  /// Build attack style icon widget
+  Widget _buildAttackStyleIcon(GameCard card, {double size = 10}) {
+    final style = _getAttackStyle(card);
+    final icon = _getAttackStyleIcon(style);
+    final color = _getAttackStyleColor(style);
+
+    return Icon(icon, size: size, color: color);
+  }
+
+  /// Get human-readable label for attack style
+  String _getAttackStyleLabel(String attackStyle) {
+    switch (attackStyle) {
+      case 'far_attack':
+        return 'Cannon'; // Far attack - no retaliation
+      case 'ranged':
+        return 'Ranged'; // Ranged - no retaliation
+      case 'melee':
+      default:
+        return 'Melee'; // Melee - gets retaliation
+    }
+  }
+
   /// Get a human-readable description for an ability
   String _abilityDescription(String ability) {
     // Handle parameterized abilities (e.g., fury_1, shield_2, inspire_1)
+    if (ability.startsWith('tile_shield_')) {
+      final value = ability.split('_').last;
+      return 'Defends ALL units on this tile by adding $value defense to attacks against them.';
+    }
     if (ability.startsWith('shield_')) {
       final value = ability.split('_').last;
       return 'Takes $value less damage from each hit.';
@@ -2174,7 +2246,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     }
     if (ability.startsWith('regen_')) {
       final value = ability.split('_').last;
-      return 'Regenerates $value HP each tick.';
+      return 'Regenerates $value HP each turn.';
     }
     if (ability.startsWith('thorns_')) {
       final value = ability.split('_').last;
@@ -2182,30 +2254,34 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     }
 
     switch (ability) {
+      case 'guard':
+        return 'This unit will direct all tile damage to itself, protecting allies.';
       case 'first_strike':
         return 'Attacks FIRST in the same tick. Can kill before enemy counterattacks.';
       case 'ranged':
-        return 'Can attack from the back position in a stack.';
+        return 'Attacks without receiving retaliation damage.';
       case 'far_attack':
         return 'Attacks enemies at OTHER tiles in same lane. Disabled if contested.';
       case 'cross_attack':
-        return 'Attacks enemies in different lanes from the back.';
+        return 'Can attack enemies in adjacent lanes (left/right).';
       case 'heal_ally_2':
         return 'Heals an ally in lane for 2 HP each tick.';
       case 'regenerate':
         return 'Powerful regeneration over time.';
-      case 'stack_buff_damage_2':
-        return 'Buffs allies in stack with +2 damage.';
-      case 'stack_debuff_enemy_damage_2':
-        return 'Debuffs enemies in stack by -2 damage.';
       case 'cleave':
-        return 'Hits multiple enemies in lane.';
+        return 'Hits BOTH enemies on the same tile with full damage.';
       case 'conceal_back':
         return 'Hides the back card in this stack from the enemy.';
       case 'stealth_pass':
         return 'Can move through enemies in the middle lane.';
       case 'paratrooper':
         return 'Can be staged directly onto the middle row.';
+      case 'scout':
+        return 'Reveals enemy cards in adjacent lanes.';
+      case 'long_range':
+        return 'Can attack enemies 2 tiles away.';
+      case 'flanking':
+        return 'Can move to adjacent lanes (left/right).';
       default:
         return ability; // Return raw ability name if unknown
     }
@@ -2250,6 +2326,8 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   /// Get a display-friendly name for an ability
   String _abilityDisplayName(String ability) {
     // Convert ability code to readable name
+    if (ability.startsWith('tile_shield_'))
+      return 'Tile Shield ${ability.split('_').last}';
     if (ability.startsWith('shield_'))
       return 'Shield ${ability.split('_').last}';
     if (ability.startsWith('fury_')) return 'Fury ${ability.split('_').last}';
@@ -2277,10 +2355,6 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         return 'Heal Ally';
       case 'regenerate':
         return 'Regenerate';
-      case 'stack_buff_damage_2':
-        return 'Stack Buff';
-      case 'stack_debuff_enemy_damage_2':
-        return 'Stack Debuff';
       case 'cleave':
         return 'Cleave';
       case 'conceal_back':
@@ -2289,6 +2363,8 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         return 'Stealth';
       case 'paratrooper':
         return 'Paratrooper';
+      case 'flanking':
+        return 'Flanking';
       default:
         // Convert snake_case to Title Case
         return ability
@@ -2385,7 +2461,36 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    _buildStatIcon(Icons.flash_on, card.damage, size: 14),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Show damage as current/max
+                        _buildStatIconWithMax(
+                          Icons.local_fire_department,
+                          card.currentDamage,
+                          card.damage,
+                          size: 14,
+                        ),
+                        // Show attack AP cost only if > 1
+                        if (card.attackAPCost > 1) ...[
+                          Text(
+                            ' (${card.attackAPCost}',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.orange[700],
+                            ),
+                          ),
+                          Icon(Icons.bolt, size: 11, color: Colors.orange[700]),
+                          Text(
+                            ')',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.orange[700],
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
                     // Show HP as current/max
                     _buildStatIconWithMax(
                       Icons.favorite,
@@ -2399,7 +2504,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    // TYC3: Show AP (current/max) and attack cost
+                    // TYC3: Show AP (current/max) and attack style
                     if (_useTYC3Mode) ...[
                       _buildStatIconWithMax(
                         Icons.bolt,
@@ -2407,10 +2512,22 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                         card.maxAP,
                         size: 14,
                       ),
-                      _buildStatIcon(
-                        Icons.gps_fixed,
-                        card.attackAPCost,
-                        size: 14,
+                      // Attack style with label
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _buildAttackStyleIcon(card, size: 14),
+                          const SizedBox(width: 4),
+                          Text(
+                            _getAttackStyleLabel(_getAttackStyle(card)),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: _getAttackStyleColor(
+                                _getAttackStyle(card),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ] else ...[
                       _buildStatIcon(Icons.timer, card.tick, size: 14),
@@ -5263,24 +5380,19 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         _selectedCardForAction != null &&
         _selectedCardRow != null &&
         _selectedCardCol != null) {
-      // Can move to adjacent tile in same column (forward/backward)
-      final sameCol = col == _selectedCardCol;
-      final adjacentRow = (row - _selectedCardRow!).abs() == 1;
-      final notEnemyBase = row != 0; // Can't move to enemy base
-      final hasRoom = tile.cards.length < 4;
-      // Cannot move to tile with alive enemy cards
-      final noEnemyCards = !tile.cards.any(
-        (c) => c.ownerId != _selectedCardForAction!.ownerId && c.isAlive,
+      // Use MatchManager's getMoveError for consistent validation
+      // This handles same-lane, cross-lane (if enabled), and all other rules
+      final moveError = _matchManager.getMoveError(
+        _selectedCardForAction!,
+        _selectedCardRow!,
+        _selectedCardCol!,
+        row,
+        col,
       );
-      canMoveTo =
-          sameCol &&
-          adjacentRow &&
-          notEnemyBase &&
-          hasRoom &&
-          noEnemyCards &&
-          _matchManager.isPlayerTurn;
+      canMoveTo = moveError == null && _matchManager.isPlayerTurn;
 
       // Check if can attack enemy base (row 0)
+      final sameCol = col == _selectedCardCol;
       if (row == 0 &&
           sameCol &&
           _selectedCardForAction!.canAttack() &&
@@ -5584,11 +5696,35 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                                         Row(
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
-                                            _buildStatIcon(
-                                              Icons.flash_on,
+                                            // Show damage as current/max
+                                            _buildStatIconWithMax(
+                                              Icons.local_fire_department,
+                                              card.currentDamage,
                                               card.damage,
                                               size: 10,
                                             ),
+                                            // Show attack AP cost only if > 1
+                                            if (card.attackAPCost > 1) ...[
+                                              Text(
+                                                ' (${card.attackAPCost}',
+                                                style: TextStyle(
+                                                  fontSize: 8,
+                                                  color: Colors.orange[700],
+                                                ),
+                                              ),
+                                              Icon(
+                                                Icons.bolt,
+                                                size: 8,
+                                                color: Colors.orange[700],
+                                              ),
+                                              Text(
+                                                ')',
+                                                style: TextStyle(
+                                                  fontSize: 8,
+                                                  color: Colors.orange[700],
+                                                ),
+                                              ),
+                                            ],
                                             const SizedBox(width: 2),
                                             // Show HP as current/max
                                             _buildStatIconWithMax(
@@ -5598,7 +5734,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                                               size: 10,
                                             ),
                                             const SizedBox(width: 2),
-                                            // TYC3: Show AP (current/max) and attack cost
+                                            // TYC3: Show AP (current/max) and attack style icon
                                             if (_useTYC3Mode) ...[
                                               _buildStatIconWithMax(
                                                 Icons.bolt,
@@ -5607,9 +5743,9 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                                                 size: 10,
                                               ),
                                               const SizedBox(width: 2),
-                                              _buildStatIcon(
-                                                Icons.gps_fixed,
-                                                card.attackAPCost,
+                                              // Attack style: melee (sword), ranged (bow), far_attack (cannon)
+                                              _buildAttackStyleIcon(
+                                                card,
                                                 size: 10,
                                               ),
                                             ] else ...[
@@ -5949,11 +6085,35 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                                 Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    _buildStatIcon(
-                                      Icons.flash_on,
+                                    // Show damage as current/max
+                                    _buildStatIconWithMax(
+                                      Icons.local_fire_department,
+                                      card.currentDamage,
                                       card.damage,
                                       size: 10,
                                     ),
+                                    // Show attack AP cost only if > 1
+                                    if (card.attackAPCost > 1) ...[
+                                      Text(
+                                        ' (${card.attackAPCost}',
+                                        style: TextStyle(
+                                          fontSize: 8,
+                                          color: Colors.orange[700],
+                                        ),
+                                      ),
+                                      Icon(
+                                        Icons.bolt,
+                                        size: 8,
+                                        color: Colors.orange[700],
+                                      ),
+                                      Text(
+                                        ')',
+                                        style: TextStyle(
+                                          fontSize: 8,
+                                          color: Colors.orange[700],
+                                        ),
+                                      ),
+                                    ],
                                     const SizedBox(width: 2),
                                     // Show HP as current/max for hand cards
                                     _buildStatIconWithMax(
@@ -5968,7 +6128,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                                 Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    // TYC3: Show AP (current/max) and attack cost
+                                    // TYC3: Show AP (current/max) and attack style icon
                                     if (_useTYC3Mode) ...[
                                       _buildStatIconWithMax(
                                         Icons.bolt,
@@ -5977,11 +6137,8 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                                         size: 10,
                                       ),
                                       const SizedBox(width: 2),
-                                      _buildStatIcon(
-                                        Icons.gps_fixed,
-                                        card.attackAPCost,
-                                        size: 10,
-                                      ),
+                                      // Attack style: melee (sword), ranged (bow), far_attack (cannon)
+                                      _buildAttackStyleIcon(card, size: 10),
                                     ] else ...[
                                       _buildStatIcon(
                                         Icons.timer,

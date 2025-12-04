@@ -60,9 +60,9 @@ class GameCard {
     required this.health,
     this.tick = 3, // Legacy default
     this.moveSpeed = 1, // Default: normal speed (1 tile per turn)
-    // TYC3 AP fields - all units have 3 AP for simplicity
-    this.maxAP = 3,
-    this.apPerTurn = 3,
+    // TYC3 AP fields - most units have 1 AP
+    this.maxAP = 1,
+    this.apPerTurn = 1,
     this.attackAPCost = 1,
     this.attackRange = 1, // 1 = adjacent, 2 = long range
     this.element,
@@ -97,6 +97,15 @@ class GameCard {
 
   /// Check if card is still alive
   bool get isAlive => currentHealth > 0;
+
+  /// Get current damage output (scaled by HP ratio, 50%-100%)
+  /// This is the actual damage the card will deal based on its current health
+  int get currentDamage {
+    if (health <= 0) return damage;
+    final hpRatio = currentHealth / health;
+    final multiplier = 0.5 + 0.5 * hpRatio;
+    return (damage * multiplier).ceil();
+  }
 
   /// Take damage and return true if card dies
   bool takeDamage(int amount) {
