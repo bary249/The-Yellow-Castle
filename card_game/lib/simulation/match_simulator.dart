@@ -1,6 +1,7 @@
+import 'dart:math';
 import '../models/deck.dart';
+import '../models/card.dart';
 import '../services/match_manager.dart';
-import '../services/simple_ai.dart';
 
 class MatchOutcome {
   final String winner; // 'deck1', 'deck2', or 'draw'
@@ -18,17 +19,18 @@ class MatchOutcome {
   });
 }
 
-/// Simulate a single headless match between two decks using SimpleAI on both sides.
+/// Simulate a single headless match between two decks using TYC3 turn-based system.
+/// This matches the PvE and PvP modes exactly.
 Future<MatchOutcome> simulateSingleMatch({
   required Deck deck1,
   required Deck deck2,
   required int seed,
 }) async {
   final matchManager = MatchManager();
+  final random = Random(seed);
 
-  // Ensure combat runs automatically without manual tick input
-  matchManager.autoProgress = true;
-  matchManager.fastMode = true; // No delays in simulation
+  // Fast mode for simulation (no delays)
+  matchManager.fastMode = true;
 
   // Capture full logs for this simulated match
   final buffer = StringBuffer();
@@ -38,7 +40,8 @@ Future<MatchOutcome> simulateSingleMatch({
   final p1Deck = Deck(id: deck1.id, name: deck1.name, cards: deck1.cards);
   final p2Deck = Deck(id: deck2.id, name: deck2.name, cards: deck2.cards);
 
-  matchManager.startMatch(
+  // Start match with TYC3 turn-based system
+  matchManager.startMatchTYC3(
     playerId: 'P1',
     playerName: 'Deck1',
     playerDeck: p1Deck,
@@ -50,14 +53,11 @@ Future<MatchOutcome> simulateSingleMatch({
     opponentAttunedElement: 'Desert',
   );
 
-  // Log initial game state before any turns are played
+  // Log initial game state
   matchManager.printGameStateSnapshot();
 
-  final ai1 = SimpleAI();
-  final ai2 = SimpleAI();
-
   // Limit maximum turns to avoid infinite games
-  const maxTurns = 40;
+  const maxTurns = 80; // Higher limit for turn-based (each player gets a turn)
 
   while (true) {
     final match = matchManager.currentMatch;
@@ -87,32 +87,157 @@ Future<MatchOutcome> simulateSingleMatch({
       return MatchOutcome(
         winner: winnerLabel,
         turns: match.turnNumber,
-        playerCrystalHp: match.player.crystalHP,
-        opponentCrystalHp: match.opponent.crystalHP,
+        playerCrystalHp: match.player.baseHP,
+        opponentCrystalHp: match.opponent.baseHP,
         fullLog: buffer.toString(),
       );
     }
 
-    // SimpleAI for both sides - use tile-based moves to support captured middle tiles
-    final p1Moves = ai1.generateTileMoves(
-      match.player,
-      match.board,
-      match.lanes,
-      isOpponent: false,
-    );
-    final p2Moves = ai2.generateTileMoves(
-      match.opponent,
-      match.board,
-      match.lanes,
-      isOpponent: true,
+    // Determine whose turn it is
+    final isPlayer1Turn = matchManager.isPlayerTurn;
+    final currentPlayer = isPlayer1Turn ? match.player : match.opponent;
+    final enemyPlayer = isPlayer1Turn ? match.opponent : match.player;
+    final playerBaseRow = isPlayer1Turn ? 2 : 0;
+    final enemyBaseRow = isPlayer1Turn ? 0 : 2;
+
+    // Execute AI turn for current player
+    await _executeSimulatedTurn(
+      matchManager: matchManager,
+      match: match,
+      currentPlayer: currentPlayer,
+      enemyPlayer: enemyPlayer,
+      playerBaseRow: playerBaseRow,
+      enemyBaseRow: enemyBaseRow,
+      random: random,
     );
 
-    await matchManager.submitPlayerTileMoves(p1Moves);
-    await matchManager.submitOpponentTileMoves(p2Moves);
+    // End turn
+    matchManager.endTurnTYC3();
 
-    // After both sides submit, MatchManager resolves combat and advances turn.
-    // Capture a snapshot at the end of each full round (post-combat, pre-next turn).
-    matchManager.printGameStateSnapshot();
+    // Log state after each turn
+    if (match.turnNumber % 10 == 0) {
+      matchManager.printGameStateSnapshot();
+    }
+  }
+}
+
+/// Execute a simulated AI turn using TYC3 mechanics
+Future<void> _executeSimulatedTurn({
+  required MatchManager matchManager,
+  required dynamic match,
+  required dynamic currentPlayer,
+  required dynamic enemyPlayer,
+  required int playerBaseRow,
+  required int enemyBaseRow,
+  required Random random,
+}) async {
+  // Phase 1: Place cards from hand
+  final maxCards = match.maxCardsThisTurn;
+  var cardsPlaced = 0;
+
+  final hand = List<GameCard>.from(currentPlayer.hand);
+  hand.shuffle(random);
+
+  for (final card in hand) {
+    if (cardsPlaced >= maxCards) break;
+
+    // Try to place on base row first
+    for (int col = 0; col < 3; col++) {
+      final tile = match.board.getTile(playerBaseRow, col);
+      if (tile.cards.length < 2) {
+        if (matchManager.placeCardTYC3(card, playerBaseRow, col)) {
+          cardsPlaced++;
+          break;
+        }
+      }
+    }
+  }
+
+  // Phase 2: Move cards forward
+  for (int row = 0; row < 3; row++) {
+    for (int col = 0; col < 3; col++) {
+      final tile = match.board.getTile(row, col);
+      final cards = tile.cards
+          .where((c) => c.isAlive && c.ownerId == currentPlayer.id)
+          .toList();
+
+      for (final card in cards) {
+        if (!card.canMove()) continue;
+
+        // Determine target row (move toward enemy)
+        final targetRow = playerBaseRow == 2 ? row - 1 : row + 1;
+        if (targetRow < 0 || targetRow > 2) continue;
+
+        // Check if target tile has enemy cards (don't move into enemy)
+        final targetTile = match.board.getTile(targetRow, col);
+        final hasEnemyCards = targetTile.cards.any(
+          (c) => c.isAlive && c.ownerId == enemyPlayer.id,
+        );
+        if (hasEnemyCards) continue;
+
+        // Random chance to not move
+        if (random.nextDouble() < 0.3) continue;
+
+        matchManager.moveCardTYC3(card, row, col, targetRow, col);
+      }
+    }
+  }
+
+  // Phase 3: Attack with cards
+  final attackers = <({GameCard card, int row, int col})>[];
+  for (int row = 0; row < 3; row++) {
+    for (int col = 0; col < 3; col++) {
+      final tile = match.board.getTile(row, col);
+      for (final card in tile.cards) {
+        if (card.isAlive &&
+            card.canAttack() &&
+            card.ownerId == currentPlayer.id) {
+          attackers.add((card: card, row: row, col: col));
+        }
+      }
+    }
+  }
+
+  attackers.shuffle(random);
+
+  for (final entry in attackers) {
+    final card = entry.card;
+    final row = entry.row;
+    final col = entry.col;
+
+    if (!card.canAttack()) continue;
+
+    // Try to attack enemy cards
+    final targets = matchManager.getValidTargetsTYC3(card, row, col);
+    if (targets.isNotEmpty) {
+      // Prioritize targets we can kill, then high damage targets
+      targets.sort((a, b) {
+        final canKillA = a.currentHealth <= card.damage ? 1 : 0;
+        final canKillB = b.currentHealth <= card.damage ? 1 : 0;
+        if (canKillA != canKillB) return canKillB - canKillA;
+        return b.damage - a.damage;
+      });
+
+      final target = targets.first;
+      // Find target position
+      for (int tr = 0; tr < 3; tr++) {
+        for (int tc = 0; tc < 3; tc++) {
+          final targetTile = match.board.getTile(tr, tc);
+          if (targetTile.cards.contains(target)) {
+            matchManager.attackCardTYC3(card, target, row, col, tr, tc);
+            break;
+          }
+        }
+      }
+    }
+
+    // Try to attack enemy base if in range
+    if (card.canAttack()) {
+      final distanceToBase = (enemyBaseRow - row).abs();
+      if (distanceToBase <= card.attackRange) {
+        matchManager.attackBaseTYC3(card, row, col);
+      }
+    }
   }
 }
 
