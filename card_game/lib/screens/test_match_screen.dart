@@ -1936,8 +1936,10 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         }
       }
 
-      // Try to attack player base if at row 2
-      if (row == 2 && card.canAttack()) {
+      // Try to attack player base if in range (row 1 or 2 for AI attacking player base at row 2)
+      // AI cards attack player base (row 2), so they need to be within attack range
+      final distanceToPlayerBase = (2 - row).abs();
+      if (distanceToPlayerBase <= card.attackRange && card.canAttack()) {
         final damage = _matchManager.attackBaseTYC3(card, row, col);
         if (damage > 0) {
           debugPrint('AI attacked player base for $damage damage!');
@@ -2223,7 +2225,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     if (ability.startsWith('heal')) return Icons.healing;
     if (ability == 'cleave') return Icons.all_inclusive;
     if (ability.startsWith('thorns')) return Icons.grass;
-    if (ability == 'conceal_back') return Icons.visibility_off;
+    // conceal_back removed - not valid in TYC3
     if (ability == 'stealth_pass') return Icons.nightlight_round;
     if (ability == 'paratrooper') return Icons.flight_takeoff;
     // New Napoleon abilities
@@ -2355,8 +2357,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         return 'Powerful regeneration over time.';
       case 'cleave':
         return 'Hits BOTH enemies on the same tile with full damage.';
-      case 'conceal_back':
-        return 'Hides the back card in this stack from the enemy.';
+      // conceal_back removed - not valid in TYC3
       case 'stealth_pass':
         return 'Can move through enemies in the middle lane.';
       case 'paratrooper':
@@ -2442,8 +2443,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         return 'Regenerate';
       case 'cleave':
         return 'Cleave';
-      case 'conceal_back':
-        return 'Conceal';
+      // conceal_back removed - not valid in TYC3
       case 'stealth_pass':
         return 'Stealth';
       case 'paratrooper':

@@ -13,7 +13,7 @@ class DeckEditorScreen extends StatefulWidget {
 
 class _DeckEditorScreenState extends State<DeckEditorScreen> {
   static const int maxDeckSize = 25;
-  static const int minDeckSize = 15;
+  static const int minDeckSize = 20;
 
   final DeckStorageService _storageService = DeckStorageService();
 
@@ -90,7 +90,7 @@ class _DeckEditorScreenState extends State<DeckEditorScreen> {
     }
 
     setState(() {
-      // Create a copy with unique ID
+      // Create a copy with unique ID including all TYC3 stats
       final newCard = GameCard(
         id: '${card.id}_deck_${DateTime.now().millisecondsSinceEpoch}',
         name: card.name,
@@ -101,6 +101,12 @@ class _DeckEditorScreenState extends State<DeckEditorScreen> {
         abilities: card.abilities,
         cost: card.cost,
         rarity: card.rarity,
+        // TYC3 stats
+        maxAP: card.maxAP,
+        apPerTurn: card.apPerTurn,
+        attackAPCost: card.attackAPCost,
+        attackRange: card.attackRange,
+        moveSpeed: card.moveSpeed,
       );
       _deckCards.add(newCard);
     });
@@ -378,7 +384,7 @@ class _DeckEditorScreenState extends State<DeckEditorScreen> {
                     ],
                   ),
                   Text(
-                    '⚔️${card.damage} ❤️${card.health} ⏱️${card.tick}  (max $maxCopies)',
+                    '⚔️${card.damage} ❤️${card.health} 🎯${card.attackRange} ⚡${card.maxAP}  (max $maxCopies)',
                     style: TextStyle(color: Colors.grey[400], fontSize: 11),
                   ),
                 ],
@@ -573,13 +579,18 @@ class _DeckEditorScreenState extends State<DeckEditorScreen> {
               ),
             ),
 
-            // Stats
+            // Stats - TYC3 format
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
                 _buildStatBadge('⚔️', card.damage.toString(), Colors.red),
                 _buildStatBadge('❤️', card.health.toString(), Colors.pink),
-                _buildStatBadge('⏱️', card.tick.toString(), Colors.blue),
+                _buildStatBadge(
+                  '🎯',
+                  card.attackRange.toString(),
+                  Colors.orange,
+                ),
+                _buildStatBadge('⚡', card.maxAP.toString(), Colors.cyan),
               ],
             ),
 
@@ -664,13 +675,57 @@ class _DeckEditorScreenState extends State<DeckEditorScreen> {
             ],
           ),
           const SizedBox(height: 8),
+          // TYC3 Stats
           Row(
             children: [
               _buildDetailStat('Damage', card.damage, Colors.red),
-              const SizedBox(width: 16),
+              const SizedBox(width: 12),
               _buildDetailStat('Health', card.health, Colors.pink),
-              const SizedBox(width: 16),
-              _buildDetailStat('Tick', card.tick, Colors.blue),
+              const SizedBox(width: 12),
+              _buildDetailStat('Range', card.attackRange, Colors.orange),
+              const SizedBox(width: 12),
+              _buildDetailStat('AP', card.maxAP, Colors.cyan),
+            ],
+          ),
+          const SizedBox(height: 8),
+          // Additional TYC3 info
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.cyan.withAlpha(50),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  'AP/Turn: ${card.apPerTurn}',
+                  style: const TextStyle(color: Colors.cyan, fontSize: 11),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.red.withAlpha(50),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  'Attack Cost: ${card.attackAPCost} AP',
+                  style: const TextStyle(color: Colors.red, fontSize: 11),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.green.withAlpha(50),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  'Move Speed: ${card.moveSpeed}',
+                  style: const TextStyle(color: Colors.green, fontSize: 11),
+                ),
+              ),
             ],
           ),
           if (card.abilities.isNotEmpty) ...[
@@ -784,7 +839,7 @@ class _DeckEditorScreenState extends State<DeckEditorScreen> {
     }
   }
 
-  /// Get human-readable description for abilities
+  /// Get human-readable description for abilities (TYC3)
   String _getAbilityDescription(String ability) {
     // Parse ability format: name_value (e.g., "fury_2", "shield_1")
     final parts = ability.split('_');
@@ -796,34 +851,75 @@ class _DeckEditorScreenState extends State<DeckEditorScreen> {
       case 'fury':
         return '+$value damage when attacking';
       case 'cleave':
-        return 'Attacks hit all enemy cards in the lane';
+        return 'Attacks hit ALL enemies on the same tile';
       case 'thorns':
         return 'Reflects $value damage back to attackers';
+      case 'first':
+        if (ability == 'first_strike') {
+          return 'Attacks first, enemy cannot retaliate if killed';
+        }
+        return 'Strikes first in combat';
 
       // Defensive abilities
       case 'shield':
         return 'Reduces incoming damage by $value';
       case 'regen':
-        return 'Heals $value HP each tick';
+        return 'Heals $value HP at start of each turn';
       case 'regenerate':
-        return 'Slowly regenerates health over time';
+        return 'Regenerates health over time';
+      case 'guard':
+        return 'Must be attacked before other units on same tile';
+      case 'tile':
+        if (ability.startsWith('tile_shield')) {
+          return 'Provides shield to all allies on same tile';
+        }
+        return 'Tile-wide effect';
 
       // Support abilities
       case 'heal':
         return 'Heals friendly cards for $value HP';
-      case 'heal_ally':
-        return 'Heals friendly cards by $value HP per tick';
+      case 'inspire':
+        return 'Boosts nearby allies by $value damage';
+      case 'fortify':
+        return 'Grants $value shield to allies on same tile';
+      case 'rally':
+        return 'Boosts all allies in lane by $value damage';
 
-      // Tactical abilities
-      case 'conceal':
-        if (ability == 'conceal_back') {
-          return 'When front, hides back card identity from enemy';
+      // Movement/Tactical abilities
+      case 'flanking':
+        return 'Can move to adjacent lanes (left/right)';
+      case 'scout':
+        return 'Reveals enemy cards in adjacent lanes';
+      case 'stealth':
+        if (ability == 'stealth_pass') {
+          return 'Can move through enemies in middle lane';
         }
-        return 'Conceals information from enemy';
+        return 'Harder to detect';
+      case 'paratrooper':
+        return 'Can be placed directly on middle row';
+
+      // Attack abilities
+      case 'ranged':
+        return 'Can attack from distance without retaliation';
+      case 'far':
+        if (ability == 'far_attack') {
+          return 'Attacks enemies at OTHER tiles in same lane';
+        }
+        return 'Long-range attack';
+      case 'cross':
+        if (ability == 'cross_attack') {
+          return 'Can attack enemies in adjacent lanes';
+        }
+        return 'Cross-lane ability';
+      case 'long':
+        if (ability == 'long_range') {
+          return 'Can attack enemies 2 tiles away';
+        }
+        return 'Extended range';
 
       default:
         // Try to make unknown abilities readable
-        return ability.replaceAll('_', ' ').toUpperCase();
+        return ability.replaceAll('_', ' ');
     }
   }
 }

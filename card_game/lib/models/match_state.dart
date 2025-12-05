@@ -121,8 +121,9 @@ class MatchState {
   bool get isTurnExpired => remainingTurnSeconds <= 0;
 
   /// Maximum cards that can be placed this turn
-  int get maxCardsThisTurn =>
-      isFirstTurn && activePlayerId == player.id ? 1 : 2;
+  /// Turn 1 (first turn) = 1 card only (balances first-mover advantage)
+  /// All other turns = 2 cards
+  int get maxCardsThisTurn => isFirstTurn ? 1 : 2;
 
   /// Check if more cards can be placed this turn
   bool get canPlaceMoreCards => cardsPlayedThisTurn < maxCardsThisTurn;

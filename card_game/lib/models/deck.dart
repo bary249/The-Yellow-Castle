@@ -2,15 +2,21 @@ import 'dart:math';
 import 'card.dart';
 import '../data/card_library.dart';
 
-/// Represents a player's deck of 25 cards
+/// Represents a player's deck of 20-25 cards
 class Deck {
+  static const int minDeckSize = 20;
+  static const int maxDeckSize = 25;
+
   final String id;
   final String name;
   final List<GameCard> _cards;
 
   Deck({required this.id, required this.name, required List<GameCard> cards})
     : _cards = cards.map((c) => c.copy()).toList() {
-    assert(cards.length == 25, 'Deck must have exactly 25 cards');
+    assert(
+      cards.length >= minDeckSize && cards.length <= maxDeckSize,
+      'Deck must have $minDeckSize-$maxDeckSize cards (got ${cards.length})',
+    );
   }
 
   /// Get remaining cards in deck
@@ -79,33 +85,25 @@ class Deck {
     );
   }
 
-  /// Create a deck from saved cards (must have 15-25 cards)
-  /// Will pad with starter cards if under 25
+  /// Create a deck from saved cards (must have 20-25 cards)
   factory Deck.fromCards({
     required String playerId,
     required List<GameCard> cards,
     String name = 'Custom Deck',
   }) {
-    // Ensure we have at least 15 cards
-    if (cards.length < 15) {
-      throw ArgumentError('Deck must have at least 15 cards');
+    // Ensure we have at least minDeckSize cards
+    if (cards.length < minDeckSize) {
+      throw ArgumentError(
+        'Deck must have at least $minDeckSize cards (got ${cards.length})',
+      );
     }
 
-    // Pad to 25 cards if needed using starter pool
-    final deckCards = List<GameCard>.from(cards);
-    if (deckCards.length < 25) {
-      final starterCards = buildStarterCardPool();
-      starterCards.shuffle(Random());
-      while (deckCards.length < 25) {
-        deckCards.add(starterCards.removeAt(0).copy());
-      }
-    }
+    // Cap at maxDeckSize
+    final deckCards = cards.length > maxDeckSize
+        ? cards.take(maxDeckSize).toList()
+        : List<GameCard>.from(cards);
 
-    return Deck(
-      id: 'custom_$playerId',
-      name: name,
-      cards: deckCards.take(25).toList(),
-    );
+    return Deck(id: 'custom_$playerId', name: name, cards: deckCards);
   }
 
   /// Create a deck from card names (for online sync)
@@ -141,17 +139,17 @@ class Deck {
       }
     }
 
-    // Pad to 25 if needed
-    while (cards.length < 25) {
-      final starterCards = buildStarterCardPool();
-      starterCards.shuffle(Random());
-      cards.add(starterCards.first.copy());
+    // Ensure minimum deck size
+    if (cards.length < minDeckSize) {
+      throw ArgumentError(
+        'Deck must have at least $minDeckSize cards (got ${cards.length})',
+      );
     }
 
     return Deck(
       id: 'synced_$playerId',
       name: name,
-      cards: cards.take(25).toList(),
+      cards: cards.take(maxDeckSize).toList(),
     );
   }
 
@@ -180,6 +178,20 @@ class Deck {
         return lakeTank(index);
       case 'Woods Tank':
         return woodsTank(index);
+      // Archers (ranged)
+      case 'Desert Archer':
+        return desertArcher(index);
+      case 'Lake Archer':
+        return lakeArcher(index);
+      case 'Woods Archer':
+        return woodsArcher(index);
+      // Cannons (long range)
+      case 'Desert Cannon':
+        return desertCannon(index);
+      case 'Lake Cannon':
+        return lakeCannon(index);
+      case 'Woods Cannon':
+        return woodsCannon(index);
       // Rare cards
       case 'Desert Elite Striker':
         return desertEliteStriker(index);

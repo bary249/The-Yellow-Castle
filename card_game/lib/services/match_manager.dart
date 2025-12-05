@@ -1334,6 +1334,8 @@ class MatchManager {
   }
 
   /// Get max cards that can be played this turn
+  /// Turn 1 = 1 card only (balances first-mover advantage)
+  /// All other turns = 2 cards
   int get maxCardsThisTurn {
     if (_currentMatch == null) return 0;
     return _currentMatch!.isFirstTurn ? 1 : 2;
@@ -1488,17 +1490,17 @@ class MatchManager {
 
     final wasFirstTurn = _currentMatch!.isFirstTurn;
 
+    // First turn ends after whoever goes first ends their turn
+    // This balances first-mover advantage (they only get 1 card)
+    if (wasFirstTurn) {
+      _currentMatch!.isFirstTurn = false;
+      _log('📍 First turn phase complete');
+    }
+
     // Switch active player
     if (_currentMatch!.activePlayerId == _currentMatch!.player.id) {
       _currentMatch!.activePlayerId = _currentMatch!.opponent.id;
       _currentMatch!.currentPhase = MatchPhase.opponentTurn;
-
-      // First turn ends after the first player has had their turn
-      // (opponent will now have their first turn, then first turn phase is over)
-      if (wasFirstTurn) {
-        _currentMatch!.isFirstTurn = false;
-        _log('📍 First turn phase complete');
-      }
     } else {
       _currentMatch!.activePlayerId = _currentMatch!.player.id;
       _currentMatch!.currentPhase = MatchPhase.playerTurn;
@@ -1543,7 +1545,7 @@ class MatchManager {
     regenerateAPForPlayer(activeId);
   }
 
-  /// Regenerate AP for all cards belonging to a specific player
+  /// Regenerate AP and apply regen abilities for all cards belonging to a specific player
   /// Public method for online mode to call when turn switches
   void regenerateAPForPlayer(String playerId) {
     if (_currentMatch == null) return;
@@ -1560,6 +1562,9 @@ class MatchManager {
           if (card.ownerId == playerId && card.isAlive) {
             card.regenerateAP();
             cardsRegen++;
+
+            // Apply HP regen abilities
+            _applyRegenAbilities(card);
           }
         }
       }
@@ -1567,6 +1572,47 @@ class MatchManager {
 
     if (cardsRegen > 0) {
       _log('⚡ $cardsRegen cards regenerated AP');
+    }
+  }
+
+  /// Apply HP regeneration abilities to a card at turn start
+  void _applyRegenAbilities(GameCard card) {
+    if (!card.isAlive) return;
+
+    // Check for regen_X ability (e.g., regen_1, regen_2)
+    for (final ability in card.abilities) {
+      if (ability.startsWith('regen_')) {
+        final regenAmount = int.tryParse(ability.split('_').last) ?? 0;
+        if (regenAmount > 0 && card.currentHealth < card.health) {
+          final oldHp = card.currentHealth;
+          card.currentHealth = (card.currentHealth + regenAmount).clamp(
+            0,
+            card.health,
+          );
+          final healed = card.currentHealth - oldHp;
+          if (healed > 0) {
+            _log(
+              '💚 ${card.name} regenerates $healed HP (${card.currentHealth}/${card.health})',
+            );
+          }
+        }
+      }
+      // Also check for 'regenerate' ability (fixed amount)
+      else if (ability == 'regenerate') {
+        if (card.currentHealth < card.health) {
+          final oldHp = card.currentHealth;
+          card.currentHealth = (card.currentHealth + 2).clamp(
+            0,
+            card.health,
+          ); // Default 2 HP
+          final healed = card.currentHealth - oldHp;
+          if (healed > 0) {
+            _log(
+              '💚 ${card.name} regenerates $healed HP (${card.currentHealth}/${card.health})',
+            );
+          }
+        }
+      }
     }
   }
 
@@ -2037,6 +2083,20 @@ class MatchManager {
     if (_currentMatch == null) return null;
     if (!useTurnBasedSystem) return null;
 
+    // Fog of war check: Player cannot attack into unrevealed enemy base (row 0)
+    final isPlayerAttacker = attacker.ownerId == _currentMatch!.player.id;
+    if (isPlayerAttacker && targetRow == 0) {
+      final lanePos = [
+        LanePosition.west,
+        LanePosition.center,
+        LanePosition.east,
+      ][targetCol];
+      if (!_currentMatch!.revealedEnemyBaseLanes.contains(lanePos)) {
+        _log('❌ Cannot attack into fog of war - enemy base not revealed');
+        return null;
+      }
+    }
+
     // Get guards in target tile
     final targetTile = _currentMatch!.board.getTile(targetRow, targetCol);
     final guardsInTile = targetTile.cards
@@ -2232,6 +2292,19 @@ class MatchManager {
     // Determine target base row based on attacker's owner
     final isPlayerAttacking = attacker.ownerId == _currentMatch!.player.id;
     final targetBaseRow = isPlayerAttacking ? 0 : 2;
+
+    // Fog of war check: Player cannot attack enemy base if lane not revealed
+    if (isPlayerAttacking) {
+      final lanePos = [
+        LanePosition.west,
+        LanePosition.center,
+        LanePosition.east,
+      ][attackerCol];
+      if (!_currentMatch!.revealedEnemyBaseLanes.contains(lanePos)) {
+        _log('❌ Cannot attack base through fog of war - lane not revealed');
+        return 0;
+      }
+    }
 
     // Check range to base
     final distance = (targetBaseRow - attackerRow).abs();

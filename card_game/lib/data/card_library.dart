@@ -190,6 +190,122 @@ GameCard woodsTank(int index) => GameCard(
 );
 
 // ============================================================================
+// RANGED UNITS (Common) - Attack from distance, no retaliation
+// ============================================================================
+
+/// Desert Archer - Ranged unit that attacks without taking retaliation
+GameCard desertArcher(int index) => GameCard(
+  id: 'desert_archer_$index',
+  name: 'Desert Archer',
+  damage: 4,
+  health: 5,
+  tick: 2,
+  moveSpeed: 1,
+  maxAP: 1,
+  apPerTurn: 1,
+  attackAPCost: 1,
+  attackRange: 1, // Normal range but ranged ability prevents retaliation
+  element: 'Desert',
+  abilities: const ['ranged'], // No retaliation when attacking
+  cost: 2,
+  rarity: 1, // Common
+);
+
+/// Lake Archer - Ranged unit with more HP
+GameCard lakeArcher(int index) => GameCard(
+  id: 'lake_archer_$index',
+  name: 'Lake Archer',
+  damage: 3,
+  health: 7,
+  tick: 2,
+  moveSpeed: 1,
+  maxAP: 1,
+  apPerTurn: 1,
+  attackAPCost: 1,
+  attackRange: 1,
+  element: 'Lake',
+  abilities: const ['ranged'],
+  cost: 2,
+  rarity: 1, // Common
+);
+
+/// Woods Archer - Balanced ranged unit
+GameCard woodsArcher(int index) => GameCard(
+  id: 'woods_archer_$index',
+  name: 'Woods Archer',
+  damage: 3,
+  health: 6,
+  tick: 2,
+  moveSpeed: 1,
+  maxAP: 1,
+  apPerTurn: 1,
+  attackAPCost: 1,
+  attackRange: 1,
+  element: 'Woods',
+  abilities: const ['ranged'],
+  cost: 2,
+  rarity: 1, // Common
+);
+
+// ============================================================================
+// CANNON UNITS (Rare) - Long range attack (2 tiles), slow but powerful
+// ============================================================================
+
+/// Desert Cannon - Long range artillery, can attack from 2 tiles away
+GameCard desertCannon(int index) => GameCard(
+  id: 'desert_cannon_$index',
+  name: 'Desert Cannon',
+  damage: 8,
+  health: 6,
+  tick: 4,
+  moveSpeed: 0, // Stationary - must be positioned carefully
+  maxAP: 1,
+  apPerTurn: 1,
+  attackAPCost: 1,
+  attackRange: 2, // Can attack 2 tiles away!
+  element: 'Desert',
+  abilities: const ['ranged'], // No retaliation
+  cost: 4,
+  rarity: 2, // Rare
+);
+
+/// Lake Cannon - Tankier artillery
+GameCard lakeCannon(int index) => GameCard(
+  id: 'lake_cannon_$index',
+  name: 'Lake Cannon',
+  damage: 7,
+  health: 8,
+  tick: 4,
+  moveSpeed: 0,
+  maxAP: 1,
+  apPerTurn: 1,
+  attackAPCost: 1,
+  attackRange: 2,
+  element: 'Lake',
+  abilities: const ['ranged'],
+  cost: 4,
+  rarity: 2, // Rare
+);
+
+/// Woods Cannon - Balanced artillery with some mobility
+GameCard woodsCannon(int index) => GameCard(
+  id: 'woods_cannon_$index',
+  name: 'Woods Cannon',
+  damage: 7,
+  health: 7,
+  tick: 4,
+  moveSpeed: 1, // Can reposition slowly
+  maxAP: 1,
+  apPerTurn: 1,
+  attackAPCost: 1,
+  attackRange: 2,
+  element: 'Woods',
+  abilities: const ['ranged'],
+  cost: 4,
+  rarity: 2, // Rare
+);
+
+// ============================================================================
 // RARE CARDS (Rarity 2) - Max 3 copies each - Elite versions (+25% stats)
 // ============================================================================
 
@@ -398,7 +514,7 @@ GameCard woodsSentinel(int index) => GameCard(
 );
 
 /// Tactical support - Desert Shadow Scout
-/// When in front with a back card, hides the back card's identity from enemy
+/// Fast scout with flanking ability
 GameCard desertShadowScout(int index) => GameCard(
   id: 'desert_shadow_$index',
   name: 'Desert Shadow Scout',
@@ -410,13 +526,16 @@ GameCard desertShadowScout(int index) => GameCard(
   apPerTurn: 2,
   attackAPCost: 1,
   element: 'Desert',
-  abilities: const ['conceal_back'], // Hides back card from enemy view
+  abilities: const [
+    'scout',
+    'flanking',
+  ], // Reveals enemies and can move cross-lane
   cost: 3,
   rarity: 3, // Epic
 );
 
 /// Tactical support - Lake Mist Weaver
-/// When in front with a back card, hides the back card's identity from enemy
+/// Defensive unit with shield and regen
 GameCard lakeMistWeaver(int index) => GameCard(
   id: 'lake_mist_$index',
   name: 'Lake Mist Weaver',
@@ -428,7 +547,7 @@ GameCard lakeMistWeaver(int index) => GameCard(
   apPerTurn: 1,
   attackAPCost: 1,
   element: 'Lake',
-  abilities: const ['conceal_back', 'shield_1'], // Conceals and has light armor
+  abilities: const ['shield_1', 'regen_1'], // Light armor and regeneration
   cost: 3,
   rarity: 3, // Epic
 );
@@ -932,7 +1051,7 @@ String rarityName(int rarity) {
 // DECK BUILDERS
 // ============================================================================
 
-/// Build a simple 25-card starter deck - mostly common with 1 rare per element
+/// Build a simple 25-card starter deck - balanced mix of unit types
 /// Every deck includes 1 Scout for reconnaissance.
 List<GameCard> buildStarterCardPool() {
   final cards = <GameCard>[];
@@ -940,38 +1059,46 @@ List<GameCard> buildStarterCardPool() {
   // 1 Scout - every deck gets one for reconnaissance
   cards.add(scoutUnit(0));
 
-  // 6 Common Quick Strikes: 2 of each element
-  for (int i = 0; i < 2; i++) {
-    cards.add(desertQuickStrike(i));
-    cards.add(lakeQuickStrike(i));
-    cards.add(woodsQuickStrike(i));
-  }
+  // 3 Common Quick Strikes: 1 of each element (reduced from 6)
+  cards.add(desertQuickStrike(0));
+  cards.add(lakeQuickStrike(0));
+  cards.add(woodsQuickStrike(0));
 
   // 3 Rare Elite Strikers: 1 of each element
   cards.add(desertEliteStriker(0));
   cards.add(lakeEliteStriker(0));
   cards.add(woodsEliteStriker(0));
 
-  // 6 Common Warriors: 2 of each element
-  for (int i = 0; i < 2; i++) {
-    cards.add(desertWarrior(i));
-    cards.add(lakeWarrior(i));
-    cards.add(woodsWarrior(i));
-  }
+  // 3 Common Warriors: 1 of each element (reduced from 6)
+  cards.add(desertWarrior(0));
+  cards.add(lakeWarrior(0));
+  cards.add(woodsWarrior(0));
 
   // 3 Rare Veterans: 1 of each element
   cards.add(desertVeteran(0));
   cards.add(lakeVeteran(0));
   cards.add(woodsVeteran(0));
 
-  // 5 Common Tanks (reduced by 1 to make room for Scout)
+  // 3 Common Tanks: 1 of each element (reduced from 5)
   cards.add(desertTank(0));
-  cards.add(desertTank(1));
   cards.add(lakeTank(0));
-  cards.add(lakeTank(1));
   cards.add(woodsTank(0));
 
-  // 1 Epic card (random element based on player preference later)
+  // 3 Common Archers: 1 of each element (NEW - ranged units)
+  cards.add(desertArcher(0));
+  cards.add(lakeArcher(0));
+  cards.add(woodsArcher(0));
+
+  // 3 Rare Cannons: 1 of each element (NEW - long range artillery)
+  cards.add(desertCannon(0));
+  cards.add(lakeCannon(0));
+  cards.add(woodsCannon(0));
+
+  // 2 Extra common units for balance (25 total)
+  cards.add(desertQuickStrike(1));
+  cards.add(lakeWarrior(1));
+
+  // 1 Epic card
   cards.add(lakeShieldTotem(0));
 
   assert(cards.length == 25);
@@ -991,6 +1118,10 @@ List<GameCard> buildFullCardPool() {
     cards.add(desertWarrior(i));
     cards.add(lakeWarrior(i));
     cards.add(woodsWarrior(i));
+    // Archers - ranged units
+    cards.add(desertArcher(i));
+    cards.add(lakeArcher(i));
+    cards.add(woodsArcher(i));
   }
   for (int i = 0; i < 4; i++) {
     cards.add(desertTank(i));
@@ -1006,6 +1137,10 @@ List<GameCard> buildFullCardPool() {
     cards.add(desertVeteran(i));
     cards.add(lakeVeteran(i));
     cards.add(woodsVeteran(i));
+    // Cannons - long range artillery
+    cards.add(desertCannon(i));
+    cards.add(lakeCannon(i));
+    cards.add(woodsCannon(i));
   }
 
   // ===== EPIC CARDS (max 2 copies each) =====
