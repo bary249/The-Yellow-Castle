@@ -1373,10 +1373,21 @@ class MatchManager {
       return false;
     }
 
-    // Validate placement - must be on own base row
-    final validRow = isPlayer ? 2 : 0;
-    if (row != validRow) {
-      _log('❌ Can only place cards on your base row ($validRow)');
+    // Validate placement - must be on own base row, or middle row if card has 2+ AP
+    final baseRow = isPlayer ? 2 : 0;
+    final middleRow = 1;
+
+    // Cards with 2+ maxAP can be placed on middle row (costs 1 extra AP)
+    final canPlaceOnMiddle = card.maxAP >= 2;
+
+    if (row == baseRow) {
+      // Base row is always valid
+    } else if (row == middleRow && canPlaceOnMiddle) {
+      // Middle row valid for 2+ AP cards
+    } else {
+      _log(
+        '❌ Can only place cards on your base row ($baseRow)${canPlaceOnMiddle ? " or middle row" : ""}',
+      );
       return false;
     }
 
@@ -1401,12 +1412,17 @@ class MatchManager {
 
     // Initialize card's AP and set owner
     // Card starts with maxAP - 1 (placing costs 1 AP)
-    card.currentAP = card.maxAP - 1;
+    // If placed on middle row, costs 2 AP (place + move)
+    final apCost = (row == middleRow) ? 2 : 1;
+    card.currentAP = card.maxAP - apCost;
     card.ownerId = active.id;
 
     final owner = isPlayer ? 'Player' : 'Opponent';
+    final placementNote = (row == middleRow)
+        ? ' (direct to middle, -2 AP)'
+        : '';
     _log(
-      '✅ [$owner] Placed ${card.name} (${card.damage}/${card.health}) at ($row, $col)',
+      '✅ [$owner] Placed ${card.name} (${card.damage}/${card.health}) at ($row, $col)$placementNote',
     );
 
     // Check for relic pickup at placement tile (in case placed on middle)
@@ -1632,10 +1648,6 @@ class MatchManager {
   ) {
     if (_currentMatch == null) return [];
 
-    _log(
-      '🔍 getReachableTiles: ${card.name} at ($fromRow,$fromCol) with ${card.currentAP}/${card.maxAP} AP',
-    );
-
     final reachable = <({int row, int col, int apCost})>[];
     final visited = <String>{};
     final queue = <({int row, int col, int apCost})>[
@@ -1696,9 +1708,6 @@ class MatchManager {
       }
     }
 
-    _log(
-      '🔍 Reachable tiles: ${reachable.map((t) => "(${t.row},${t.col})@${t.apCost}AP").join(", ")}',
-    );
     return reachable;
   }
 

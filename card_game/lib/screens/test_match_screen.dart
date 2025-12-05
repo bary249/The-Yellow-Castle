@@ -1246,93 +1246,115 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     await Future.delayed(const Duration(milliseconds: 200));
   }
 
-  /// TYC3: Move card to adjacent tile
+  /// TYC3: Move card to a tile (supports multi-step moves if card has enough AP)
   void _moveCardTYC3(int toRow, int toCol) {
     if (_selectedCardForAction == null ||
         _selectedCardRow == null ||
         _selectedCardCol == null)
       return;
 
-    // Check for error first to show meaningful message
-    final error = _matchManager.getMoveError(
-      _selectedCardForAction!,
-      _selectedCardRow!,
-      _selectedCardCol!,
-      toRow,
-      toCol,
-    );
-
-    if (error != null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(error)));
-      return;
-    }
-
     final card = _selectedCardForAction!;
     final fromRow = _selectedCardRow!;
     final fromCol = _selectedCardCol!;
 
-    // NEW: Use OnlineGameManager for online mode if available
-    if (_onlineGameManager != null) {
-      // Apply locally first (same logic as vs-AI)
-      final success = _matchManager.moveCardTYC3(
-        card,
-        fromRow,
-        fromCol,
-        toRow,
-        toCol,
-      );
-      if (success) {
-        // Sync state to Firebase so opponent sees the action
-        _syncOnlineState();
-        _clearTYC3Selection();
-        setState(() {});
-      }
+    // Check if this is a valid destination using reachable tiles
+    final reachableTiles = _matchManager.getReachableTiles(
+      card,
+      fromRow,
+      fromCol,
+    );
+    final targetTile = reachableTiles
+        .where((t) => t.row == toRow && t.col == toCol)
+        .firstOrNull;
+
+    if (targetTile == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Cannot reach that tile')));
       return;
     }
 
-    // LEGACY: Old online mode path (will be removed once OnlineGameManager is stable)
-    bool success = false;
-    final cardName = card.name;
+    // Move step by step to reach the destination
+    int currentRow = fromRow;
+    int currentCol = fromCol;
 
-    if (_isOnlineMode && !_amPlayer1) {
-      // ONLINE, non-host player: do NOT mutate local MatchManager.
-      // Just send the action; host will apply movement and sync state.
+    while (currentRow != toRow || currentCol != toCol) {
+      // Determine next step (prioritize row movement, then column)
+      int nextRow = currentRow;
+      int nextCol = currentCol;
+
+      // Simple pathfinding: move toward target one step at a time
+      if (currentRow < toRow)
+        nextRow++;
+      else if (currentRow > toRow)
+        nextRow--;
+      else if (currentCol < toCol)
+        nextCol++;
+      else if (currentCol > toCol)
+        nextCol--;
+
+      final moved = _matchManager.moveCardTYC3(
+        card,
+        currentRow,
+        currentCol,
+        nextRow,
+        nextCol,
+      );
+      if (!moved) {
+        // Path blocked, try alternative direction
+        if (currentCol != toCol && currentRow == nextRow) {
+          // Was trying horizontal, try vertical first
+          nextRow = currentRow;
+          nextCol = currentCol;
+          if (currentRow < toRow)
+            nextRow++;
+          else if (currentRow > toRow)
+            nextRow--;
+          else
+            break; // No valid move
+
+          final altMoved = _matchManager.moveCardTYC3(
+            card,
+            currentRow,
+            currentCol,
+            nextRow,
+            nextCol,
+          );
+          if (!altMoved) {
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(const SnackBar(content: Text('Path blocked')));
+            break;
+          }
+        } else {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Path blocked')));
+          break;
+        }
+      }
+
+      currentRow = nextRow;
+      currentCol = nextCol;
+    }
+
+    // Sync state for online mode
+    if (_onlineGameManager != null) {
+      _syncOnlineState();
+    } else if (_isOnlineMode) {
+      // LEGACY: Old online mode path
       _syncTYC3Action('move', {
-        'cardName': cardName,
+        'cardName': card.name,
         'fromRow': fromRow,
         'fromCol': fromCol,
         'toRow': toRow,
         'toCol': toCol,
       });
-      success = true;
-    } else {
-      // Offline or host: apply to local MatchManager
-      success = _matchManager.moveCardTYC3(
-        card,
-        fromRow,
-        fromCol,
-        toRow,
-        toCol,
-      );
-
-      if (success && _isOnlineMode) {
-        _syncTYC3Action('move', {
-          'cardName': cardName,
-          'fromRow': fromRow,
-          'fromCol': fromCol,
-          'toRow': toRow,
-          'toCol': toCol,
-        });
-      }
     }
 
-    if (success) {
-      // Clear selection after move to avoid confusion
-      _clearTYC3Selection();
-      setState(() {});
-    }
+    // Clear selection after move
+    _clearTYC3Selection();
+    setState(() {});
   }
 
   /// TYC3: Handle tap on a tile (place card or move to)
@@ -5378,11 +5400,18 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     // Count existing cards for placement check
     final existingPlayerCount = playerCardsAtTile.length;
 
-    // Can place on player-owned tiles with room, but NOT enemy base (row 0)
-    final isPlayerOwned = tile.owner == TileOwner.player;
-    final isNotEnemyBase =
-        row != 0; // Cannot stage on enemy base even if captured
+    // Can place on player base (row 2), or middle row (row 1) if card has 2+ AP
+    final isPlayerBase = row == 2;
+    final isMiddleRow = row == 1;
+    final isNotEnemyBase = row != 0; // Cannot stage on enemy base
     final stagedCount = stagedCardsOnTile.length;
+
+    // Check if selected card can be placed on middle row (needs 2+ AP)
+    final selectedCardCanPlaceMiddle =
+        _selectedCard != null && _selectedCard!.maxAP >= 2;
+
+    // Check if there are enemy cards on the middle tile (can't place there)
+    final hasEnemyOnMiddle = isMiddleRow && opponentCardsAtTile.isNotEmpty;
 
     // Check 1 card per lane limit - count staged cards in this lane (all rows)
     int stagedInLane = 0;
@@ -5391,12 +5420,16 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       stagedInLane += (_stagedCards[laneKey]?.length ?? 0);
     }
 
+    // Can place on:
+    // 1. Player base (row 2) - always valid
+    // 2. Middle row (row 1) - only if card has 2+ AP and no enemies there
     final canPlace =
-        isPlayerOwned &&
-        isNotEnemyBase &&
         _selectedCard != null &&
+        isNotEnemyBase &&
         stagedInLane == 0 && // No card already staged in this lane
-        (existingPlayerCount + stagedCount) < Tile.maxCards;
+        (existingPlayerCount + stagedCount) < Tile.maxCards &&
+        (isPlayerBase ||
+            (isMiddleRow && selectedCardCanPlaceMiddle && !hasEnemyOnMiddle));
 
     // Determine tile color based on owner and terrain
     Color bgColor;
