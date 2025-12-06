@@ -6,6 +6,78 @@ import 'relic.dart';
 import 'hero.dart';
 import '../data/hero_library.dart';
 
+/// Serializable combat result for syncing between players in PvP
+/// This allows the "resting" player to see combat results from opponent's attacks
+class SyncedCombatResult {
+  final String id; // Unique ID to detect new results
+  final bool isBaseAttack; // true if attacking base, false if attacking card
+  final String attackerName;
+  final String? targetName; // null for base attacks
+  final int damageDealt;
+  final int retaliationDamage;
+  final bool targetDied;
+  final bool attackerDied;
+  final int? targetHpBefore;
+  final int? targetHpAfter;
+  final int? attackerHpBefore;
+  final int? attackerHpAfter;
+  final int laneCol; // 0=west, 1=center, 2=east
+  final String attackerOwnerId; // To determine if "my" card or opponent's
+
+  SyncedCombatResult({
+    required this.id,
+    required this.isBaseAttack,
+    required this.attackerName,
+    this.targetName,
+    required this.damageDealt,
+    this.retaliationDamage = 0,
+    this.targetDied = false,
+    this.attackerDied = false,
+    this.targetHpBefore,
+    this.targetHpAfter,
+    this.attackerHpBefore,
+    this.attackerHpAfter,
+    required this.laneCol,
+    required this.attackerOwnerId,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'isBaseAttack': isBaseAttack,
+    'attackerName': attackerName,
+    'targetName': targetName,
+    'damageDealt': damageDealt,
+    'retaliationDamage': retaliationDamage,
+    'targetDied': targetDied,
+    'attackerDied': attackerDied,
+    'targetHpBefore': targetHpBefore,
+    'targetHpAfter': targetHpAfter,
+    'attackerHpBefore': attackerHpBefore,
+    'attackerHpAfter': attackerHpAfter,
+    'laneCol': laneCol,
+    'attackerOwnerId': attackerOwnerId,
+  };
+
+  factory SyncedCombatResult.fromJson(Map<String, dynamic> json) {
+    return SyncedCombatResult(
+      id: json['id'] as String,
+      isBaseAttack: json['isBaseAttack'] as bool,
+      attackerName: json['attackerName'] as String,
+      targetName: json['targetName'] as String?,
+      damageDealt: json['damageDealt'] as int,
+      retaliationDamage: json['retaliationDamage'] as int? ?? 0,
+      targetDied: json['targetDied'] as bool? ?? false,
+      attackerDied: json['attackerDied'] as bool? ?? false,
+      targetHpBefore: json['targetHpBefore'] as int?,
+      targetHpAfter: json['targetHpAfter'] as int?,
+      attackerHpBefore: json['attackerHpBefore'] as int?,
+      attackerHpAfter: json['attackerHpAfter'] as int?,
+      laneCol: json['laneCol'] as int,
+      attackerOwnerId: json['attackerOwnerId'] as String,
+    );
+  }
+}
+
 /// Current phase of the match
 /// TYC3: Updated for turn-based system
 enum MatchPhase {
@@ -71,6 +143,10 @@ class MatchState {
   /// Relic manager for handling relics on the battlefield.
   /// Currently places one relic on the center middle tile.
   final RelicManager relicManager = RelicManager();
+
+  /// Last combat result for syncing to opponent in PvP
+  /// When an attack happens, store the result here so the other player can see it
+  SyncedCombatResult? lastCombatResult;
 
   MatchState({
     required this.player,
@@ -209,6 +285,7 @@ class MatchState {
     'relicColumn': relicManager.relicColumn,
     'relicClaimed': relicManager.isRelicClaimed,
     'relicClaimedBy': relicManager.relicClaimedBy,
+    'lastCombatResult': lastCombatResult?.toJson(),
   };
 
   /// Create from JSON (for online sync)
@@ -280,6 +357,12 @@ class MatchState {
     if (claimedBy != null && match.relicManager.middleRelic != null) {
       match.relicManager.middleRelic!.isClaimed = true;
       match.relicManager.middleRelic!.claimedByPlayerId = claimedBy;
+    }
+
+    // Restore last combat result (for PvP sync)
+    final combatResultJson = json['lastCombatResult'] as Map<String, dynamic>?;
+    if (combatResultJson != null) {
+      match.lastCombatResult = SyncedCombatResult.fromJson(combatResultJson);
     }
 
     return match;

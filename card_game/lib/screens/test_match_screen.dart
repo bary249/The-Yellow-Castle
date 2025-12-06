@@ -90,6 +90,9 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   OnlineGameManager? _onlineGameManager;
   StreamSubscription<MatchState>? _onlineStateSubscription;
 
+  // Track last seen combat result ID to avoid showing duplicates
+  String? _lastSeenCombatResultId;
+
   // ===== TYC3: Turn-based AP system state =====
   bool _useTYC3Mode = true; // Enable TYC3 by default for testing
   Timer? _turnTimer;
@@ -176,6 +179,23 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
 
     // Check if it's currently our turn locally
     final wasMyTurn = _matchManager.isPlayerTurn;
+
+    // Check for new combat result to show dialog (before replacing state)
+    final combatResult = newState.lastCombatResult;
+    if (combatResult != null && combatResult.id != _lastSeenCombatResultId) {
+      // New combat result from opponent - show dialog
+      _lastSeenCombatResultId = combatResult.id;
+      debugPrint(
+        '📥 New combat result: ${combatResult.attackerName} -> ${combatResult.targetName}',
+      );
+
+      // Show dialog after state update
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _showSyncedCombatResultDialog(combatResult);
+        }
+      });
+    }
 
     // Replace local match state with the received state
     _matchManager.replaceMatchState(newState);
@@ -1236,6 +1256,178 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
           ElevatedButton(
             onPressed: () => Navigator.pop(context),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('OK', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    // Brief pause after dialog closes
+    await Future.delayed(const Duration(milliseconds: 200));
+  }
+
+  /// Show combat result dialog from synced PvP state
+  /// This is called when opponent attacks and we receive the result via Firebase
+  Future<void> _showSyncedCombatResultDialog(SyncedCombatResult result) async {
+    final laneName = _getLaneName(result.laneCol);
+    final isOpponentAttacking = result.attackerOwnerId != _playerId;
+
+    // Determine dialog style based on who is attacking
+    final titleEmoji = isOpponentAttacking ? '🤖' : '⚔️';
+    final titleText = isOpponentAttacking ? 'Enemy Attack!' : 'Your Attack';
+    final bgColor = isOpponentAttacking ? Colors.red[50] : Colors.blue[50];
+    final accentColor = isOpponentAttacking ? Colors.red : Colors.blue;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) => AlertDialog(
+        title: Column(
+          children: [
+            Text('$titleEmoji $titleText', textAlign: TextAlign.center),
+            Text(
+              '$laneName Lane',
+              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+            ),
+          ],
+        ),
+        backgroundColor: bgColor,
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Attack damage
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: accentColor.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: accentColor, width: 2),
+              ),
+              child: Column(
+                children: [
+                  Text(
+                    result.attackerName,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text('dealt '),
+                      Text(
+                        '${result.damageDealt}',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: accentColor,
+                        ),
+                      ),
+                      const Text(' damage to'),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    result.targetName ?? 'Base',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: isOpponentAttacking ? Colors.blue : Colors.red,
+                    ),
+                  ),
+                  if (result.isBaseAttack && result.targetHpAfter != null) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.favorite, color: Colors.red, size: 20),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Base HP: ${result.targetHpAfter}',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                  ],
+                  if (result.targetDied)
+                    Text(
+                      result.isBaseAttack ? '🏆 VICTORY!' : '💀 DESTROYED!',
+                      style: TextStyle(
+                        color: accentColor,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+
+            // Retaliation (only for card attacks)
+            if (!result.isBaseAttack && result.retaliationDamage > 0) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.green[50],
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.green, width: 1),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      result.targetDied
+                          ? '↩️ Retaliation (before dying)'
+                          : '↩️ Retaliation',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.green[700],
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          result.targetName ?? '',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        const Text(' dealt '),
+                        Text(
+                          '${result.retaliationDamage}',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.green,
+                          ),
+                        ),
+                        const Text(' to '),
+                        Text(
+                          result.attackerName,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                    if (result.attackerDied)
+                      const Text(
+                        '💀 ATTACKER DESTROYED!',
+                        style: TextStyle(
+                          color: Colors.green,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context),
+            style: ElevatedButton.styleFrom(backgroundColor: accentColor),
             child: const Text('OK', style: TextStyle(color: Colors.white)),
           ),
         ],

@@ -2224,6 +2224,28 @@ class MatchManager {
     }
     _log('   AP remaining: ${attacker.currentAP}/${attacker.maxAP}');
 
+    // Store combat result for PvP sync (so opponent can see the result dialog)
+    _currentMatch!.lastCombatResult = SyncedCombatResult(
+      id: '${DateTime.now().millisecondsSinceEpoch}_${attacker.id}_${target.id}',
+      isBaseAttack: false,
+      attackerName: attacker.name,
+      targetName: target.name,
+      damageDealt: result.damageDealt,
+      retaliationDamage: result.retaliationDamage,
+      targetDied: result.targetDied,
+      attackerDied: result.attackerDied,
+      targetHpBefore:
+          target.currentHealth + result.damageDealt, // Reconstruct before HP
+      targetHpAfter: target.currentHealth,
+      attackerHpBefore:
+          attacker.currentHealth +
+          result.retaliationDamage +
+          result.thornsDamage,
+      attackerHpAfter: attacker.currentHealth,
+      laneCol: targetCol,
+      attackerOwnerId: attacker.ownerId ?? '',
+    );
+
     return result;
   }
 
@@ -2366,6 +2388,24 @@ class MatchManager {
           : _currentMatch!.opponent.id;
       _log('🏆 GAME OVER! ${isPlayerAttacking ? "Player" : "Opponent"} wins!');
     }
+
+    // Store combat result for PvP sync (so opponent can see the base attack result)
+    _currentMatch!.lastCombatResult = SyncedCombatResult(
+      id: '${DateTime.now().millisecondsSinceEpoch}_${attacker.id}_base',
+      isBaseAttack: true,
+      attackerName: attacker.name,
+      targetName: '${targetPlayer.name}\'s Base',
+      damageDealt: damage,
+      retaliationDamage: 0,
+      targetDied: targetPlayer.isDefeated,
+      attackerDied: false,
+      targetHpBefore: targetPlayer.baseHP + damage,
+      targetHpAfter: targetPlayer.baseHP,
+      attackerHpBefore: attacker.currentHealth,
+      attackerHpAfter: attacker.currentHealth,
+      laneCol: attackerCol,
+      attackerOwnerId: attacker.ownerId ?? '',
+    );
 
     return damage;
   }
