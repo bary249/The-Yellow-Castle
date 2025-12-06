@@ -797,18 +797,13 @@ class MatchManager {
     for (final lane in _currentMatch!.lanes) {
       final laneName = lane.position.name.toUpperCase();
       final colIndex = lane.position.index;
-      final lanePos = lane.position;
 
       // Check for player attackers at enemy base
       final playerAttackers = lane.playerCards.enemyBaseCards.aliveCards;
       final opponentDefenders = lane.opponentCards.baseCards.aliveCards;
 
       if (playerAttackers.isNotEmpty) {
-        // Fog of war: as soon as you have attackers at enemy base,
-        // reveal that lane's enemy base to the player.
-        if (!_currentMatch!.revealedEnemyBaseLanes.contains(lanePos)) {
-          _currentMatch!.revealedEnemyBaseLanes.add(lanePos);
-        }
+        // Fog of war is now DYNAMIC - no permanent reveal needed
         if (opponentDefenders.isEmpty) {
           // Uncontested - deal full damage
           final totalDamage = playerAttackers.fold<int>(
@@ -1099,25 +1094,12 @@ class MatchManager {
     // Base tiles NEVER change ownership
     if (newZone == Zone.middle) {
       final tile = board.getTile(1, col);
-      final lanePos = [
-        LanePosition.west,
-        LanePosition.center,
-        LanePosition.east,
-      ][col];
 
       if (isPlayerAdvancing) {
         if (tile.owner != TileOwner.player) {
           tile.owner = TileOwner.player;
           _log('  🏴 Player captured ${tile.displayName}!');
-
-          // Fog of war: reveal enemy base terrain for this lane
-          if (!_currentMatch!.revealedEnemyBaseLanes.contains(lanePos)) {
-            _currentMatch!.revealedEnemyBaseLanes.add(lanePos);
-            final enemyBaseTile = board.getTile(0, col);
-            _log(
-              '  👁️ Enemy base terrain revealed: ${enemyBaseTile.terrain ?? "none"}',
-            );
-          }
+          // Fog of war is now DYNAMIC - visibility based on current card positions
         }
       } else {
         if (tile.owner != TileOwner.opponent) {
@@ -1944,61 +1926,12 @@ class MatchManager {
   }
 
   /// Update fog of war visibility based on scout ability.
-  /// Scouts can see adjacent lanes (all 3 if in center, 2 if on edge).
+  /// Scout visibility is now DYNAMIC - based on current card positions.
+  /// No permanent reveal. This method is kept for future permanent reveal abilities.
   void _updateScoutVisibility(int row, int col, String playerId) {
-    if (_currentMatch == null) return;
-
-    // Only player's scouts reveal for the player
-    final isPlayer = playerId == _currentMatch!.player.id;
-    if (!isPlayer) return;
-
-    // Scout reveals enemy base tiles in adjacent lanes
-    // Scout can ONLY see from middle row (row 1) - one tile ahead to enemy base
-    if (row == 1) {
-      // Reveal current lane
-      final currentLane = [
-        LanePosition.west,
-        LanePosition.center,
-        LanePosition.east,
-      ][col];
-      if (!_currentMatch!.revealedEnemyBaseLanes.contains(currentLane)) {
-        _currentMatch!.revealedEnemyBaseLanes.add(currentLane);
-        _log('👁️ Scout reveals ${currentLane.name} enemy base');
-      }
-
-      // Reveal adjacent lanes based on column
-      if (col == 0) {
-        // West lane - can also see center
-        if (!_currentMatch!.revealedEnemyBaseLanes.contains(
-          LanePosition.center,
-        )) {
-          _currentMatch!.revealedEnemyBaseLanes.add(LanePosition.center);
-          _log('👁️ Scout reveals center enemy base');
-        }
-      } else if (col == 1) {
-        // Center lane - can see all 3 lanes
-        if (!_currentMatch!.revealedEnemyBaseLanes.contains(
-          LanePosition.west,
-        )) {
-          _currentMatch!.revealedEnemyBaseLanes.add(LanePosition.west);
-          _log('👁️ Scout reveals west enemy base');
-        }
-        if (!_currentMatch!.revealedEnemyBaseLanes.contains(
-          LanePosition.east,
-        )) {
-          _currentMatch!.revealedEnemyBaseLanes.add(LanePosition.east);
-          _log('👁️ Scout reveals east enemy base');
-        }
-      } else if (col == 2) {
-        // East lane - can also see center
-        if (!_currentMatch!.revealedEnemyBaseLanes.contains(
-          LanePosition.center,
-        )) {
-          _currentMatch!.revealedEnemyBaseLanes.add(LanePosition.center);
-          _log('👁️ Scout reveals center enemy base');
-        }
-      }
-    }
+    // Fog of war is now purely dynamic - visibility is determined by
+    // whether player has cards in the middle row of each lane.
+    // No permanent reveal abilities exist yet.
   }
 
   /// Log a summary of the current board state for debugging
@@ -2086,13 +2019,35 @@ class MatchManager {
     // Fog of war check: Player cannot attack into unrevealed enemy base (row 0)
     final isPlayerAttacker = attacker.ownerId == _currentMatch!.player.id;
     if (isPlayerAttacker && targetRow == 0) {
-      final lanePos = [
-        LanePosition.west,
-        LanePosition.center,
-        LanePosition.east,
-      ][targetCol];
-      if (!_currentMatch!.revealedEnemyBaseLanes.contains(lanePos)) {
-        _log('❌ Cannot attack into fog of war - enemy base not revealed');
+      // Dynamic fog of war: check if player has visibility
+      final playerId = _currentMatch!.player.id;
+      final middleTile = _currentMatch!.board.getTile(1, targetCol);
+      final playerHasMiddleCard = middleTile.cards.any(
+        (c) => c.ownerId == playerId && c.isAlive,
+      );
+
+      // Check if a scout can see this lane
+      bool scoutCanSee = false;
+      for (int scoutCol = 0; scoutCol < 3; scoutCol++) {
+        final scoutTile = _currentMatch!.board.getTile(1, scoutCol);
+        final hasScout = scoutTile.cards.any(
+          (c) =>
+              c.ownerId == playerId &&
+              c.isAlive &&
+              c.abilities.contains('scout'),
+        );
+        if (hasScout) {
+          if (scoutCol == targetCol ||
+              (scoutCol - targetCol).abs() == 1 ||
+              scoutCol == 1) {
+            scoutCanSee = true;
+            break;
+          }
+        }
+      }
+
+      if (!playerHasMiddleCard && !scoutCanSee) {
+        _log('❌ Cannot attack into fog of war - no visibility in this lane');
         return null;
       }
     }
@@ -2317,13 +2272,37 @@ class MatchManager {
 
     // Fog of war check: Player cannot attack enemy base if lane not revealed
     if (isPlayerAttacking) {
-      final lanePos = [
-        LanePosition.west,
-        LanePosition.center,
-        LanePosition.east,
-      ][attackerCol];
-      if (!_currentMatch!.revealedEnemyBaseLanes.contains(lanePos)) {
-        _log('❌ Cannot attack base through fog of war - lane not revealed');
+      // Dynamic fog of war: check if player has visibility
+      final playerId = _currentMatch!.player.id;
+      final middleTile = _currentMatch!.board.getTile(1, attackerCol);
+      final playerHasMiddleCard = middleTile.cards.any(
+        (c) => c.ownerId == playerId && c.isAlive,
+      );
+
+      // Check if a scout can see this lane
+      bool scoutCanSee = false;
+      for (int scoutCol = 0; scoutCol < 3; scoutCol++) {
+        final scoutTile = _currentMatch!.board.getTile(1, scoutCol);
+        final hasScout = scoutTile.cards.any(
+          (c) =>
+              c.ownerId == playerId &&
+              c.isAlive &&
+              c.abilities.contains('scout'),
+        );
+        if (hasScout) {
+          if (scoutCol == attackerCol ||
+              (scoutCol - attackerCol).abs() == 1 ||
+              scoutCol == 1) {
+            scoutCanSee = true;
+            break;
+          }
+        }
+      }
+
+      if (!playerHasMiddleCard && !scoutCanSee) {
+        _log(
+          '❌ Cannot attack base through fog of war - no visibility in this lane',
+        );
         return 0;
       }
     }

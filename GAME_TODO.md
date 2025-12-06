@@ -459,6 +459,25 @@
 
 ---
 
+## 🧪 UI Responsiveness Testing (In Progress)
+
+### UI Test Screen Created: `lib/screens/ui_test_screen.dart`
+- [x] Stacked/fanned card display on board tiles
+  - Configurable overlap ratio (30%-90%)
+  - Stack vs Fan layout toggle
+  - Adjustable fan angle (0-15°)
+- [x] Drag-and-drop card placement from hand to board
+- [x] Point-and-click card placement (tap to select, tap tile to place)
+- [x] Responsive layout (portrait vs landscape)
+- [x] Mini card widgets with stats display
+- [ ] Test on various screen sizes (phone, tablet, web)
+- [ ] Integrate best patterns into main game screen
+
+### Access
+- Main Menu → "UI TEST" button (purple)
+
+---
+
 ## 🎨 4. Visual Assets & UI Components
 
 ### 4.1 Card Visuals

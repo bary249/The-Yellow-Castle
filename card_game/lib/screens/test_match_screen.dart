@@ -98,6 +98,12 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   Timer? _turnTimer;
   int _turnSecondsRemaining = 100;
 
+  // ===== UI Mode Toggle =====
+  bool _useStackedCardUI =
+      true; // Toggle between old ListView and new stacked card UI
+  double _handFanAngle = 5.0; // Degrees of fan spread for hand
+  double _handCardOverlap = 0.4; // How much hand cards overlap
+
   // TYC3 action state
   GameCard? _selectedCardForAction; // Card selected for move/attack
   int? _selectedCardRow;
@@ -2432,49 +2438,84 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     return Icons.star;
   }
 
-  /// Determine attack style from card abilities
-  /// Returns: 'melee' (sword), 'ranged' (bow), or 'far_attack' (cannon)
+  /// Determine attack style from card abilities and properties
+  /// Returns: 'melee' (sword), 'ranged' (bow - no retaliation), or 'long_range' (cannon - 2 tile range)
   String _getAttackStyle(GameCard card) {
-    if (card.abilities.contains('far_attack')) return 'far_attack';
-    if (card.abilities.contains('ranged')) return 'ranged';
+    // Long range (cannon): attackRange >= 2 or has 'long_range' or 'far_attack' ability
+    if (card.isLongRange || card.abilities.contains('far_attack')) {
+      return 'long_range';
+    }
+    // Ranged (archer): has 'ranged' ability - no retaliation but range 1
+    if (card.isRanged) return 'ranged';
+    // Default: melee
     return 'melee';
   }
 
   /// Get icon for attack style
-  /// - Melee: Sword (gets retaliation)
-  /// - Ranged: Bow (no retaliation)
-  /// - Far Attack: Cannonball (attacks from distance, no retaliation)
+  /// - Melee: Sword (gets retaliation, range 1)
+  /// - Ranged/Archer: Bow (no retaliation, range 1) 🏹
+  /// - Long Range/Cannon: Explosion (no retaliation, range 2) 💥
   IconData _getAttackStyleIcon(String attackStyle) {
     switch (attackStyle) {
-      case 'far_attack':
-        return Icons.adjust; // Cannonball
+      case 'long_range':
+        return Icons.gps_fixed; // Target/crosshair for cannon (long range)
       case 'ranged':
-        return Icons.arrow_forward; // Bow
+        return Icons
+            .keyboard_double_arrow_right; // Double arrow for archer (ranged, no retaliation)
       case 'melee':
       default:
-        return Icons
-            .content_cut; // Sword (rotated scissors look like crossed swords)
+        return Icons.content_cut; // Sword for melee
     }
   }
 
   /// Get color for attack style icon
   Color _getAttackStyleColor(String attackStyle) {
     switch (attackStyle) {
-      case 'far_attack':
-        return Colors.orange[700]!; // Cannon = orange
+      case 'long_range':
+        return Colors.deepOrange[700]!; // Cannon = deep orange (explosive)
       case 'ranged':
-        return Colors.green[700]!; // Bow = green
+        return Colors.teal[600]!; // Archer = teal (swift, precise)
       case 'melee':
       default:
-        return Colors.grey[700]!; // Sword = grey/steel
+        return Colors.blueGrey[700]!; // Sword = steel blue-grey
     }
   }
 
-  /// Build attack style icon widget
+  /// Build attack style icon widget with tooltip
   Widget _buildAttackStyleIcon(GameCard card, {double size = 10}) {
     final style = _getAttackStyle(card);
     final icon = _getAttackStyleIcon(style);
     final color = _getAttackStyleColor(style);
+
+    // Add a small indicator for range
+    if (style == 'long_range') {
+      // Show "2" badge for long range
+      return Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Icon(icon, size: size, color: color),
+          Positioned(
+            right: -2,
+            bottom: -2,
+            child: Container(
+              padding: const EdgeInsets.all(1),
+              decoration: BoxDecoration(
+                color: Colors.deepOrange[800],
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                '2',
+                style: TextStyle(
+                  fontSize: size * 0.5,
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
 
     return Icon(icon, size: size, color: color);
   }
@@ -2482,10 +2523,10 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   /// Get human-readable label for attack style
   String _getAttackStyleLabel(String attackStyle) {
     switch (attackStyle) {
-      case 'far_attack':
-        return 'Cannon'; // Far attack - no retaliation
+      case 'long_range':
+        return 'Cannon (Range 2)'; // Long range - can hit 2 tiles away
       case 'ranged':
-        return 'Ranged'; // Ranged - no retaliation
+        return 'Archer (No Retaliation)'; // Ranged - no retaliation but range 1
       case 'melee':
       default:
         return 'Melee'; // Melee - gets retaliation
@@ -4207,6 +4248,15 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                 },
                 tooltip: 'Clear all placements',
               ),
+            // UI Mode Toggle
+            IconButton(
+              icon: Icon(_useStackedCardUI ? Icons.view_list : Icons.layers),
+              onPressed: () =>
+                  setState(() => _useStackedCardUI = !_useStackedCardUI),
+              tooltip: _useStackedCardUI
+                  ? 'Switch to List View'
+                  : 'Switch to Stacked View',
+            ),
           ],
         ),
         body: match.isGameOver ? _buildGameOver(match) : _buildMatchView(match),
@@ -4292,14 +4342,14 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   Widget? _buildTYC3ActionButton(MatchState match) {
     if (match.isGameOver) return null;
 
-    // Show "End Turn" button during player's turn
+    // Show "End Turn" button during player's turn (small icon)
     if (_matchManager.isPlayerTurn) {
-      return FloatingActionButton.extended(
+      return FloatingActionButton.small(
         onPressed: _endTurnTYC3,
-        label: const Text('End Turn'),
-        icon: const Icon(Icons.skip_next),
+        tooltip: 'End Turn',
         backgroundColor: Colors.blue[700],
         heroTag: 'endTurn',
+        child: const Icon(Icons.skip_next, size: 24),
       );
     }
 
@@ -5551,19 +5601,49 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       final tileCards = tile.cards.where((c) => c.isAlive).toList();
       final playerId = match.player.id;
 
-      // Fog of War: Check if player has cards in middle (row 1) of this lane
+      // Fog of War: Check if player has cards in middle (row 1) OR enemy base (row 0) of this lane
       final middleTile = match.board.getTile(1, col);
+      final enemyBaseTile = match.board.getTile(0, col);
       final playerHasMiddleCard = middleTile.cards.any(
         (c) => c.ownerId == playerId && c.isAlive,
       );
+      final playerHasEnemyBaseCard = enemyBaseTile.cards.any(
+        (c) => c.ownerId == playerId && c.isAlive,
+      );
+
+      // Check if a scout in middle can see this lane
+      bool scoutCanSee = false;
+      for (int scoutCol = 0; scoutCol < 3; scoutCol++) {
+        final scoutTile = match.board.getTile(1, scoutCol);
+        final hasScout = scoutTile.cards.any(
+          (c) =>
+              c.ownerId == playerId &&
+              c.isAlive &&
+              c.abilities.contains('scout'),
+        );
+        if (hasScout) {
+          // Scout can see its own lane and adjacent lanes
+          if (scoutCol == col) {
+            scoutCanSee = true;
+          } else if ((scoutCol - col).abs() == 1) {
+            scoutCanSee = true;
+          } else if (scoutCol == 1) {
+            // Center scout can see all lanes
+            scoutCanSee = true;
+          }
+        }
+      }
+
+      final canSeeEnemyBase =
+          playerHasMiddleCard || playerHasEnemyBaseCard || scoutCanSee;
 
       // Use card.ownerId to determine ownership
       for (final card in tileCards) {
         if (card.ownerId == playerId) {
           playerCardsAtTile.add(card);
         } else {
-          // Fog of War: Hide enemy base cards (row 0) unless player has cards in middle
-          if (row == 0 && !playerHasMiddleCard) {
+          // Fog of War: Hide enemy base cards (row 0) unless player can see it
+          if (row == 0 && !canSeeEnemyBase) {
             // Don't add to opponentCardsAtTile - hidden by fog of war
             continue;
           }
@@ -5731,403 +5811,957 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       borderWidth = 1;
     }
 
-    return GestureDetector(
-      onTap: () => _onTileTapTYC3(row, col, canPlace, canMoveTo, canAttackBase),
-      child: Container(
-        margin: const EdgeInsets.all(2),
-        decoration: BoxDecoration(
-          color: canMoveTo ? Colors.purple[50]! : bgColor,
-          border: Border.all(color: borderColor, width: borderWidth),
-          borderRadius: BorderRadius.circular(6),
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(6),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Terrain tag (with fog of war for enemy base)
-              if (tile.terrain != null)
-                Builder(
-                  builder: (context) {
-                    // Fog of war: check if enemy base terrain is revealed
-                    final isEnemyBase = row == 0;
-                    bool showTerrain = true;
+    // Wrap with DragTarget to accept card drops from hand
+    return DragTarget<GameCard>(
+      onWillAcceptWithDetails: (details) {
+        // Accept if this is a valid placement tile for a hand card
+        final card = details.data;
+        // Check if card is from hand (not already on board)
+        final isFromHand = match.player.hand.contains(card);
+        if (!isFromHand) return false;
 
-                    if (isEnemyBase) {
-                      final lanePos = [
-                        LanePosition.west,
-                        LanePosition.center,
-                        LanePosition.east,
-                      ][col];
+        // Check placement rules
+        final isPlayerBase = row == 2;
+        final isMiddleRow = row == 1;
+        final cardCanPlaceMiddle = card.maxAP >= 2;
+        final hasEnemyOnMiddle = isMiddleRow && opponentCardsAtTile.isNotEmpty;
 
-                      // Check if revealed via revealedEnemyBaseLanes (scout ability or capture)
-                      final isRevealedByScout = match.revealedEnemyBaseLanes
-                          .contains(lanePos);
+        // Check 1 card per lane limit
+        int stagedInLane = 0;
+        for (int r = 0; r <= 2; r++) {
+          final laneKey = _tileKey(r, col);
+          stagedInLane += (_stagedCards[laneKey]?.length ?? 0);
+        }
 
-                      if (_useTYC3Mode) {
-                        // TYC3: Revealed if player has cards in middle of this lane OR scout revealed it
-                        final middleTile = match.board.getTile(1, col);
-                        final playerId = match.player.id;
-                        final hasCardInMiddle = middleTile.cards.any(
-                          (c) => c.ownerId == playerId && c.isAlive,
+        return isNotEnemyBase &&
+            stagedInLane == 0 &&
+            (existingPlayerCount + stagedCount) < Tile.maxCards &&
+            (isPlayerBase ||
+                (isMiddleRow && cardCanPlaceMiddle && !hasEnemyOnMiddle));
+      },
+      onAcceptWithDetails: (details) {
+        // Place the card on this tile
+        final card = details.data;
+        setState(() {
+          _selectedCard = card;
+        });
+        _placeCardOnTile(row, col);
+      },
+      builder: (context, candidateData, rejectedData) {
+        final isBeingDraggedOver = candidateData.isNotEmpty;
+
+        return GestureDetector(
+          onTap: () =>
+              _onTileTapTYC3(row, col, canPlace, canMoveTo, canAttackBase),
+          child: Container(
+            margin: const EdgeInsets.all(2),
+            decoration: BoxDecoration(
+              color: isBeingDraggedOver
+                  ? Colors.green[100]!
+                  : (canMoveTo ? Colors.purple[50]! : bgColor),
+              border: Border.all(
+                color: isBeingDraggedOver ? Colors.green : borderColor,
+                width: isBeingDraggedOver ? 3 : borderWidth,
+              ),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Terrain tag (with fog of war for enemy base)
+                  if (tile.terrain != null)
+                    Builder(
+                      builder: (context) {
+                        // Fog of war: check if enemy base terrain is revealed
+                        final isEnemyBase = row == 0;
+                        bool showTerrain = true;
+
+                        if (isEnemyBase) {
+                          // Fog of war is DYNAMIC - check current visibility
+                          final playerId = match.player.id;
+
+                          // 1. Check if player has cards in middle of THIS lane
+                          final middleTileForLane = match.board.getTile(1, col);
+                          final hasPlayerCardInMiddle = middleTileForLane.cards
+                              .any((c) => c.ownerId == playerId && c.isAlive);
+
+                          // 2. Check if a scout in middle can see this lane
+                          bool scoutCanSee = false;
+                          for (int scoutCol = 0; scoutCol < 3; scoutCol++) {
+                            final scoutTile = match.board.getTile(1, scoutCol);
+                            final hasScout = scoutTile.cards.any(
+                              (c) =>
+                                  c.ownerId == playerId &&
+                                  c.isAlive &&
+                                  c.abilities.contains('scout'),
+                            );
+                            if (hasScout) {
+                              // Scout can see its own lane and adjacent lanes
+                              if (scoutCol == col) {
+                                scoutCanSee = true;
+                              } else if ((scoutCol - col).abs() == 1) {
+                                // Adjacent lane
+                                scoutCanSee = true;
+                              } else if (scoutCol == 1) {
+                                // Center scout can see all lanes
+                                scoutCanSee = true;
+                              }
+                            }
+                          }
+
+                          // Show terrain if player has visibility via cards OR scout
+                          showTerrain = hasPlayerCardInMiddle || scoutCanSee;
+                        }
+
+                        return Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: showTerrain
+                                ? _getTerrainColor(tile.terrain!)
+                                : Colors.grey[600],
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: showTerrain
+                              ? Icon(
+                                  _getTerrainIcon(tile.terrain!),
+                                  size: 14,
+                                  color: Colors.white,
+                                )
+                              : const Text(
+                                  '?',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                ),
                         );
-                        showTerrain = hasCardInMiddle || isRevealedByScout;
-                      } else {
-                        // Legacy: Use revealedEnemyBaseLanes
-                        showTerrain = isRevealedByScout;
-                      }
-                    }
+                      },
+                    ),
 
-                    return Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 4,
-                        vertical: 2,
+                  const SizedBox(height: 2),
+
+                  // Cards on this tile
+                  if (cardsToShow.isEmpty)
+                    Text(
+                      row == 1 ? 'Middle' : tile.shortName,
+                      style: TextStyle(fontSize: 10, color: Colors.grey[500]),
+                    )
+                  else if (_useStackedCardUI)
+                    // NEW: Stacked card UI
+                    Expanded(
+                      child: _buildStackedCardsOnTile(
+                        cardsToShow,
+                        playerCardsAtTile,
+                        opponentCardsAtTile,
+                        stagedCardsOnTile,
+                        row,
+                        col,
+                        match,
                       ),
-                      decoration: BoxDecoration(
-                        color: showTerrain
-                            ? _getTerrainColor(tile.terrain!)
-                            : Colors.grey[600],
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: showTerrain
-                          ? Icon(
-                              _getTerrainIcon(tile.terrain!),
-                              size: 14,
-                              color: Colors.white,
-                            )
-                          : const Text(
-                              '?',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
+                    )
+                  else
+                    // OLD: ListView UI
+                    Expanded(
+                      child: ListView(
+                        shrinkWrap: true,
+                        padding: const EdgeInsets.symmetric(horizontal: 2),
+                        children: cardsToShow.map((card) {
+                          final isStaged = stagedCardsOnTile.contains(card);
+                          final isOpponent = opponentCardsAtTile.contains(card);
+                          final isPlayerCard = playerCardsAtTile.contains(card);
+
+                          // TYC3: No front/back - just show card index for reference
+                          String? positionLabel;
+                          bool isFrontCard = false;
+
+                          if (_useTYC3Mode) {
+                            // TYC3: Show if card is selected for action
+                            if (_selectedCardForAction == card) {
+                              positionLabel = '✓ SELECTED';
+                            } else if (isOpponent) {
+                              // Show if this is a valid target
+                              if (_validTargets.contains(card)) {
+                                positionLabel = '🎯 TARGET';
+                              }
+                            }
+                          } else {
+                            // Legacy front/back logic
+                            if (isOpponent && opponentCardsAtTile.isNotEmpty) {
+                              final originalIndex = opponentCardsAtTile.indexOf(
+                                card,
+                              );
+                              isFrontCard = originalIndex == 0;
+                              if (opponentCardsAtTile.length > 1) {
+                                positionLabel = isFrontCard
+                                    ? '▼ FRONT'
+                                    : '▲ BACK';
+                              } else {
+                                positionLabel = '▼ FRONT';
+                              }
+                            } else if (isPlayerCard &&
+                                playerCardsAtTile.isNotEmpty) {
+                              final idx = playerCardsAtTile.indexOf(card);
+                              isFrontCard = idx == 0;
+                              if (playerCardsAtTile.length > 1) {
+                                positionLabel = isFrontCard
+                                    ? '▲ FRONT'
+                                    : '▼ BACK';
+                              } else {
+                                positionLabel = '▲ FRONT';
+                              }
+                            } else if (isStaged) {
+                              positionLabel = '📦 STAGED';
+                            }
+                          }
+
+                          // Check if this is the opponent's back card and it's concealed (legacy only)
+                          final isOpponentBackCard =
+                              !_useTYC3Mode &&
+                              isOpponent &&
+                              opponentCardsAtTile.length >= 2 &&
+                              opponentCardsAtTile.indexOf(card) == 1;
+                          final isConcealed =
+                              isOpponentBackCard && opponentBackCardConcealed;
+
+                          // Determine card color
+                          Color cardColor;
+                          Color labelColor;
+                          if (isStaged) {
+                            cardColor = Colors.amber[100]!;
+                            labelColor = Colors.orange[800]!;
+                          } else if (isOpponent) {
+                            cardColor = isConcealed
+                                ? Colors.grey[400]!
+                                : Colors.red[200]!;
+                            labelColor = Colors.red[800]!;
+                          } else if (isPlayerCard) {
+                            cardColor = Colors.blue[200]!;
+                            labelColor = Colors.blue[800]!;
+                          } else {
+                            cardColor = Colors.grey[200]!;
+                            labelColor = Colors.grey[600]!;
+                          }
+
+                          final rarityBorder = _getRarityBorderColor(card);
+
+                          // TYC3: Highlight selected card and valid targets
+                          final isSelected =
+                              _useTYC3Mode && _selectedCardForAction == card;
+                          final isValidTarget =
+                              _useTYC3Mode && _validTargets.contains(card);
+
+                          return GestureDetector(
+                            onTap: () => _onCardTapTYC3(
+                              card,
+                              row,
+                              col,
+                              isPlayerCard,
+                              isOpponent,
                             ),
-                    );
-                  },
-                ),
-
-              const SizedBox(height: 2),
-
-              // Cards on this tile
-              if (cardsToShow.isEmpty)
-                Text(
-                  row == 1 ? 'Middle' : tile.shortName,
-                  style: TextStyle(fontSize: 10, color: Colors.grey[500]),
-                )
-              else
-                Expanded(
-                  child: ListView(
-                    shrinkWrap: true,
-                    padding: const EdgeInsets.symmetric(horizontal: 2),
-                    children: cardsToShow.map((card) {
-                      final isStaged = stagedCardsOnTile.contains(card);
-                      final isOpponent = opponentCardsAtTile.contains(card);
-                      final isPlayerCard = playerCardsAtTile.contains(card);
-
-                      // TYC3: No front/back - just show card index for reference
-                      String? positionLabel;
-                      bool isFrontCard = false;
-
-                      if (_useTYC3Mode) {
-                        // TYC3: Show if card is selected for action
-                        if (_selectedCardForAction == card) {
-                          positionLabel = '✓ SELECTED';
-                        } else if (isOpponent) {
-                          // Show if this is a valid target
-                          if (_validTargets.contains(card)) {
-                            positionLabel = '🎯 TARGET';
-                          }
-                        }
-                      } else {
-                        // Legacy front/back logic
-                        if (isOpponent && opponentCardsAtTile.isNotEmpty) {
-                          final originalIndex = opponentCardsAtTile.indexOf(
-                            card,
-                          );
-                          isFrontCard = originalIndex == 0;
-                          if (opponentCardsAtTile.length > 1) {
-                            positionLabel = isFrontCard ? '▼ FRONT' : '▲ BACK';
-                          } else {
-                            positionLabel = '▼ FRONT';
-                          }
-                        } else if (isPlayerCard &&
-                            playerCardsAtTile.isNotEmpty) {
-                          final idx = playerCardsAtTile.indexOf(card);
-                          isFrontCard = idx == 0;
-                          if (playerCardsAtTile.length > 1) {
-                            positionLabel = isFrontCard ? '▲ FRONT' : '▼ BACK';
-                          } else {
-                            positionLabel = '▲ FRONT';
-                          }
-                        } else if (isStaged) {
-                          positionLabel = '📦 STAGED';
-                        }
-                      }
-
-                      // Check if this is the opponent's back card and it's concealed (legacy only)
-                      final isOpponentBackCard =
-                          !_useTYC3Mode &&
-                          isOpponent &&
-                          opponentCardsAtTile.length >= 2 &&
-                          opponentCardsAtTile.indexOf(card) == 1;
-                      final isConcealed =
-                          isOpponentBackCard && opponentBackCardConcealed;
-
-                      // Determine card color
-                      Color cardColor;
-                      Color labelColor;
-                      if (isStaged) {
-                        cardColor = Colors.amber[100]!;
-                        labelColor = Colors.orange[800]!;
-                      } else if (isOpponent) {
-                        cardColor = isConcealed
-                            ? Colors.grey[400]!
-                            : Colors.red[200]!;
-                        labelColor = Colors.red[800]!;
-                      } else if (isPlayerCard) {
-                        cardColor = Colors.blue[200]!;
-                        labelColor = Colors.blue[800]!;
-                      } else {
-                        cardColor = Colors.grey[200]!;
-                        labelColor = Colors.grey[600]!;
-                      }
-
-                      final rarityBorder = _getRarityBorderColor(card);
-
-                      // TYC3: Highlight selected card and valid targets
-                      final isSelected =
-                          _useTYC3Mode && _selectedCardForAction == card;
-                      final isValidTarget =
-                          _useTYC3Mode && _validTargets.contains(card);
-
-                      return GestureDetector(
-                        onTap: () => _onCardTapTYC3(
-                          card,
-                          row,
-                          col,
-                          isPlayerCard,
-                          isOpponent,
-                        ),
-                        onLongPress: () => _showCardDetails(card),
-                        child: Stack(
-                          children: [
-                            Container(
-                              margin: const EdgeInsets.symmetric(vertical: 1),
-                              padding: const EdgeInsets.all(3),
-                              decoration: BoxDecoration(
-                                color: isSelected
-                                    ? Colors.yellow[200]!
-                                    : isValidTarget
-                                    ? Colors.orange[200]!
-                                    : cardColor,
-                                borderRadius: BorderRadius.circular(4),
-                                border: isSelected
-                                    ? Border.all(
-                                        color: Colors.yellow[700]!,
-                                        width: 3,
-                                      )
-                                    : isValidTarget
-                                    ? Border.all(
-                                        color: Colors.orange[700]!,
-                                        width: 2,
-                                      )
-                                    : isStaged
-                                    ? Border.all(color: Colors.amber, width: 2)
-                                    : Border.all(
-                                        color: rarityBorder,
-                                        width: _useTYC3Mode
-                                            ? 1
-                                            : (isFrontCard ? 2 : 1),
-                                      ),
-                              ),
-                              child: isConcealed
-                                  // Show hidden card placeholder
-                                  ? Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.center,
-                                      children: [
-                                        Text(
-                                          positionLabel ?? '',
-                                          style: TextStyle(
-                                            fontSize: 7,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.grey[600],
+                            onLongPress: () => _showCardDetails(card),
+                            child: Stack(
+                              children: [
+                                Container(
+                                  margin: const EdgeInsets.symmetric(
+                                    vertical: 1,
+                                  ),
+                                  padding: const EdgeInsets.all(3),
+                                  decoration: BoxDecoration(
+                                    color: isSelected
+                                        ? Colors.yellow[200]!
+                                        : isValidTarget
+                                        ? Colors.orange[200]!
+                                        : cardColor,
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: isSelected
+                                        ? Border.all(
+                                            color: Colors.yellow[700]!,
+                                            width: 3,
+                                          )
+                                        : isValidTarget
+                                        ? Border.all(
+                                            color: Colors.orange[700]!,
+                                            width: 2,
+                                          )
+                                        : isStaged
+                                        ? Border.all(
+                                            color: Colors.amber,
+                                            width: 2,
+                                          )
+                                        : Border.all(
+                                            color: rarityBorder,
+                                            width: _useTYC3Mode
+                                                ? 1
+                                                : (isFrontCard ? 2 : 1),
                                           ),
-                                        ),
-                                        const Text(
-                                          '🔮 Hidden',
-                                          style: TextStyle(
-                                            fontSize: 9,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.white,
-                                          ),
-                                        ),
-                                      ],
-                                    )
-                                  // Show normal card info with position label
-                                  : Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        // Position label row
-                                        if (positionLabel != null)
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 3,
-                                              vertical: 1,
-                                            ),
-                                            margin: const EdgeInsets.only(
-                                              bottom: 2,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: labelColor.withValues(
-                                                alpha: 0.2,
-                                              ),
-                                              borderRadius:
-                                                  BorderRadius.circular(3),
-                                            ),
-                                            child: Text(
-                                              positionLabel,
+                                  ),
+                                  child: isConcealed
+                                      // Show hidden card placeholder
+                                      ? Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.center,
+                                          children: [
+                                            Text(
+                                              positionLabel ?? '',
                                               style: TextStyle(
                                                 fontSize: 7,
                                                 fontWeight: FontWeight.bold,
-                                                color: labelColor,
+                                                color: Colors.grey[600],
                                               ),
                                             ),
-                                          ),
-                                        Row(
-                                          mainAxisSize: MainAxisSize.min,
+                                            const Text(
+                                              '🔮 Hidden',
+                                              style: TextStyle(
+                                                fontSize: 9,
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                          ],
+                                        )
+                                      // Show normal card info with position label
+                                      : Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
                                           children: [
-                                            // Show damage as current/max
-                                            _buildStatIconWithMax(
-                                              Icons.local_fire_department,
-                                              card.currentDamage,
-                                              card.damage,
-                                              size: 10,
-                                            ),
-                                            // Show attack AP cost only if > 1
-                                            if (card.attackAPCost > 1) ...[
-                                              Text(
-                                                ' (${card.attackAPCost}',
-                                                style: TextStyle(
-                                                  fontSize: 8,
-                                                  color: Colors.orange[700],
-                                                ),
-                                              ),
-                                              Icon(
-                                                Icons.bolt,
-                                                size: 8,
-                                                color: Colors.orange[700],
-                                              ),
-                                              Text(
-                                                ')',
-                                                style: TextStyle(
-                                                  fontSize: 8,
-                                                  color: Colors.orange[700],
-                                                ),
-                                              ),
-                                            ],
-                                            const SizedBox(width: 2),
-                                            // Show HP as current/max
-                                            _buildStatIconWithMax(
-                                              Icons.favorite,
-                                              card.currentHealth,
-                                              card.health,
-                                              size: 10,
-                                            ),
-                                            const SizedBox(width: 2),
-                                            // TYC3: Show AP (current/max) and attack style icon
-                                            if (_useTYC3Mode) ...[
-                                              _buildStatIconWithMax(
-                                                Icons.bolt,
-                                                card.currentAP,
-                                                card.maxAP,
-                                                size: 10,
-                                              ),
-                                              const SizedBox(width: 2),
-                                              // Attack style: melee (sword), ranged (bow), far_attack (cannon)
-                                              _buildAttackStyleIcon(
-                                                card,
-                                                size: 10,
-                                              ),
-                                            ] else ...[
-                                              _buildStatIcon(
-                                                Icons.timer,
-                                                card.tick,
-                                                size: 10,
-                                              ),
-                                              const SizedBox(width: 2),
-                                              _buildStatIcon(
-                                                Icons.directions_run,
-                                                card.moveSpeed,
-                                                size: 10,
-                                              ),
-                                            ],
-                                            // Element/Terrain icon
-                                            if (card.element != null) ...[
-                                              const SizedBox(width: 2),
+                                            // Position label row
+                                            if (positionLabel != null)
                                               Container(
-                                                padding: const EdgeInsets.all(
-                                                  2,
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 3,
+                                                      vertical: 1,
+                                                    ),
+                                                margin: const EdgeInsets.only(
+                                                  bottom: 2,
                                                 ),
                                                 decoration: BoxDecoration(
-                                                  color: _getTerrainColor(
-                                                    card.element!,
+                                                  color: labelColor.withValues(
+                                                    alpha: 0.2,
                                                   ),
                                                   borderRadius:
                                                       BorderRadius.circular(3),
                                                 ),
-                                                child: Icon(
-                                                  _getTerrainIcon(
-                                                    card.element!,
+                                                child: Text(
+                                                  positionLabel,
+                                                  style: TextStyle(
+                                                    fontSize: 7,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: labelColor,
                                                   ),
-                                                  size: 8,
-                                                  color: Colors.white,
                                                 ),
                                               ),
-                                            ],
+                                            Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                // Show damage as current/max
+                                                _buildStatIconWithMax(
+                                                  Icons.local_fire_department,
+                                                  card.currentDamage,
+                                                  card.damage,
+                                                  size: 10,
+                                                ),
+                                                // Show attack AP cost only if > 1
+                                                if (card.attackAPCost > 1) ...[
+                                                  Text(
+                                                    ' (${card.attackAPCost}',
+                                                    style: TextStyle(
+                                                      fontSize: 8,
+                                                      color: Colors.orange[700],
+                                                    ),
+                                                  ),
+                                                  Icon(
+                                                    Icons.bolt,
+                                                    size: 8,
+                                                    color: Colors.orange[700],
+                                                  ),
+                                                  Text(
+                                                    ')',
+                                                    style: TextStyle(
+                                                      fontSize: 8,
+                                                      color: Colors.orange[700],
+                                                    ),
+                                                  ),
+                                                ],
+                                                const SizedBox(width: 2),
+                                                // Show HP as current/max
+                                                _buildStatIconWithMax(
+                                                  Icons.favorite,
+                                                  card.currentHealth,
+                                                  card.health,
+                                                  size: 10,
+                                                ),
+                                                const SizedBox(width: 2),
+                                                // TYC3: Show AP (current/max) and attack style icon
+                                                if (_useTYC3Mode) ...[
+                                                  _buildStatIconWithMax(
+                                                    Icons.bolt,
+                                                    card.currentAP,
+                                                    card.maxAP,
+                                                    size: 10,
+                                                  ),
+                                                  const SizedBox(width: 2),
+                                                  // Attack style: melee (sword), ranged (bow), far_attack (cannon)
+                                                  _buildAttackStyleIcon(
+                                                    card,
+                                                    size: 10,
+                                                  ),
+                                                ] else ...[
+                                                  _buildStatIcon(
+                                                    Icons.timer,
+                                                    card.tick,
+                                                    size: 10,
+                                                  ),
+                                                  const SizedBox(width: 2),
+                                                  _buildStatIcon(
+                                                    Icons.directions_run,
+                                                    card.moveSpeed,
+                                                    size: 10,
+                                                  ),
+                                                ],
+                                                // Element/Terrain icon
+                                                if (card.element != null) ...[
+                                                  const SizedBox(width: 2),
+                                                  Container(
+                                                    padding:
+                                                        const EdgeInsets.all(2),
+                                                    decoration: BoxDecoration(
+                                                      color: _getTerrainColor(
+                                                        card.element!,
+                                                      ),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            3,
+                                                          ),
+                                                    ),
+                                                    child: Icon(
+                                                      _getTerrainIcon(
+                                                        card.element!,
+                                                      ),
+                                                      size: 8,
+                                                      color: Colors.white,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ],
+                                            ),
                                           ],
                                         ),
-                                      ],
-                                    ),
-                            ),
-                            // X button to remove staged cards
-                            if (isStaged &&
-                                match.currentPhase != MatchPhase.combatPhase)
-                              Positioned(
-                                top: 0,
-                                right: 0,
-                                child: GestureDetector(
-                                  onTap: () =>
-                                      _removeCardFromTile(row, col, card),
-                                  child: Container(
-                                    padding: const EdgeInsets.all(2),
-                                    decoration: BoxDecoration(
-                                      color: Colors.red,
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                        color: Colors.white,
-                                        width: 1,
+                                ),
+                                // X button to remove staged cards
+                                if (isStaged &&
+                                    match.currentPhase !=
+                                        MatchPhase.combatPhase)
+                                  Positioned(
+                                    top: 0,
+                                    right: 0,
+                                    child: GestureDetector(
+                                      onTap: () =>
+                                          _removeCardFromTile(row, col, card),
+                                      child: Container(
+                                        padding: const EdgeInsets.all(2),
+                                        decoration: BoxDecoration(
+                                          color: Colors.red,
+                                          shape: BoxShape.circle,
+                                          border: Border.all(
+                                            color: Colors.white,
+                                            width: 1,
+                                          ),
+                                        ),
+                                        child: const Icon(
+                                          Icons.close,
+                                          size: 10,
+                                          color: Colors.white,
+                                        ),
                                       ),
                                     ),
-                                    child: const Icon(
-                                      Icons.close,
-                                      size: 10,
-                                      color: Colors.white,
-                                    ),
                                   ),
-                                ),
-                              ),
-                          ],
-                        ),
-                      );
-                    }).toList(),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // ===== NEW STACKED CARD UI =====
+
+  /// Build side-by-side card display for a tile (new UI mode)
+  Widget _buildStackedCardsOnTile(
+    List<GameCard> cardsToShow,
+    List<GameCard> playerCardsAtTile,
+    List<GameCard> opponentCardsAtTile,
+    List<GameCard> stagedCardsOnTile,
+    int row,
+    int col,
+    MatchState match,
+  ) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final tileWidth = constraints.maxWidth;
+        final tileHeight = constraints.maxHeight;
+
+        // Calculate card dimensions - side by side layout (25% smaller)
+        const scaleFactor = 0.75;
+        final cardCount = cardsToShow.length;
+        final gap = 4.0;
+        final totalGaps = (cardCount > 1) ? (cardCount - 1) * gap : 0;
+        final availableWidth = tileWidth - 8; // padding
+        final cardWidth = cardCount > 0
+            ? (availableWidth - totalGaps) / cardCount
+            : availableWidth;
+        final cardHeight = min(cardWidth * 1.4, tileHeight - 4) * scaleFactor;
+        final actualCardWidth = cardHeight / 1.4;
+
+        return Center(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: List.generate(cardsToShow.length, (index) {
+              final card = cardsToShow[index];
+              final isStaged = stagedCardsOnTile.contains(card);
+              final isOpponent = opponentCardsAtTile.contains(card);
+              final isPlayerCard = playerCardsAtTile.contains(card);
+
+              // Check states
+              final isSelected = _selectedCardForAction == card;
+              final isValidTarget = _validTargets.contains(card);
+
+              Widget cardWidget = _buildStackedMiniCard(
+                card,
+                actualCardWidth,
+                cardHeight,
+                isPlayerCard: isPlayerCard,
+                isOpponent: isOpponent,
+                isStaged: isStaged,
+                isSelected: isSelected,
+                isValidTarget: isValidTarget,
+                isTopCard: true,
+                row: row,
+                col: col,
+                match: match,
+              );
+
+              // Wrap player cards with Draggable for drag-and-drop targeting
+              if (isPlayerCard && !isStaged) {
+                cardWidget = _buildDraggableCard(
+                  card,
+                  row,
+                  col,
+                  cardWidget,
+                  actualCardWidth,
+                  cardHeight,
+                );
+              }
+              // Wrap opponent cards with DragTarget for receiving attacks
+              else if (isOpponent) {
+                cardWidget = _buildTargetableCard(
+                  card,
+                  row,
+                  col,
+                  cardWidget,
+                  isValidTarget,
+                );
+              }
+              // Regular gesture detector for staged/other cards
+              else {
+                cardWidget = GestureDetector(
+                  onTap: () =>
+                      _onCardTapTYC3(card, row, col, isPlayerCard, isOpponent),
+                  onLongPress: () => _showCardDetails(card),
+                  child: cardWidget,
+                );
+              }
+
+              return Padding(
+                padding: EdgeInsets.only(
+                  right: index < cardsToShow.length - 1 ? gap : 0,
+                ),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  transform: Matrix4.identity()
+                    ..scale(
+                      isSelected
+                          ? 1.05
+                          : isValidTarget
+                          ? 1.1
+                          : 1.0,
+                    )
+                    ..translate(
+                      0.0,
+                      isValidTarget
+                          ? -8.0
+                          : isSelected
+                          ? -4.0
+                          : 0.0,
+                    ),
+                  transformAlignment: Alignment.center,
+                  child: cardWidget,
+                ),
+              );
+            }),
+          ),
+        );
+      },
+    );
+  }
+
+  /// Build a draggable player card for drag-and-drop targeting
+  Widget _buildDraggableCard(
+    GameCard card,
+    int row,
+    int col,
+    Widget cardWidget,
+    double width,
+    double height,
+  ) {
+    return Draggable<GameCard>(
+      data: card,
+      feedback: Material(
+        elevation: 12,
+        borderRadius: BorderRadius.circular(8),
+        child: Transform.scale(
+          scale: 1.1,
+          child: SizedBox(
+            width: width,
+            height: height,
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.blue[200],
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: Colors.yellow, width: 3),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.yellow.withOpacity(0.5),
+                    blurRadius: 12,
+                    spreadRadius: 2,
+                  ),
+                ],
+              ),
+              child: Center(
+                child: Text(
+                  card.name,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 10,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+      childWhenDragging: Opacity(opacity: 0.3, child: cardWidget),
+      onDragStarted: () {
+        setState(() {
+          _selectedCardForAction = card;
+          _selectedCardRow = row;
+          _selectedCardCol = col;
+          // Calculate valid targets when drag starts
+          _validTargets = _matchManager.getValidTargetsTYC3(card, row, col);
+        });
+      },
+      onDragEnd: (details) {
+        // Keep selection if dropped on valid target, otherwise clear after delay
+        if (!details.wasAccepted) {
+          // Don't clear immediately - let tap handle it
+        }
+      },
+      child: GestureDetector(
+        onTap: () => _onCardTapTYC3(card, row, col, true, false),
+        onLongPress: () => _showCardDetails(card),
+        child: cardWidget,
+      ),
+    );
+  }
+
+  /// Build a targetable enemy card that can receive drag-and-drop attacks
+  Widget _buildTargetableCard(
+    GameCard card,
+    int row,
+    int col,
+    Widget cardWidget,
+    bool isValidTarget,
+  ) {
+    return DragTarget<GameCard>(
+      onWillAcceptWithDetails: (details) {
+        // Only accept if this card is a valid target for the dragged card
+        return _validTargets.contains(card);
+      },
+      onAcceptWithDetails: (details) {
+        // Show attack preview dialog when dropped on valid target
+        final attackerCard = details.data;
+        if (_selectedCardForAction == attackerCard &&
+            _validTargets.contains(card)) {
+          // Use the same flow as tap-to-attack (shows preview dialog)
+          _attackTargetTYC3(card, row, col);
+        }
+      },
+      builder: (context, candidateData, rejectedData) {
+        final isBeingDraggedOver =
+            candidateData.isNotEmpty && _validTargets.contains(card);
+
+        return GestureDetector(
+          onTap: () => _onCardTapTYC3(card, row, col, false, true),
+          onLongPress: () => _showCardDetails(card),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            transform: Matrix4.identity()
+              ..scale(isBeingDraggedOver ? 1.15 : 1.0)
+              ..translate(0.0, isBeingDraggedOver ? -10.0 : 0.0),
+            transformAlignment: Alignment.center,
+            decoration: isBeingDraggedOver
+                ? BoxDecoration(
+                    borderRadius: BorderRadius.circular(8),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.orange.withOpacity(0.7),
+                        blurRadius: 16,
+                        spreadRadius: 4,
+                      ),
+                    ],
+                  )
+                : null,
+            child: cardWidget,
+          ),
+        );
+      },
+    );
+  }
+
+  /// Build a mini card widget for stacked display (new UI mode)
+  Widget _buildStackedMiniCard(
+    GameCard card,
+    double width,
+    double height, {
+    required bool isPlayerCard,
+    required bool isOpponent,
+    required bool isStaged,
+    required bool isSelected,
+    required bool isValidTarget,
+    required bool isTopCard,
+    required int row,
+    required int col,
+    required MatchState match,
+  }) {
+    // Determine card colors - vibrant gradients
+    Color gradientStart;
+    Color gradientEnd;
+    if (isStaged) {
+      gradientStart = Colors.amber[100]!;
+      gradientEnd = Colors.amber[300]!;
+    } else if (isOpponent) {
+      gradientStart = Colors.red[50]!;
+      gradientEnd = Colors.red[200]!;
+    } else {
+      gradientStart = Colors.blue[50]!;
+      gradientEnd = Colors.blue[200]!;
+    }
+
+    // Border color based on state
+    Color borderColor;
+    double borderWidth;
+    if (isSelected) {
+      borderColor = Colors.yellow[600]!;
+      borderWidth = 3;
+    } else if (isValidTarget) {
+      borderColor = Colors.orange[600]!;
+      borderWidth = 3;
+    } else {
+      borderColor = _getRarityBorderColor(card);
+      borderWidth = isTopCard ? 2 : 1;
+    }
+
+    // Shadow/glow for selected/targeted
+    List<BoxShadow> shadows = [];
+    if (isSelected) {
+      shadows.add(
+        BoxShadow(
+          color: Colors.yellow.withOpacity(0.6),
+          blurRadius: 10,
+          spreadRadius: 2,
+        ),
+      );
+    } else if (isValidTarget) {
+      shadows.add(
+        BoxShadow(
+          color: Colors.orange.withOpacity(0.6),
+          blurRadius: 12,
+          spreadRadius: 3,
+        ),
+      );
+    } else {
+      shadows.add(
+        BoxShadow(
+          color: Colors.black.withOpacity(0.2),
+          blurRadius: 4,
+          offset: const Offset(1, 2),
+        ),
+      );
+    }
+
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: isSelected
+              ? [Colors.yellow[100]!, Colors.yellow[300]!]
+              : isValidTarget
+              ? [Colors.orange[100]!, Colors.orange[300]!]
+              : [gradientStart, gradientEnd],
+        ),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: borderColor, width: borderWidth),
+        boxShadow: shadows,
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(3),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Card name
+            Text(
+              card.name,
+              style: TextStyle(
+                fontSize: width * 0.11,
+                fontWeight: FontWeight.bold,
+                color: isOpponent ? Colors.red[900] : Colors.blue[900],
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+
+            const Spacer(),
+
+            // Stats row
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                // Attack
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.local_fire_department,
+                      size: width * 0.13,
+                      color: Colors.orange[700],
+                    ),
+                    Text(
+                      '${card.currentDamage}',
+                      style: TextStyle(
+                        fontSize: width * 0.11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+                // Health
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.favorite,
+                      size: width * 0.13,
+                      color: Colors.red[700],
+                    ),
+                    Text(
+                      '${card.currentHealth}/${card.health}',
+                      style: TextStyle(
+                        fontSize: width * 0.11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+
+            // AP and attack style row
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                // AP
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.bolt,
+                      size: width * 0.12,
+                      color: Colors.amber[700],
+                    ),
+                    Text(
+                      '${card.currentAP}/${card.maxAP}',
+                      style: TextStyle(
+                        fontSize: width * 0.10,
+                        color: Colors.grey[700],
+                      ),
+                    ),
+                  ],
+                ),
+                // Attack style icon
+                _buildAttackStyleIcon(card, size: width * 0.12),
+                // Element
+                if (card.element != null)
+                  Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: BoxDecoration(
+                      color: _getTerrainColor(card.element!),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                    child: Icon(
+                      _getTerrainIcon(card.element!),
+                      size: width * 0.10,
+                      color: Colors.white,
+                    ),
+                  ),
+              ],
+            ),
+
+            // Status indicators
+            if (isSelected || isValidTarget || isStaged)
+              Container(
+                margin: const EdgeInsets.only(top: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? Colors.yellow[700]
+                      : isValidTarget
+                      ? Colors.orange[700]
+                      : Colors.amber[700],
+                  borderRadius: BorderRadius.circular(3),
+                ),
+                child: Text(
+                  isSelected
+                      ? '✓ SELECTED'
+                      : isValidTarget
+                      ? '🎯 TARGET'
+                      : '📦 STAGED',
+                  style: TextStyle(
+                    fontSize: width * 0.09,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
                   ),
                 ),
-            ],
-          ),
+              ),
+          ],
         ),
       ),
     );
@@ -6309,6 +6943,11 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     final availableCards = player.hand
         .where((card) => !stagedCardSet.contains(card))
         .toList();
+
+    // Use new fanned hand UI when stacked card UI is enabled
+    if (_useStackedCardUI) {
+      return _buildFannedHand(availableCards);
+    }
 
     return Container(
       height: 140,
@@ -6514,6 +7153,286 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                   ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Build poker-style fanned hand (new UI mode)
+  Widget _buildFannedHand(List<GameCard> availableCards) {
+    return Container(
+      height: 160, // Hand container height
+      color: Colors.brown[200],
+      child: Column(
+        children: [
+          // Label
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              'Your Hand (${availableCards.length}) - Tap to select, drag to place',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: Colors.brown[800],
+              ),
+            ),
+          ),
+          // Fanned cards
+          Expanded(
+            child: availableCards.isEmpty
+                ? Center(
+                    child: Text(
+                      'No cards in hand',
+                      style: TextStyle(color: Colors.brown[600]),
+                    ),
+                  )
+                : LayoutBuilder(
+                    builder: (context, constraints) {
+                      // Card dimensions - fixed size so they don't get cut off
+                      const cardHeight = 120.0;
+                      const cardWidth = cardHeight / 1.4;
+
+                      // Calculate total width needed for all cards with overlap
+                      final overlapWidth = cardWidth * (1 - _handCardOverlap);
+                      final totalCardsWidth =
+                          cardWidth +
+                          (availableCards.length - 1) * overlapWidth;
+
+                      // Fan rotation calculations
+                      final totalAngle =
+                          _handFanAngle * (availableCards.length - 1);
+                      final startAngle = -totalAngle / 2;
+
+                      // Sort cards so selected card is rendered last (on top)
+                      final sortedIndices = List.generate(
+                        availableCards.length,
+                        (i) => i,
+                      );
+                      if (_selectedCard != null) {
+                        final selectedIndex = availableCards.indexOf(
+                          _selectedCard!,
+                        );
+                        if (selectedIndex >= 0) {
+                          sortedIndices.remove(selectedIndex);
+                          sortedIndices.add(selectedIndex);
+                        }
+                      }
+
+                      return Center(
+                        child: SizedBox(
+                          width: totalCardsWidth + 40,
+                          height:
+                              cardHeight +
+                              30, // Card height + space for pop-out
+                          child: Stack(
+                            clipBehavior: Clip.none,
+                            children: sortedIndices.map((index) {
+                              final card = availableCards[index];
+                              final isSelected = _selectedCard == card;
+
+                              // Calculate position relative to center
+                              final centerIndex =
+                                  (availableCards.length - 1) / 2;
+                              final offsetFromCenter = index - centerIndex;
+
+                              // Horizontal position from center
+                              final xOffset = offsetFromCenter * overlapWidth;
+
+                              // Rotation angle
+                              final angle = availableCards.length > 1
+                                  ? (startAngle + index * _handFanAngle) *
+                                        (pi / 180)
+                                  : 0.0;
+
+                              // Vertical offset based on position (arc effect)
+                              final distanceFromCenter = offsetFromCenter.abs();
+                              final yOffset =
+                                  distanceFromCenter * distanceFromCenter * 2;
+
+                              // Selected card pops out significantly above others
+                              // Non-selected cards start at 5px from top, selected pops up
+                              final popOutOffset = isSelected ? -25.0 : 5.0;
+                              final selectedScale = isSelected ? 1.2 : 1.0;
+                              final selectedAngle = isSelected ? 0.0 : angle;
+
+                              return Positioned(
+                                left:
+                                    (totalCardsWidth + 40) / 2 -
+                                    cardWidth / 2 +
+                                    xOffset,
+                                top: yOffset + popOutOffset,
+                                child: Transform.scale(
+                                  scale: selectedScale,
+                                  child: Transform.rotate(
+                                    angle: selectedAngle,
+                                    alignment: Alignment.bottomCenter,
+                                    child: _buildDraggableHandCard(
+                                      card,
+                                      cardWidth,
+                                      cardHeight,
+                                      isSelected,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Build a draggable hand card for the fanned hand
+  Widget _buildDraggableHandCard(
+    GameCard card,
+    double width,
+    double height,
+    bool isSelected,
+  ) {
+    final baseFill = _getRarityFillColor(card);
+    final baseBorder = _getRarityBorderColor(card);
+
+    final cardWidget = Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: baseFill,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: isSelected ? Colors.green : baseBorder,
+          width: isSelected ? 3 : 2,
+        ),
+        boxShadow: [
+          if (isSelected)
+            BoxShadow(
+              color: Colors.green.withOpacity(0.5),
+              blurRadius: 10,
+              spreadRadius: 2,
+            )
+          else
+            BoxShadow(
+              color: Colors.black.withOpacity(0.2),
+              blurRadius: 4,
+              offset: const Offset(1, 2),
+            ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Card name
+            Text(
+              card.name,
+              style: TextStyle(
+                fontSize: width * 0.11,
+                fontWeight: FontWeight.bold,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const Spacer(),
+            // Stats
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.local_fire_department,
+                      size: width * 0.12,
+                      color: Colors.orange,
+                    ),
+                    Text(
+                      '${card.damage}',
+                      style: TextStyle(
+                        fontSize: width * 0.10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.favorite, size: width * 0.12, color: Colors.red),
+                    Text(
+                      '${card.health}',
+                      style: TextStyle(
+                        fontSize: width * 0.10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.bolt, size: width * 0.11, color: Colors.amber),
+                    Text(
+                      '${card.maxAP}',
+                      style: TextStyle(
+                        fontSize: width * 0.09,
+                        color: Colors.grey[700],
+                      ),
+                    ),
+                  ],
+                ),
+                _buildAttackStyleIcon(card, size: width * 0.11),
+                if (card.element != null)
+                  Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: BoxDecoration(
+                      color: _getTerrainColor(card.element!),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                    child: Icon(
+                      _getTerrainIcon(card.element!),
+                      size: width * 0.09,
+                      color: Colors.white,
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+
+    return Draggable<GameCard>(
+      data: card,
+      feedback: Material(
+        elevation: 8,
+        borderRadius: BorderRadius.circular(8),
+        child: Transform.scale(scale: 1.1, child: cardWidget),
+      ),
+      childWhenDragging: Opacity(opacity: 0.3, child: cardWidget),
+      onDragStarted: () {
+        setState(() {
+          _clearTYC3Selection();
+          _selectedCard = card;
+        });
+      },
+      child: GestureDetector(
+        onTap: () {
+          setState(() {
+            _clearTYC3Selection();
+            _selectedCard = _selectedCard == card ? null : card;
+          });
+        },
+        onLongPress: () => _showCardDetails(card),
+        child: cardWidget,
       ),
     );
   }
