@@ -2230,6 +2230,9 @@ class MatchManager {
     if (_currentMatch == null) return [];
     if (!useTurnBasedSystem) return [];
 
+    // Check if attacker has AP to attack
+    if (attacker.currentAP < 1) return [];
+
     // Determine if attacker is a player card based on ownerId
     final isPlayerCard = attacker.ownerId == _currentMatch!.player.id;
 
