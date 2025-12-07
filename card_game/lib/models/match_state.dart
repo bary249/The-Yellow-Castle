@@ -3,7 +3,6 @@ import 'lane.dart';
 import 'game_board.dart';
 import 'tile.dart';
 import 'relic.dart';
-import 'hero.dart';
 import '../data/hero_library.dart';
 
 /// Serializable combat result for syncing between players in PvP
@@ -23,6 +22,7 @@ class SyncedCombatResult {
   final int? attackerHpAfter;
   final int laneCol; // 0=west, 1=center, 2=east
   final String attackerOwnerId; // To determine if "my" card or opponent's
+  final String? attackerId; // ID of the attacking card (for fog of war)
 
   SyncedCombatResult({
     required this.id,
@@ -39,6 +39,7 @@ class SyncedCombatResult {
     this.attackerHpAfter,
     required this.laneCol,
     required this.attackerOwnerId,
+    this.attackerId,
   });
 
   Map<String, dynamic> toJson() => {
@@ -56,6 +57,7 @@ class SyncedCombatResult {
     'attackerHpAfter': attackerHpAfter,
     'laneCol': laneCol,
     'attackerOwnerId': attackerOwnerId,
+    'attackerId': attackerId,
   };
 
   factory SyncedCombatResult.fromJson(Map<String, dynamic> json) {
@@ -74,8 +76,43 @@ class SyncedCombatResult {
       attackerHpAfter: json['attackerHpAfter'] as int?,
       laneCol: json['laneCol'] as int,
       attackerOwnerId: json['attackerOwnerId'] as String,
+      attackerId: json['attackerId'] as String?,
     );
   }
+}
+
+/// Serializable hero ability event for syncing
+class SyncedHeroAbility {
+  final String id; // Unique ID to detect new events
+  final String heroName;
+  final String abilityName;
+  final String description;
+  final String playerId; // Who used it
+
+  SyncedHeroAbility({
+    required this.id,
+    required this.heroName,
+    required this.abilityName,
+    required this.description,
+    required this.playerId,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'heroName': heroName,
+    'abilityName': abilityName,
+    'description': description,
+    'playerId': playerId,
+  };
+
+  factory SyncedHeroAbility.fromJson(Map<String, dynamic> json) =>
+      SyncedHeroAbility(
+        id: json['id'] as String,
+        heroName: json['heroName'] as String,
+        abilityName: json['abilityName'] as String,
+        description: json['description'] as String,
+        playerId: json['playerId'] as String,
+      );
 }
 
 /// Current phase of the match
@@ -140,6 +177,10 @@ class MatchState {
   /// A lane is revealed once player captures its middle tile.
   final Set<LanePosition> revealedEnemyBaseLanes = {};
 
+  /// Fog of war: tracks enemy units that attacked this turn (visible next turn).
+  /// Map of unit ID -> turn number when they attacked
+  final Map<String, int> recentlyAttackedEnemyUnits = {};
+
   /// Relic manager for handling relics on the battlefield.
   /// Currently places one relic on the center middle tile.
   final RelicManager relicManager = RelicManager();
@@ -147,6 +188,9 @@ class MatchState {
   /// Last combat result for syncing to opponent in PvP
   /// When an attack happens, store the result here so the other player can see it
   SyncedCombatResult? lastCombatResult;
+
+  /// Last hero ability usage for syncing to opponent in PvP
+  SyncedHeroAbility? lastHeroAbility;
 
   MatchState({
     required this.player,
@@ -286,6 +330,7 @@ class MatchState {
     'relicClaimed': relicManager.isRelicClaimed,
     'relicClaimedBy': relicManager.relicClaimedBy,
     'lastCombatResult': lastCombatResult?.toJson(),
+    'lastHeroAbility': lastHeroAbility?.toJson(),
   };
 
   /// Create from JSON (for online sync)
@@ -363,6 +408,12 @@ class MatchState {
     final combatResultJson = json['lastCombatResult'] as Map<String, dynamic>?;
     if (combatResultJson != null) {
       match.lastCombatResult = SyncedCombatResult.fromJson(combatResultJson);
+    }
+
+    // Restore last hero ability (for PvP sync)
+    final heroAbilityJson = json['lastHeroAbility'] as Map<String, dynamic>?;
+    if (heroAbilityJson != null) {
+      match.lastHeroAbility = SyncedHeroAbility.fromJson(heroAbilityJson);
     }
 
     return match;

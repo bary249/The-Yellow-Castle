@@ -143,6 +143,43 @@ class MatchManager {
     }
   }
 
+  /// Permanently reveal enemy base lanes once seen.
+  /// Called on placement, movement, and post-attack moves.
+  void _updatePermanentVisibility(int row, int col, String playerId) {
+    if (_currentMatch == null) return;
+
+    // Only local player revelation matters for their fog
+    if (playerId != _currentMatch!.player.id) return;
+
+    final lanesToReveal = <int>{};
+
+    // Owning the middle tile reveals that lane's base permanently
+    if (row == 1) {
+      lanesToReveal.add(col);
+    }
+
+    // Scouts in middle row also reveal adjacent lanes permanently
+    final hasScout = _currentMatch!.board
+        .getTile(row, col)
+        .cards
+        .any(
+          (c) =>
+              c.isAlive &&
+              c.abilities.contains('scout') &&
+              c.ownerId == playerId,
+        );
+    if (hasScout && row == 1) {
+      lanesToReveal.add(col);
+      if (col > 0) lanesToReveal.add(col - 1);
+      if (col < 2) lanesToReveal.add(col + 1);
+    }
+
+    for (final laneCol in lanesToReveal) {
+      final lanePos = LanePosition.values[laneCol];
+      _currentMatch!.revealedEnemyBaseLanes.add(lanePos);
+    }
+  }
+
   /// Check if player can use their hero ability.
   bool get canUsePlayerHeroAbility {
     final hero = _currentMatch?.player.hero;
@@ -163,6 +200,15 @@ class MatchManager {
 
     _log('\n🦸 HERO ABILITY ACTIVATED: ${hero.name}');
     _log('   ${hero.abilityDescription}');
+
+    // Set last hero ability for sync
+    _currentMatch!.lastHeroAbility = SyncedHeroAbility(
+      id: '${DateTime.now().millisecondsSinceEpoch}_${hero.id}',
+      heroName: hero.name,
+      abilityName: hero.abilityType.name,
+      description: hero.abilityDescription,
+      playerId: _currentMatch!.player.id,
+    );
 
     switch (hero.abilityType) {
       case HeroAbilityType.drawCards:
@@ -1412,10 +1458,8 @@ class MatchManager {
     // Check for relic pickup at placement tile (in case placed on middle)
     _checkRelicPickup(row, col, card.ownerId!);
 
-    // Update scout visibility if the placed card has scout ability
-    if (card.abilities.contains('scout')) {
-      _updateScoutVisibility(row, col, card.ownerId!);
-    }
+    // Update visibility (permanent lane reveal + scout)
+    _updatePermanentVisibility(row, col, card.ownerId!);
 
     return true;
   }
@@ -1492,9 +1536,19 @@ class MatchManager {
     // This ensures both players see the same turn count
     _currentMatch!.turnNumber++;
 
+    // Clean up enemy units that attacked more than 1 turn ago (fog of war)
+    final currentTurn = _currentMatch!.turnNumber;
+    _currentMatch!.recentlyAttackedEnemyUnits.removeWhere(
+      (unitId, attackTurn) => currentTurn - attackTurn > 1,
+    );
+
     // Reset turn state
     _currentMatch!.cardsPlayedThisTurn = 0;
     _currentMatch!.turnStartTime = DateTime.now();
+
+    // Reset temporary buffs (Saladin hero ability, etc.)
+    // Always reset this at the end of a turn cycle to ensure it doesn't carry over
+    _playerDamageBoostActive = false;
 
     // Draw a card for the new active player
     final newActive = activePlayer;
@@ -1878,10 +1932,8 @@ class MatchManager {
     // Check for relic pickup at destination tile
     _checkRelicPickup(toRow, toCol, card.ownerId!);
 
-    // Update scout visibility if the moved card has scout ability
-    if (card.abilities.contains('scout')) {
-      _updateScoutVisibility(toRow, toCol, card.ownerId!);
-    }
+    // Update visibility (permanent lane reveal + scout)
+    _updatePermanentVisibility(toRow, toCol, card.ownerId!);
 
     return true;
   }
@@ -1929,9 +1981,38 @@ class MatchManager {
   /// Scout visibility is now DYNAMIC - based on current card positions.
   /// No permanent reveal. This method is kept for future permanent reveal abilities.
   void _updateScoutVisibility(int row, int col, String playerId) {
-    // Fog of war is now purely dynamic - visibility is determined by
-    // whether player has cards in the middle row of each lane.
-    // No permanent reveal abilities exist yet.
+    if (_currentMatch == null) return;
+
+    // If this is the local player, permanently reveal enemy base lane(s)
+    if (playerId == _currentMatch!.player.id) {
+      final lanesToReveal = <int>{};
+
+      // Owning the middle tile reveals that lane's base permanently
+      if (row == 1) {
+        lanesToReveal.add(col);
+      }
+
+      // Scouts in middle row also reveal adjacent lanes once
+      final hasScout = _currentMatch!.board
+          .getTile(row, col)
+          .cards
+          .any(
+            (c) =>
+                c.isAlive &&
+                c.abilities.contains('scout') &&
+                c.ownerId == playerId,
+          );
+      if (hasScout && row == 1) {
+        lanesToReveal.add(col);
+        if (col > 0) lanesToReveal.add(col - 1);
+        if (col < 2) lanesToReveal.add(col + 1);
+      }
+
+      for (final laneCol in lanesToReveal) {
+        final lanePos = LanePosition.values[laneCol];
+        _currentMatch!.revealedEnemyBaseLanes.add(lanePos);
+      }
+    }
   }
 
   /// Log a summary of the current board state for debugging
@@ -2144,10 +2225,8 @@ class MatchManager {
             // Check for relic pickup at new tile
             _checkRelicPickup(targetRow, targetCol, attacker.ownerId!);
 
-            // Update scout visibility if the attacker has scout ability
-            if (attacker.abilities.contains('scout')) {
-              _updateScoutVisibility(targetRow, targetCol, attacker.ownerId!);
-            }
+            // Update visibility (permanent lane reveal + scout)
+            _updatePermanentVisibility(targetRow, targetCol, attacker.ownerId!);
           } else {
             _log(
               '   ⚠️ ${attacker.name} cannot advance - other enemies remain on tile',
@@ -2199,7 +2278,14 @@ class MatchManager {
       attackerHpAfter: attacker.currentHealth,
       laneCol: targetCol,
       attackerOwnerId: attacker.ownerId ?? '',
+      attackerId: attacker.id,
     );
+
+    // Track enemy units that attacked player for fog of war (visible next turn)
+    if (!isPlayerAttacking && target.ownerId == _currentMatch!.player.id) {
+      _currentMatch!.recentlyAttackedEnemyUnits[attacker.id] =
+          _currentMatch!.turnNumber;
+    }
 
     return result;
   }
@@ -2231,7 +2317,7 @@ class MatchManager {
     if (!useTurnBasedSystem) return [];
 
     // Check if attacker has AP to attack
-    if (attacker.currentAP < 1) return [];
+    if (attacker.currentAP < attacker.attackAPCost) return [];
 
     // Determine if attacker is a player card based on ownerId
     final isPlayerCard = attacker.ownerId == _currentMatch!.player.id;
@@ -2387,7 +2473,14 @@ class MatchManager {
       attackerHpAfter: attacker.currentHealth,
       laneCol: attackerCol,
       attackerOwnerId: attacker.ownerId ?? '',
+      attackerId: attacker.id,
     );
+
+    // Track enemy units that attacked player base for fog of war (visible next turn)
+    if (!isPlayerAttacking) {
+      _currentMatch!.recentlyAttackedEnemyUnits[attacker.id] =
+          _currentMatch!.turnNumber;
+    }
 
     return damage;
   }

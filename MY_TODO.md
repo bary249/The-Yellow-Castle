@@ -1,40 +1,22 @@
-Major changes! ✅ ALL COMPLETED
 
-1. ✅ Card Move Speed:
-   - Added `moveSpeed` attribute to GameCard (0, 1, or 2)
-   - Updated all cards in card_library.dart with appropriate speeds
-   - Tanks/Support = 0 (stationary), Warriors = 1 (normal), Quick Strikes = 2 (fast)
+Bugs:
+Drag and drop from withihn the board with 1 ap shows purple border but not working.
+End of game rteturn to main menu
+Retalition of ranged unit damage shuold be 35% of thier current damage.
+Late dialogs (user suddenly sees the battle result dialog from the opponent perspective).
+After seeing a terrain of the opponent base once, it should be revealed for the rest of the game,
+If an oppoenet attacked you, the tile they are on should be revealed for 2 turns
 
-2. ✅ 1 Card per lane per turn:
-   - UI enforces 1 card per lane per turn in staging
-   - AI follows same rule
 
-3. ✅ Cards only staged at player base:
-   - UI blocks middle tile staging unless card has 'paratrooper' ability
-   - AI follows same rule
-
-4. ✅ X button to remove staged cards:
-   - Added X button overlay on staged cards during staging phase
-   - Calls `_removeCardFromTile()` to unstage
-
-5. ✅ Random terrain on middle tiles:
-   - GameBoard.create() now assigns random terrain (woods/lake/desert/marsh) to middle row
-
-6. ✅ Crystal damage rework:
-   - Cards can reach enemy base and STAY there (no retreat)
-   - Crystal damage: uncontested attackers OR combat victory at enemy base
-   - Attackers keep dealing damage each turn until pushed back
-
-7. ✅ All applies to both players:
-   - Player and opponent use same movement/crystal damage logic
-   - Zone mapping correctly handles both perspectives
-
-✅ ALL 3 MODES UPDATED:
-- Simulation mode: Uses MatchManager with new logic
-- Player vs AI: Uses same MatchManager + updated SimpleAI
-- Online mode: Uses same logic + moveSpeed serialized in Firebase
+Add hero ability dialog for player and oponnet, and make sure it shows on cards,it showes a dialog to the enemy in the pvp, and that it's only availabe 1 per turn
 
 
 
 
-Add Icon for each terrain in tile and on card.
+Remove "terrain" from common cards.
+Add  special abilities to cards based on unit vs unit buff/debuff, use your logic and historical knowledge, for example pikeman are good vs horses, archer's are bad if melle attacks them so they should have -4 retaliation damage when defending from a melle attack and more and more and more, first confirm all with me then implement.
+- 
+
+
+make sure a cannon cannot attack a base that is under fog of war
+- 

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'main_menu_screen.dart';
 import '../models/deck.dart';
 import '../models/match_state.dart';
 import '../models/lane.dart';
@@ -92,6 +93,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
 
   // Track last seen combat result ID to avoid showing duplicates
   String? _lastSeenCombatResultId;
+  String? _lastSeenHeroAbilityId;
 
   // ===== TYC3: Turn-based AP system state =====
   bool _useTYC3Mode = true; // Enable TYC3 by default for testing
@@ -110,6 +112,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   int? _selectedCardCol;
   String? _currentAction; // 'move', 'attack', or null
   List<GameCard> _validTargets = [];
+  bool _isAttackPreviewOpen = false; // Track if preview dialog is open
 
   /// Get the staging key for a tile.
   String _tileKey(int row, int col) => '$row,$col';
@@ -188,7 +191,10 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
 
     // Check for new combat result to show dialog (before replacing state)
     final combatResult = newState.lastCombatResult;
-    if (combatResult != null && combatResult.id != _lastSeenCombatResultId) {
+    if (combatResult != null &&
+        combatResult.id != _lastSeenCombatResultId &&
+        // Only show results where opponent was the attacker
+        combatResult.attackerOwnerId != _matchManager.currentMatch?.player.id) {
       // New combat result from opponent - show dialog
       _lastSeenCombatResultId = combatResult.id;
       debugPrint(
@@ -201,10 +207,45 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
           _showSyncedCombatResultDialog(combatResult);
         }
       });
+
+      // LOCAL FOG OF WAR UPDATE:
+      // Since we don't sync 'recentlyAttackedEnemyUnits' via Firebase (to avoid bugs),
+      // we must update our local state when we see an incoming combat result.
+      final attackerId = combatResult.attackerId;
+      if (attackerId != null) {
+        debugPrint('👀 FOW: Marking attacker $attackerId as visible');
+        // We use the *incoming* turn number from the new state
+        _matchManager.currentMatch?.recentlyAttackedEnemyUnits[attackerId] =
+            newState.turnNumber;
+      }
     }
+
+    // Check for new hero ability usage from opponent
+    final heroAbility = newState.lastHeroAbility;
+    if (heroAbility != null &&
+        heroAbility.id != _lastSeenHeroAbilityId &&
+        heroAbility.playerId != _matchManager.currentMatch?.player.id) {
+      _lastSeenHeroAbilityId = heroAbility.id;
+      debugPrint('🦸 Opponent used hero ability: ${heroAbility.heroName}');
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _showHeroAbilityDialog(heroAbility, isOpponent: true);
+        }
+      });
+    }
+
+    // Preserve local fog of war state before replacing
+    final localAttackedUnits = Map<String, int>.from(
+      _matchManager.currentMatch?.recentlyAttackedEnemyUnits ?? {},
+    );
 
     // Replace local match state with the received state
     _matchManager.replaceMatchState(newState);
+
+    // Restore local fog of war state into the new state object
+    _matchManager.currentMatch?.recentlyAttackedEnemyUnits.addAll(
+      localAttackedUnits,
+    );
 
     // Check if turn changed
     final isMyTurnNow = _matchManager.isPlayerTurn;
@@ -218,6 +259,11 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       // Turn just switched away from us - stop timer
       debugPrint('🔄 Turn switched to opponent');
       _turnTimer?.cancel();
+
+      // Close any open attack preview dialog
+      if (_isAttackPreviewOpen && mounted) {
+        Navigator.of(context).pop();
+      }
     }
 
     // Refresh UI
@@ -226,6 +272,11 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
 
   void _endTurnTYC3() {
     _turnTimer?.cancel();
+
+    // Close any open attack preview dialog
+    if (_isAttackPreviewOpen && mounted) {
+      Navigator.of(context).pop();
+    }
 
     // NEW: Use OnlineGameManager for online mode if available
     if (_onlineGameManager != null) {
@@ -460,14 +511,14 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   }
 
   /// Show attack preview dialog with predicted outcome
-  void _showAttackPreviewDialog({
+  Future<void> _showAttackPreviewDialog({
     required GameCard attacker,
     required GameCard target,
     required int attackerRow,
     required int attackerCol,
     required int targetRow,
     required int targetCol,
-  }) {
+  }) async {
     // Get preview from combat resolver (includes terrain buff)
     final preview = _matchManager.previewAttackTYC3(
       attacker,
@@ -494,7 +545,8 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
 
     final laneName = _getLaneName(attackerCol);
 
-    showDialog(
+    _isAttackPreviewOpen = true;
+    await showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: Column(
@@ -532,6 +584,26 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                         color: Colors.red,
                       ),
                     ),
+                    // Show detailed modifiers (buffs/debuffs)
+                    if (preview.modifiers.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2, bottom: 4),
+                        child: Column(
+                          children: preview.modifiers
+                              .map(
+                                (m) => Text(
+                                  m,
+                                  style: const TextStyle(
+                                    fontSize: 9,
+                                    color: Colors.blueGrey,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              )
+                              .toList(),
+                        ),
+                      ),
                     if (attackerHasTerrainBuff)
                       Row(
                         mainAxisSize: MainAxisSize.min,
@@ -556,7 +628,9 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                       size: 32,
                       color: Colors.red,
                     ),
-                    if (preview.retaliationDamage > 0) ...[
+                    // Show retaliation if > 0 OR if there are modifiers explaining why it's 0 (e.g. -4 weakness)
+                    if (preview.retaliationDamage > 0 ||
+                        preview.retaliationModifiers.isNotEmpty) ...[
                       const SizedBox(height: 8),
                       const Icon(
                         Icons.arrow_back,
@@ -590,6 +664,26 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                             ),
                           ],
                         ),
+                      // Show detailed retaliation modifiers
+                      if (preview.retaliationModifiers.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Column(
+                            children: preview.retaliationModifiers
+                                .map(
+                                  (m) => Text(
+                                    m,
+                                    style: const TextStyle(
+                                      fontSize: 9,
+                                      color: Colors.blueGrey,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                )
+                                .toList(),
+                          ),
+                        ),
                       const Text(
                         'retaliation',
                         style: TextStyle(fontSize: 10, color: Colors.orange),
@@ -608,12 +702,12 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
               ],
             ),
             const SizedBox(height: 16),
-            // Outcome summary
+            // Result summary
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.grey[200],
-                borderRadius: BorderRadius.circular(8),
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(4),
               ),
               child: Column(
                 children: [
@@ -674,6 +768,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         ],
       ),
     );
+    _isAttackPreviewOpen = false;
   }
 
   /// Build a card preview for combat dialog
@@ -1270,6 +1365,83 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
 
     // Brief pause after dialog closes
     await Future.delayed(const Duration(milliseconds: 200));
+  }
+
+  /// Show hero ability usage dialog
+  Future<void> _showHeroAbilityDialog(
+    SyncedHeroAbility ability, {
+    required bool isOpponent,
+  }) async {
+    final titleEmoji = isOpponent ? '🤖' : '🦸';
+    final titleText = isOpponent
+        ? 'Enemy Hero Ability!'
+        : 'Hero Ability Activated!';
+    final bgColor = isOpponent ? Colors.red[50] : Colors.amber[50];
+    final accentColor = isOpponent ? Colors.red : Colors.amber[800]!;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        // Auto-close after 3 seconds using the DIALOG'S context
+        Timer(const Duration(seconds: 3), () {
+          if (dialogContext.mounted && Navigator.canPop(dialogContext)) {
+            Navigator.pop(dialogContext);
+          }
+        });
+
+        return AlertDialog(
+          backgroundColor: bgColor,
+          title: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(titleEmoji, style: const TextStyle(fontSize: 28)),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  titleText,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: accentColor,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                ability.heroName,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 20,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: accentColor, width: 2),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      ability.description,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 16),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   /// Show combat result dialog from synced PvP state
@@ -4441,11 +4613,19 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
           // Continue button - returns result to campaign
           ElevatedButton.icon(
             onPressed: () {
-              Navigator.pop(context, {
-                'won': playerWon,
-                'crystalDamage': 50 - match.player.crystalHP,
-                'turnsPlayed': match.turnNumber,
-              });
+              if (isCampaignMode) {
+                Navigator.pop(context, {
+                  'won': playerWon,
+                  'crystalDamage': 50 - match.player.crystalHP,
+                  'turnsPlayed': match.turnNumber,
+                });
+              } else {
+                // Return to main menu safely (avoid popping the app)
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (_) => const MainMenuScreen()),
+                  (route) => false,
+                );
+              }
             },
             icon: Icon(
               isCampaignMode
@@ -5507,14 +5687,18 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                 final success = _matchManager.activatePlayerHeroAbility();
                 if (success) {
                   setState(() {});
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        '🦸 ${hero.name}: ${hero.abilityDescription}',
-                      ),
-                      duration: const Duration(seconds: 2),
+                  _showHeroAbilityDialog(
+                    SyncedHeroAbility(
+                      id: 'temp', // ID doesn't matter for local display
+                      heroName: hero.name,
+                      abilityName: hero.abilityType.name,
+                      description: hero.abilityDescription,
+                      playerId: _matchManager.currentMatch!.player.id,
                     ),
+                    isOpponent: false,
                   );
+                  // Sync state immediately so opponent sees it
+                  _syncOnlineState();
                 }
               }
             : null,
@@ -5634,7 +5818,8 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         }
       }
 
-      final canSeeEnemyBase =
+      // Unit FOW: Dynamic visibility only (no permanent reveal for units)
+      final canSeeEnemyBaseUnits =
           playerHasMiddleCard || playerHasEnemyBaseCard || scoutCanSee;
 
       // Use card.ownerId to determine ownership
@@ -5642,10 +5827,15 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         if (card.ownerId == playerId) {
           playerCardsAtTile.add(card);
         } else {
-          // Fog of War: Hide enemy base cards (row 0) unless player can see it
-          if (row == 0 && !canSeeEnemyBase) {
-            // Don't add to opponentCardsAtTile - hidden by fog of war
-            continue;
+          // Fog of War: Hide enemy base cards (row 0) unless player can see units
+          if (row == 0 && !canSeeEnemyBaseUnits) {
+            // Check if this specific unit recently attacked (visible for 1 turn)
+            final recentlyAttacked = match.recentlyAttackedEnemyUnits
+                .containsKey(card.id);
+            if (!recentlyAttacked) {
+              // Don't add to opponentCardsAtTile - hidden by fog of war
+              continue;
+            }
           }
           opponentCardsAtTile.add(card);
         }
@@ -5814,38 +6004,53 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     // Wrap with DragTarget to accept card drops from hand
     return DragTarget<GameCard>(
       onWillAcceptWithDetails: (details) {
-        // Accept if this is a valid placement tile for a hand card
         final card = details.data;
-        // Check if card is from hand (not already on board)
         final isFromHand = match.player.hand.contains(card);
-        if (!isFromHand) return false;
 
-        // Check placement rules
-        final isPlayerBase = row == 2;
-        final isMiddleRow = row == 1;
-        final cardCanPlaceMiddle = card.maxAP >= 2;
-        final hasEnemyOnMiddle = isMiddleRow && opponentCardsAtTile.isNotEmpty;
+        // Case 1: Placement from hand (existing logic)
+        if (isFromHand) {
+          final isPlayerBase = row == 2;
+          final isMiddleRow = row == 1;
+          final cardCanPlaceMiddle = card.maxAP >= 2;
+          final hasEnemyOnMiddle =
+              isMiddleRow && opponentCardsAtTile.isNotEmpty;
 
-        // Check 1 card per lane limit
-        int stagedInLane = 0;
-        for (int r = 0; r <= 2; r++) {
-          final laneKey = _tileKey(r, col);
-          stagedInLane += (_stagedCards[laneKey]?.length ?? 0);
+          // Check 1 card per lane limit
+          int stagedInLane = 0;
+          for (int r = 0; r <= 2; r++) {
+            final laneKey = _tileKey(r, col);
+            stagedInLane += (_stagedCards[laneKey]?.length ?? 0);
+          }
+
+          return isNotEnemyBase &&
+              stagedInLane == 0 &&
+              (existingPlayerCount + stagedCount) < Tile.maxCards &&
+              (isPlayerBase ||
+                  (isMiddleRow && cardCanPlaceMiddle && !hasEnemyOnMiddle));
         }
 
-        return isNotEnemyBase &&
-            stagedInLane == 0 &&
-            (existingPlayerCount + stagedCount) < Tile.maxCards &&
-            (isPlayerBase ||
-                (isMiddleRow && cardCanPlaceMiddle && !hasEnemyOnMiddle));
+        // Case 2: Moving an on-board player card via drag-and-drop
+        final isPlayerCard = card.ownerId == match.player.id;
+        final isSelectedForMove = _selectedCardForAction == card;
+
+        // Allow drop only on reachable tiles during player's turn
+        return isPlayerCard && isSelectedForMove && canMoveTo;
       },
       onAcceptWithDetails: (details) {
-        // Place the card on this tile
         final card = details.data;
-        setState(() {
-          _selectedCard = card;
-        });
-        _placeCardOnTile(row, col);
+        final isFromHand = match.player.hand.contains(card);
+
+        if (isFromHand) {
+          // Place the card on this tile
+          setState(() {
+            _selectedCard = card;
+          });
+          _placeCardOnTile(row, col);
+        } else {
+          // Move an on-board card
+          _moveCardTYC3(row, col);
+          setState(() {});
+        }
       },
       builder: (context, candidateData, rejectedData) {
         final isBeingDraggedOver = candidateData.isNotEmpty;
@@ -5912,8 +6117,21 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                             }
                           }
 
-                          // Show terrain if player has visibility via cards OR scout
-                          showTerrain = hasPlayerCardInMiddle || scoutCanSee;
+                          // Check permanent reveal
+                          final lanePos = [
+                            LanePosition.west,
+                            LanePosition.center,
+                            LanePosition.east,
+                          ][col];
+                          final isPermanentlyRevealed = match
+                              .revealedEnemyBaseLanes
+                              .contains(lanePos);
+
+                          // Show terrain if player has visibility via cards, scout, OR permanent reveal
+                          showTerrain =
+                              hasPlayerCardInMiddle ||
+                              scoutCanSee ||
+                              isPermanentlyRevealed;
                         }
 
                         return Container(
@@ -6057,6 +6275,11 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                           final isValidTarget =
                               _useTYC3Mode && _validTargets.contains(card);
 
+                          // Visual effect for hero ability damage boost
+                          final isDamageBoosted =
+                              isPlayerCard &&
+                              _matchManager.playerDamageBoost > 0;
+
                           return GestureDetector(
                             onTap: () => _onCardTapTYC3(
                               card,
@@ -6080,6 +6303,17 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                                         ? Colors.orange[200]!
                                         : cardColor,
                                     borderRadius: BorderRadius.circular(4),
+                                    boxShadow: isDamageBoosted
+                                        ? [
+                                            BoxShadow(
+                                              color: Colors.red.withOpacity(
+                                                0.6,
+                                              ),
+                                              blurRadius: 8,
+                                              spreadRadius: 2,
+                                            ),
+                                          ]
+                                        : null,
                                     border: isSelected
                                         ? Border.all(
                                             color: Colors.yellow[700]!,
@@ -6164,10 +6398,27 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                                                 // Show damage as current/max
                                                 _buildStatIconWithMax(
                                                   Icons.local_fire_department,
-                                                  card.currentDamage,
+                                                  card.currentDamage +
+                                                      (isDamageBoosted ? 1 : 0),
                                                   card.damage,
                                                   size: 10,
                                                 ),
+                                                if (isDamageBoosted)
+                                                  Padding(
+                                                    padding:
+                                                        const EdgeInsets.only(
+                                                          left: 1,
+                                                        ),
+                                                    child: Text(
+                                                      '(+1)',
+                                                      style: const TextStyle(
+                                                        fontSize: 8,
+                                                        color: Colors.red,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                      ),
+                                                    ),
+                                                  ),
                                                 // Show attack AP cost only if > 1
                                                 if (card.attackAPCost > 1) ...[
                                                   Text(

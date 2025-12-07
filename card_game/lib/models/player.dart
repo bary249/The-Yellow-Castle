@@ -115,6 +115,7 @@ class Player {
     'gold': gold,
     'attunedElement': attunedElement,
     'heroId': hero?.id,
+    'heroAbilityUsed': hero?.abilityUsed ?? false,
     'hand': hand.map((c) => c.toJson()).toList(),
     'deckCards': deck.cards.map((c) => c.toJson()).toList(),
   };
@@ -137,6 +138,11 @@ class Player {
           health: 1,
         ),
       );
+    }
+
+    // Restore hero ability used state
+    if (hero != null && json['heroAbilityUsed'] == true) {
+      hero.abilityUsed = true;
     }
 
     final player = Player(

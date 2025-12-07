@@ -10,6 +10,8 @@ class AttackResult {
   final bool targetDied;
   final bool attackerDied;
   final String message;
+  final List<String> modifiers; // Buffs/Debuffs descriptions
+  final List<String> retaliationModifiers; // Retaliation Buffs/Debuffs
 
   AttackResult({
     required this.success,
@@ -19,6 +21,8 @@ class AttackResult {
     this.targetDied = false,
     this.attackerDied = false,
     this.message = '',
+    this.modifiers = const [],
+    this.retaliationModifiers = const [],
   });
 }
 
@@ -767,10 +771,14 @@ class CombatResolver {
   }) {
     // Calculate base damage
     int damage = attacker.damage;
+    final List<String> modifiers = [];
 
     // Apply fury bonus
     final furyBonus = _getFuryBonus(attacker);
-    damage += furyBonus;
+    if (furyBonus > 0) {
+      damage += furyBonus;
+      modifiers.add('+$furyBonus Fury');
+    }
 
     // Apply terrain buff for attacker (+1 if attacker's element matches tile terrain)
     int attackerTerrainBonus = 0;
@@ -779,19 +787,58 @@ class CombatResolver {
         attacker.element!.toLowerCase() == tileTerrain.toLowerCase()) {
       attackerTerrainBonus = 1;
       damage += attackerTerrainBonus;
+      modifiers.add('+1 Terrain');
     }
 
     // Apply hero ability damage boost (player only)
     if (isPlayerAttacking && playerDamageBoost > 0) {
       damage += playerDamageBoost;
+      modifiers.add('+$playerDamageBoost Hero Boost');
     }
 
     // Apply lane damage bonus if set
     if (isPlayerAttacking) {
-      damage += _playerLaneDamageBonus;
+      if (_playerLaneDamageBonus > 0) {
+        damage += _playerLaneDamageBonus;
+        modifiers.add('+$_playerLaneDamageBonus Lane Buff');
+      }
     } else {
-      damage += _opponentLaneDamageBonus;
+      if (_opponentLaneDamageBonus > 0) {
+        damage += _opponentLaneDamageBonus;
+        modifiers.add('+$_opponentLaneDamageBonus Lane Buff');
+      }
     }
+
+    // =========================================================================
+    // UNIT COUNTERS (Rock-Paper-Scissors)
+    // =========================================================================
+    final isPikeman = attacker.abilities.contains('pikeman');
+    final isCavalry = attacker.abilities.contains('cavalry');
+    // final isArcher = attacker.abilities.contains('archer'); // Unused
+    final isRanged = attacker.isRanged; // Checks 'ranged' ability
+
+    final targetIsCavalry = target.abilities.contains('cavalry');
+    final targetIsArcher = target.abilities.contains('archer');
+    final targetIsShieldGuard = target.abilities.contains('shield_guard');
+
+    // 1. Pikeman > Cavalry (+4 DMG)
+    if (isPikeman && targetIsCavalry) {
+      damage += 4;
+      modifiers.add('+4 vs Cavalry');
+    }
+
+    // 2. Cavalry > Archer (+4 DMG)
+    if (isCavalry && targetIsArcher) {
+      damage += 4;
+      modifiers.add('+4 vs Archer');
+    }
+
+    // 3. Shield Guard vs Ranged (-2 DMG)
+    if (isRanged && targetIsShieldGuard) {
+      damage -= 2;
+      modifiers.add('-2 Shield Guard');
+    }
+    // =========================================================================
 
     // Scale damage based on attacker's current HP (soft floor 50%-100%)
     final attackerMaxHp = attacker.health;
@@ -840,18 +887,44 @@ class CombatResolver {
 
     // Retaliation happens if attacker is melee (not ranged) and target has damage > 0
     // Note: We use target.damage (base stat) not currentHealth since target retaliates before dying
+    final List<String> retModifiers = [];
     if (!attacker.isRanged && target.damage > 0) {
       // Target retaliates
       retaliationDamage = target.damage;
 
       // Apply target's fury
-      retaliationDamage += _getFuryBonus(target);
+      final furyBonus = _getFuryBonus(target);
+      if (furyBonus > 0) {
+        retaliationDamage += furyBonus;
+        retModifiers.add('+$furyBonus Fury');
+      }
+
+      // =========================================================================
+      // UNIT COUNTERS (Retaliation)
+      // =========================================================================
+      final targetIsRanged = target.isRanged; // Includes Archer, Cannon, etc.
+      final targetIsPikeman = target.abilities.contains('pikeman');
+      final attackerIsCavalry = attacker.abilities.contains('cavalry');
+
+      // 1. Ranged vs Melee (-4 Retaliation - Weak in melee)
+      if (targetIsRanged) {
+        retaliationDamage -= 4;
+        retModifiers.add('-4 Ranged Weakness');
+      }
+
+      // 2. Pikeman vs Cavalry (+4 Retaliation - Anti-cavalry defense)
+      if (targetIsPikeman && attackerIsCavalry) {
+        retaliationDamage += 4;
+        retModifiers.add('+4 vs Cavalry');
+      }
+      // =========================================================================
 
       // Apply terrain buff for defender (+1 if defender's element matches tile terrain)
       if (tileTerrain != null &&
           target.element != null &&
           target.element!.toLowerCase() == tileTerrain.toLowerCase()) {
         retaliationDamage += 1;
+        retModifiers.add('+1 Terrain');
       }
 
       // Scale retaliation based on defender's current HP (soft floor 50%-100%)
@@ -942,6 +1015,8 @@ class CombatResolver {
       attackerDied: attackerDied,
       message:
           '${attacker.name} dealt $damage to ${target.name}${targetDied ? " (killed)" : ""}',
+      modifiers: modifiers,
+      retaliationModifiers: retModifiers,
     );
   }
 
@@ -956,29 +1031,71 @@ class CombatResolver {
   }) {
     // Calculate base damage
     int damage = attacker.damage;
+    final List<String> modifiers = [];
 
     // Apply fury bonus
     final furyBonus = _getFuryBonus(attacker);
-    damage += furyBonus;
+    if (furyBonus > 0) {
+      damage += furyBonus;
+      modifiers.add('+$furyBonus Fury');
+    }
 
     // Apply terrain buff for attacker (+1 if attacker's element matches tile terrain)
     if (tileTerrain != null &&
         attacker.element != null &&
         attacker.element!.toLowerCase() == tileTerrain.toLowerCase()) {
       damage += 1;
+      modifiers.add('+1 Terrain');
     }
 
     // Apply hero ability damage boost (player only)
     if (isPlayerAttacking && playerDamageBoost > 0) {
       damage += playerDamageBoost;
+      modifiers.add('+$playerDamageBoost Hero Boost');
     }
 
     // Apply lane damage bonus if set
     if (isPlayerAttacking) {
-      damage += _playerLaneDamageBonus;
+      if (_playerLaneDamageBonus > 0) {
+        damage += _playerLaneDamageBonus;
+        modifiers.add('+$_playerLaneDamageBonus Lane Buff');
+      }
     } else {
-      damage += _opponentLaneDamageBonus;
+      if (_opponentLaneDamageBonus > 0) {
+        damage += _opponentLaneDamageBonus;
+        modifiers.add('+$_opponentLaneDamageBonus Lane Buff');
+      }
     }
+
+    // =========================================================================
+    // UNIT COUNTERS (Rock-Paper-Scissors)
+    // =========================================================================
+    final isPikeman = attacker.abilities.contains('pikeman');
+    final isCavalry = attacker.abilities.contains('cavalry');
+    final isRanged = attacker.isRanged; // Checks 'ranged' ability
+
+    final targetIsCavalry = target.abilities.contains('cavalry');
+    final targetIsArcher = target.abilities.contains('archer');
+    final targetIsShieldGuard = target.abilities.contains('shield_guard');
+
+    // 1. Pikeman > Cavalry (+4 DMG)
+    if (isPikeman && targetIsCavalry) {
+      damage += 4;
+      modifiers.add('+4 vs Cavalry');
+    }
+
+    // 2. Cavalry > Archer (+4 DMG)
+    if (isCavalry && targetIsArcher) {
+      damage += 4;
+      modifiers.add('+4 vs Archer');
+    }
+
+    // 3. Shield Guard vs Ranged (-2 DMG)
+    if (isRanged && targetIsShieldGuard) {
+      damage -= 2;
+      modifiers.add('-2 Shield Guard');
+    }
+    // =========================================================================
 
     // Scale damage based on attacker's current HP (soft floor 50%-100%)
     final attackerMaxHp = attacker.health;
@@ -1009,18 +1126,44 @@ class CombatResolver {
     int attackerHpAfter = attacker.currentHealth;
 
     // Retaliation happens if attacker is melee and target has damage > 0
+    final List<String> retModifiers = [];
     if (!attacker.isRanged && target.damage > 0) {
       // Target retaliates
       retaliationDamage = target.damage;
 
       // Apply target's fury
-      retaliationDamage += _getFuryBonus(target);
+      final furyBonus = _getFuryBonus(target);
+      if (furyBonus > 0) {
+        retaliationDamage += furyBonus;
+        retModifiers.add('+$furyBonus Fury');
+      }
+
+      // =========================================================================
+      // UNIT COUNTERS (Retaliation)
+      // =========================================================================
+      final targetIsRanged = target.isRanged; // Includes Archer, Cannon, etc.
+      final targetIsPikeman = target.abilities.contains('pikeman');
+      final attackerIsCavalry = attacker.abilities.contains('cavalry');
+
+      // 1. Ranged vs Melee (-4 Retaliation - Weak in melee)
+      if (targetIsRanged) {
+        retaliationDamage -= 4;
+        retModifiers.add('-4 Ranged Weakness');
+      }
+
+      // 2. Pikeman vs Cavalry (+4 Retaliation - Anti-cavalry defense)
+      if (targetIsPikeman && attackerIsCavalry) {
+        retaliationDamage += 4;
+        retModifiers.add('+4 vs Cavalry');
+      }
+      // =========================================================================
 
       // Apply terrain buff for defender (+1 if defender's element matches tile terrain)
       if (tileTerrain != null &&
           target.element != null &&
           target.element!.toLowerCase() == tileTerrain.toLowerCase()) {
         retaliationDamage += 1;
+        retModifiers.add('+1 Terrain');
       }
 
       // Scale retaliation based on defender's current HP (soft floor 50%-100%)
@@ -1071,6 +1214,8 @@ class CombatResolver {
       targetDied: targetDied,
       attackerDied: attackerDied,
       message: 'Preview: ${attacker.name} → $damage dmg → ${target.name}',
+      modifiers: modifiers,
+      retaliationModifiers: retModifiers,
     );
   }
 

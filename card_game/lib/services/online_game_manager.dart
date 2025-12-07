@@ -63,7 +63,7 @@ class OnlineGameManager {
   void stopListening() {
     _subscription?.cancel();
     _subscription = null;
-    debugPrint('� OnlineGameManager: Stopped listening');
+    debugPrint('OnlineGameManager: Stopped listening');
   }
 
   /// Handle incoming Firebase snapshot

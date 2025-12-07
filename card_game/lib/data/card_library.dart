@@ -43,209 +43,99 @@ GameCard scoutUnit(int index) => GameCard(
 
 // ============================================================================
 // COMMON CARDS (Rarity 1) - Unlimited copies available
+// Consolidated into Neutral Classes per user request
 // ============================================================================
 
-GameCard desertQuickStrike(int index) => GameCard(
-  id: 'desert_qs_$index',
-  name: 'Desert Quick Strike',
+/// Cavalry - Fast, High Damage, Low HP (Formerly Quick Strike)
+/// Counters: Archers (+4 DMG)
+/// Weakness: Pikemen (+4 DMG from them)
+GameCard cavalry(int index) => GameCard(
+  id: 'cavalry_$index',
+  name: 'Cavalry',
   damage: 4,
-  health: 4,
-  tick: 1,
-  moveSpeed: 2, // Fast - reaches enemy quickly
-  maxAP: 2, // TYC3: Fast unit
-  apPerTurn: 2,
-  attackAPCost: 1,
-  element: 'Desert',
-  abilities: const [],
-  cost: 1,
-  rarity: 1, // Common
-);
-
-GameCard lakeQuickStrike(int index) => GameCard(
-  id: 'lake_qs_$index',
-  name: 'Lake Quick Strike',
-  damage: 3,
-  health: 6,
-  tick: 1,
-  moveSpeed: 2, // Fast - reaches enemy quickly
-  maxAP: 2, // TYC3: Fast unit
-  apPerTurn: 2,
-  attackAPCost: 1,
-  element: 'Lake',
-  abilities: const [],
-  cost: 1,
-  rarity: 1, // Common
-);
-
-GameCard woodsQuickStrike(int index) => GameCard(
-  id: 'woods_qs_$index',
-  name: 'Woods Quick Strike',
-  damage: 3,
   health: 5,
   tick: 1,
-  moveSpeed: 2, // Fast - reaches enemy quickly
-  maxAP: 2, // TYC3: Fast unit
+  moveSpeed: 2, // Fast
+  maxAP: 2,
   apPerTurn: 2,
   attackAPCost: 1,
-  element: 'Woods',
-  abilities: const [],
+  element: null, // Neutral
+  abilities: const ['cavalry'],
   cost: 1,
-  rarity: 1, // Common
+  rarity: 1,
 );
 
-GameCard desertWarrior(int index) => GameCard(
-  id: 'desert_war_$index',
-  name: 'Desert Warrior',
-  damage: 6,
-  health: 9,
-  tick: 3,
-  moveSpeed: 1, // Normal speed
-  maxAP: 1, // TYC3: Medium unit
-  apPerTurn: 1,
-  attackAPCost: 1,
-  element: 'Desert',
-  abilities: const [],
-  cost: 2,
-  rarity: 1, // Common
-);
-
-GameCard lakeWarrior(int index) => GameCard(
-  id: 'lake_war_$index',
-  name: 'Lake Warrior',
-  damage: 5,
-  health: 11,
-  tick: 3,
-  moveSpeed: 1, // Normal speed
-  maxAP: 1, // TYC3: Medium unit
-  apPerTurn: 1,
-  attackAPCost: 1,
-  element: 'Lake',
-  abilities: const [],
-  cost: 2,
-  rarity: 1, // Common
-);
-
-GameCard woodsWarrior(int index) => GameCard(
-  id: 'woods_war_$index',
-  name: 'Woods Warrior',
+/// Pikeman - Balanced, Anti-Cavalry (Formerly Warrior)
+/// Counters: Cavalry (+4 DMG)
+GameCard pikeman(int index) => GameCard(
+  id: 'pikeman_$index',
+  name: 'Pikeman',
   damage: 5,
   health: 10,
   tick: 3,
-  moveSpeed: 1, // Normal speed
-  maxAP: 1, // TYC3: Medium unit
+  moveSpeed: 1, // Normal
+  maxAP: 1,
   apPerTurn: 1,
   attackAPCost: 1,
-  element: 'Woods',
-  abilities: const [],
+  element: null, // Neutral
+  abilities: const ['pikeman'],
   cost: 2,
-  rarity: 1, // Common
+  rarity: 1,
 );
 
-GameCard desertTank(int index) => GameCard(
-  id: 'desert_tank_$index',
-  name: 'Desert Tank',
-  damage: 9,
-  health: 14,
-  tick: 5,
-  moveSpeed: 0, // Stationary - holds position
-  maxAP: 1, // TYC3: Heavy unit
-  apPerTurn: 1,
-  attackAPCost: 1, // Heavy but efficient
-  element: 'Desert',
-  abilities: const ['guard'], // TYC3: Tanks have guard
-  cost: 3,
-  rarity: 1, // Common
-);
-
-GameCard lakeTank(int index) => GameCard(
-  id: 'lake_tank_$index',
-  name: 'Lake Tank',
-  damage: 8,
-  health: 16,
-  tick: 5,
-  moveSpeed: 0, // Stationary - holds position
-  maxAP: 1, // TYC3: Heavy unit
-  apPerTurn: 1,
-  attackAPCost: 1,
-  element: 'Lake',
-  abilities: const ['guard'], // TYC3: Tanks have guard
-  cost: 3,
-  rarity: 1, // Common
-);
-
-GameCard woodsTank(int index) => GameCard(
-  id: 'woods_tank_$index',
-  name: 'Woods Tank',
+/// Shield Guard - Slow, High HP, Anti-Ranged (Formerly Tank)
+/// Ability: Guard (Retaliates first?), Shield (-2 DMG from Ranged)
+GameCard shieldGuard(int index) => GameCard(
+  id: 'shield_guard_$index',
+  name: 'Shield Guard',
   damage: 8,
   health: 15,
   tick: 5,
-  moveSpeed: 0, // Stationary - holds position
-  maxAP: 1, // TYC3: Heavy unit
+  moveSpeed: 0, // Stationary
+  maxAP: 1,
   apPerTurn: 1,
   attackAPCost: 1,
-  element: 'Woods',
-  abilities: const ['guard'], // TYC3: Tanks have guard
+  element: null, // Neutral
+  abilities: const ['shield_guard', 'guard'],
   cost: 3,
-  rarity: 1, // Common
+  rarity: 1,
 );
 
-// ============================================================================
-// RANGED UNITS (Common) - Attack from distance, no retaliation
-// ============================================================================
-
-/// Desert Archer - Ranged unit that attacks without taking retaliation
-GameCard desertArcher(int index) => GameCard(
-  id: 'desert_archer_$index',
-  name: 'Desert Archer',
+/// Archer - Ranged, Weak Melee (Formerly Archer)
+/// Weakness: Melee (-4 Retaliation), Cavalry (+4 DMG from them)
+GameCard archer(int index) => GameCard(
+  id: 'archer_$index',
+  name: 'Archer',
   damage: 4,
-  health: 5,
+  health: 6, // Increased slightly from 5 to 6 for balance
   tick: 2,
   moveSpeed: 1,
   maxAP: 1,
   apPerTurn: 1,
   attackAPCost: 1,
-  attackRange: 1, // Normal range but ranged ability prevents retaliation
-  element: 'Desert',
-  abilities: const ['ranged'], // No retaliation when attacking
+  attackRange: 1, // Ranged ability handles range mechanics
+  element: null, // Neutral
+  abilities: const ['archer', 'ranged'],
   cost: 2,
-  rarity: 1, // Common
+  rarity: 1,
 );
 
-/// Lake Archer - Ranged unit with more HP
-GameCard lakeArcher(int index) => GameCard(
-  id: 'lake_archer_$index',
-  name: 'Lake Archer',
-  damage: 3,
-  health: 7,
-  tick: 2,
-  moveSpeed: 1,
-  maxAP: 1,
-  apPerTurn: 1,
-  attackAPCost: 1,
-  attackRange: 1,
-  element: 'Lake',
-  abilities: const ['ranged'],
-  cost: 2,
-  rarity: 1, // Common
-);
+// Deprecated Adapters for Backward Compatibility (Map to new types)
+GameCard desertQuickStrike(int i) => cavalry(i);
+GameCard lakeQuickStrike(int i) => cavalry(i);
+GameCard woodsQuickStrike(int i) => cavalry(i);
 
-/// Woods Archer - Balanced ranged unit
-GameCard woodsArcher(int index) => GameCard(
-  id: 'woods_archer_$index',
-  name: 'Woods Archer',
-  damage: 3,
-  health: 6,
-  tick: 2,
-  moveSpeed: 1,
-  maxAP: 1,
-  apPerTurn: 1,
-  attackAPCost: 1,
-  attackRange: 1,
-  element: 'Woods',
-  abilities: const ['ranged'],
-  cost: 2,
-  rarity: 1, // Common
-);
+GameCard desertWarrior(int i) => pikeman(i);
+GameCard lakeWarrior(int i) => pikeman(i);
+GameCard woodsWarrior(int i) => pikeman(i);
+
+GameCard desertTank(int i) => shieldGuard(i);
+GameCard lakeTank(int i) => shieldGuard(i);
+GameCard woodsTank(int i) => shieldGuard(i);
+
+GameCard desertArcher(int i) => archer(i);
+GameCard lakeArcher(int i) => archer(i);
+GameCard woodsArcher(int i) => archer(i);
 
 // ============================================================================
 // CANNON UNITS (Rare) - Long range attack (2 tiles), slow but powerful
@@ -264,7 +154,7 @@ GameCard desertCannon(int index) => GameCard(
   attackAPCost: 1,
   attackRange: 2, // Can attack 2 tiles away!
   element: 'Desert',
-  abilities: const ['ranged'], // No retaliation
+  abilities: const ['ranged', 'cannon'], // No retaliation
   cost: 4,
   rarity: 2, // Rare
 );
@@ -282,7 +172,7 @@ GameCard lakeCannon(int index) => GameCard(
   attackAPCost: 1,
   attackRange: 2,
   element: 'Lake',
-  abilities: const ['ranged'],
+  abilities: const ['ranged', 'cannon'],
   cost: 4,
   rarity: 2, // Rare
 );
@@ -300,7 +190,7 @@ GameCard woodsCannon(int index) => GameCard(
   attackAPCost: 1,
   attackRange: 2,
   element: 'Woods',
-  abilities: const ['ranged'],
+  abilities: const ['ranged', 'cannon'],
   cost: 4,
   rarity: 2, // Rare
 );
@@ -320,7 +210,7 @@ GameCard desertEliteStriker(int index) => GameCard(
   apPerTurn: 2,
   attackAPCost: 1,
   element: 'Desert',
-  abilities: const [],
+  abilities: const ['cavalry'],
   cost: 2,
   rarity: 2, // Rare
 );
@@ -336,7 +226,7 @@ GameCard lakeEliteStriker(int index) => GameCard(
   apPerTurn: 2,
   attackAPCost: 1,
   element: 'Lake',
-  abilities: const [],
+  abilities: const ['cavalry'],
   cost: 2,
   rarity: 2, // Rare
 );
@@ -352,7 +242,7 @@ GameCard woodsEliteStriker(int index) => GameCard(
   apPerTurn: 2,
   attackAPCost: 1,
   element: 'Woods',
-  abilities: const [],
+  abilities: const ['cavalry'],
   cost: 2,
   rarity: 2, // Rare
 );
@@ -368,7 +258,7 @@ GameCard desertVeteran(int index) => GameCard(
   apPerTurn: 1,
   attackAPCost: 1,
   element: 'Desert',
-  abilities: const [],
+  abilities: const ['pikeman'],
   cost: 3,
   rarity: 2, // Rare
 );
@@ -384,7 +274,7 @@ GameCard lakeVeteran(int index) => GameCard(
   apPerTurn: 1,
   attackAPCost: 1,
   element: 'Lake',
-  abilities: const [],
+  abilities: const ['pikeman'],
   cost: 3,
   rarity: 2, // Rare
 );
@@ -400,7 +290,7 @@ GameCard woodsVeteran(int index) => GameCard(
   apPerTurn: 1,
   attackAPCost: 1,
   element: 'Woods',
-  abilities: const [],
+  abilities: const ['pikeman'],
   cost: 3,
   rarity: 2, // Rare
 );
@@ -474,7 +364,7 @@ GameCard desertBerserker(int index) => GameCard(
   apPerTurn: 1,
   attackAPCost: 1,
   element: 'Desert',
-  abilities: const ['fury_1'], // +1 damage when attacking
+  abilities: const ['fury_1', 'pikeman'], // +1 damage when attacking
   cost: 4,
   rarity: 3, // Epic
 );
@@ -491,7 +381,7 @@ GameCard lakeGuardian(int index) => GameCard(
   apPerTurn: 1,
   attackAPCost: 1,
   element: 'Lake',
-  abilities: const ['shield_1', 'guard'], // TYC3: Elite guard
+  abilities: const ['shield_1', 'guard', 'shield_guard'], // TYC3: Elite guard
   cost: 4,
   rarity: 3, // Epic
 );
@@ -508,7 +398,7 @@ GameCard woodsSentinel(int index) => GameCard(
   apPerTurn: 1,
   attackAPCost: 1,
   element: 'Woods',
-  abilities: const ['regen_1'], // Heals 1 HP per turn
+  abilities: const ['regen_1', 'pikeman'], // Heals 1 HP per turn
   cost: 4,
   rarity: 3, // Epic
 );
