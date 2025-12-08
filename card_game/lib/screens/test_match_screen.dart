@@ -4354,6 +4354,23 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     }
   }
 
+  /// DEBUG: Instantly win the battle (Campaign testing)
+  void _debugWinBattle() {
+    final match = _matchManager.currentMatch;
+    if (match == null) return;
+
+    setState(() {
+      // Deal fatal damage to opponent base
+      match.opponent.takeBaseDamage(match.opponent.baseHP);
+
+      // Trigger game over
+      match.currentPhase = MatchPhase.gameOver;
+      match.winnerId = match.player.id;
+
+      debugPrint('🏆 DEBUG: Forced win for player');
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final match = _matchManager.currentMatch;
@@ -4410,6 +4427,14 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
               ? _buildTYC3Title(match)
               : Text('Turn ${match.turnNumber} - ${match.currentPhase.name}'),
           actions: [
+            // DEBUG: Win Battle button (Campaign only)
+            if (widget.enemyDeck != null && !match.isGameOver)
+              IconButton(
+                icon: const Icon(Icons.emoji_events, color: Colors.amber),
+                tooltip: 'Win Battle (Debug)',
+                onPressed: _debugWinBattle,
+              ),
+
             // TYC3: Show turn timer (only in online mode)
             if (_useTYC3Mode &&
                 _isOnlineMode &&
