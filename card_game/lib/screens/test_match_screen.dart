@@ -4428,7 +4428,8 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
               : Text('Turn ${match.turnNumber} - ${match.currentPhase.name}'),
           actions: [
             // DEBUG: Win Battle button (Campaign only)
-            if (widget.enemyDeck != null && !match.isGameOver)
+            if ((widget.enemyDeck != null || widget.forceCampaignDeck) &&
+                !match.isGameOver)
               IconButton(
                 icon: const Icon(Icons.emoji_events, color: Colors.amber),
                 tooltip: 'Win Battle (Debug)',
