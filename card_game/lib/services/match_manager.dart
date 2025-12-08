@@ -2428,7 +2428,7 @@ class MatchManager {
     }
 
     // Calculate damage with terrain buff
-    int damage = attacker.damage;
+    int damage = attacker.currentDamage;
     final tileTerrain = baseTile.terrain;
     int terrainBonus = 0;
     if (tileTerrain != null && attacker.element == tileTerrain) {

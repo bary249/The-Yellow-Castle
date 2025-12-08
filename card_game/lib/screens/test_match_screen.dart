@@ -1786,7 +1786,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     final terrainBonus = hasTerrainBuff ? 1 : 0;
 
     final enemyHp = match.opponent.baseHP;
-    final baseDamage = attacker.damage;
+    final baseDamage = attacker.currentDamage;
     final totalDamage = baseDamage + terrainBonus;
     final hpAfter = (enemyHp - totalDamage).clamp(0, 999);
     final willWin = hpAfter <= 0;
