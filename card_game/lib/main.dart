@@ -7,17 +7,25 @@ import 'screens/main_menu_screen.dart';
 import 'screens/auth_screen.dart';
 import 'services/auth_service.dart';
 
+bool _firebaseInitialized = false;
+
 Future<void> main() async {
   // Ensure Flutter is initialized
   WidgetsFlutterBinding.ensureInitialized();
 
   // Initialize Firebase
-  if (kIsWeb) {
-    // Web requires explicit options
-    await Firebase.initializeApp(options: DefaultFirebaseOptions.web);
-  } else {
-    // Mobile/desktop use bundled platform config
-    await Firebase.initializeApp();
+  try {
+    if (kIsWeb) {
+      // Web requires explicit options
+      await Firebase.initializeApp(options: DefaultFirebaseOptions.web);
+    } else {
+      // Mobile/desktop use bundled platform config
+      await Firebase.initializeApp();
+    }
+    _firebaseInitialized = true;
+  } catch (e) {
+    print("Firebase initialization failed: $e");
+    print("Running in offline/demo mode");
   }
 
   runApp(const MyApp());
@@ -47,6 +55,11 @@ class AuthWrapper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // If Firebase failed to initialize, bypass auth and show main menu (Demo Mode)
+    if (!_firebaseInitialized) {
+      return const MainMenuScreen();
+    }
+
     final authService = AuthService();
 
     return StreamBuilder<User?>(

@@ -3,22 +3,33 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 /// Handles user authentication and profile management
 class AuthService {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  FirebaseAuth? _auth;
+  FirebaseFirestore? _firestore;
+
+  AuthService() {
+    try {
+      _auth = FirebaseAuth.instance;
+      _firestore = FirebaseFirestore.instance;
+    } catch (e) {
+      print('AuthService: Firebase not available ($e)');
+    }
+  }
 
   /// Get current user
-  User? get currentUser => _auth.currentUser;
+  User? get currentUser => _auth?.currentUser;
 
   /// Check if user is signed in
   bool get isSignedIn => currentUser != null;
 
   /// Stream of auth state changes
-  Stream<User?> get authStateChanges => _auth.authStateChanges();
+  Stream<User?> get authStateChanges =>
+      _auth?.authStateChanges() ?? Stream.value(null);
 
   /// Sign in anonymously (quick start)
   Future<User?> signInAnonymously() async {
+    if (_auth == null) return null;
     try {
-      final credential = await _auth.signInAnonymously();
+      final credential = await _auth!.signInAnonymously();
       final user = credential.user;
 
       if (user != null) {
@@ -39,8 +50,9 @@ class AuthService {
     String email,
     String password,
   ) async {
+    if (_auth == null) return (null, 'Offline mode');
     try {
-      final credential = await _auth.signInWithEmailAndPassword(
+      final credential = await _auth!.signInWithEmailAndPassword(
         email: email,
         password: password,
       );
@@ -81,8 +93,9 @@ class AuthService {
     String password,
     String displayName,
   ) async {
+    if (_auth == null) return (null, 'Offline mode');
     try {
-      final credential = await _auth.createUserWithEmailAndPassword(
+      final credential = await _auth!.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
@@ -140,12 +153,13 @@ class AuthService {
 
   /// Sign out
   Future<void> signOut() async {
-    await _auth.signOut();
+    await _auth?.signOut();
   }
 
   /// Create user profile in Firestore
   Future<void> _createUserProfile(User user, {String? displayName}) async {
-    final docRef = _firestore.collection('users').doc(user.uid);
+    if (_firestore == null) return;
+    final docRef = _firestore!.collection('users').doc(user.uid);
     final docSnap = await docRef.get();
 
     // Only create if doesn't exist
@@ -168,8 +182,9 @@ class AuthService {
 
   /// Get user profile
   Future<Map<String, dynamic>?> getUserProfile(String userId) async {
+    if (_firestore == null) return null;
     try {
-      final doc = await _firestore.collection('users').doc(userId).get();
+      final doc = await _firestore!.collection('users').doc(userId).get();
       return doc.data();
     } catch (e) {
       print('Error getting user profile: $e');
@@ -179,17 +194,18 @@ class AuthService {
 
   /// Update user display name
   Future<void> updateDisplayName(String displayName) async {
-    if (currentUser == null) return;
+    if (currentUser == null || _firestore == null) return;
 
     await currentUser!.updateDisplayName(displayName);
-    await _firestore.collection('users').doc(currentUser!.uid).update({
+    await _firestore!.collection('users').doc(currentUser!.uid).update({
       'displayName': displayName,
     });
   }
 
   /// Update ELO after match
   Future<void> updateElo(String userId, int eloDelta, bool won) async {
-    final docRef = _firestore.collection('users').doc(userId);
+    if (_firestore == null) return;
+    final docRef = _firestore!.collection('users').doc(userId);
 
     await docRef.update({
       'elo': FieldValue.increment(eloDelta),

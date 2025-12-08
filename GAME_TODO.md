@@ -1,5 +1,7 @@
 # Land of Clans & Wanderers - Development TODO
 
+**⚠️ DEV NOTE**: Firebase initialization is currently wrapped in a try-catch block to allow "Offline Demo Mode" if configuration is missing. This enables running on new devices (like iOS) without immediate `flutterfire configure`. Auth and Matchmaking will be disabled in this mode.
+
 **Framework**: Flutter + Flame  
 **Target**: Mobile (Portrait mode)  
 **Match Duration**: 3-5 minutes  

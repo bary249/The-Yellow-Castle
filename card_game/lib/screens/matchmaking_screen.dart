@@ -14,7 +14,7 @@ class MatchmakingScreen extends StatefulWidget {
 
 class _MatchmakingScreenState extends State<MatchmakingScreen> {
   final AuthService _authService = AuthService();
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  FirebaseFirestore? _firestore;
 
   StreamSubscription? _queueListener;
   StreamSubscription? _matchListener;
@@ -26,6 +26,13 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> {
   @override
   void initState() {
     super.initState();
+    try {
+      _firestore = FirebaseFirestore.instance;
+    } catch (e) {
+      print('Matchmaking: Firebase not available');
+      setState(() => _status = 'Offline Mode: Cannot play online');
+      return;
+    }
     _startSearching();
   }
 
@@ -36,6 +43,8 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> {
   }
 
   Future<void> _startSearching() async {
+    if (_firestore == null) return;
+
     final user = _authService.currentUser;
     if (user == null) {
       setState(() => _status = 'Not signed in!');
@@ -59,7 +68,7 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> {
       final playerElo = profile?['elo'] as int? ?? 1000;
 
       // Add to queue
-      await _firestore.collection('matchmaking_queue').doc(user.uid).set({
+      await _firestore!.collection('matchmaking_queue').doc(user.uid).set({
         'userId': user.uid,
         'displayName': playerName,
         'elo': playerElo,
@@ -70,7 +79,7 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> {
       setState(() => _status = 'Searching for opponent...');
 
       // Listen for other players in queue
-      _queueListener = _firestore
+      _queueListener = _firestore!
           .collection('matchmaking_queue')
           .where('searching', isEqualTo: true)
           .snapshots()
@@ -96,7 +105,7 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> {
       // TESTING: Delete any existing matches for this user before searching
       // This ensures we always get a fresh match for testing
       try {
-        final existingMatches = await _firestore
+        final existingMatches = await _firestore!
             .collection('matches')
             .where('playerIds', arrayContains: user.uid)
             .get();
@@ -112,7 +121,7 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> {
       }
 
       // Also listen for matches where we're a player
-      _matchListener = _firestore
+      _matchListener = _firestore!
           .collection('matches')
           .where('playerIds', arrayContains: user.uid)
           .snapshots()
@@ -147,11 +156,13 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> {
     // The player with the "lower" ID creates the match
     if (myId.compareTo(opponentId) > 0) return; // Let the other player create
 
+    if (_firestore == null) return;
+
     try {
-      final matchRef = _firestore.collection('matches').doc();
+      final matchRef = _firestore!.collection('matches').doc();
 
       // Check if opponent is still searching
-      final opponentDoc = await _firestore
+      final opponentDoc = await _firestore!
           .collection('matchmaking_queue')
           .doc(opponentId)
           .get();
@@ -192,8 +203,11 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> {
       });
 
       // Remove both from queue
-      await _firestore.collection('matchmaking_queue').doc(myId).delete();
-      await _firestore.collection('matchmaking_queue').doc(opponentId).delete();
+      await _firestore!.collection('matchmaking_queue').doc(myId).delete();
+      await _firestore!
+          .collection('matchmaking_queue')
+          .doc(opponentId)
+          .delete();
 
       // Don't navigate here - let both players detect via listener
     } catch (e) {
@@ -221,9 +235,12 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> {
 
     // Remove from queue
     final user = _authService.currentUser;
-    if (user != null) {
+    if (user != null && _firestore != null) {
       try {
-        await _firestore.collection('matchmaking_queue').doc(user.uid).delete();
+        await _firestore!
+            .collection('matchmaking_queue')
+            .doc(user.uid)
+            .delete();
       } catch (_) {}
     }
   }
