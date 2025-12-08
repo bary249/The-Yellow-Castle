@@ -13,22 +13,32 @@ class DeckStorageService {
   /// Singleton instance
   static final DeckStorageService _instance = DeckStorageService._internal();
   factory DeckStorageService() => _instance;
-  DeckStorageService._internal();
+  DeckStorageService._internal() {
+    try {
+      _firestore = FirebaseFirestore.instance;
+      _auth = FirebaseAuth.instance;
+    } catch (e) {
+      debugPrint('DeckStorageService running in offline mode: $e');
+    }
+  }
 
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+  FirebaseFirestore? _firestore;
+  FirebaseAuth? _auth;
 
   /// In-memory cache
   static List<GameCard>? _cachedDeck;
 
   /// Get current user ID
-  String? get _userId => _auth.currentUser?.uid;
+  String? get _userId => _auth?.currentUser?.uid;
 
   /// Get user's decks collection reference
   CollectionReference<Map<String, dynamic>>? get _userDecksRef {
     final uid = _userId;
-    if (uid == null) return null;
-    return _firestore.collection('users').doc(uid).collection(_decksCollection);
+    if (uid == null || _firestore == null) return null;
+    return _firestore!
+        .collection('users')
+        .doc(uid)
+        .collection(_decksCollection);
   }
 
   /// Convert card to Firestore-compatible map
