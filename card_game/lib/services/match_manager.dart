@@ -2084,6 +2084,41 @@ class MatchManager {
     _log('═══════════════════════\n');
   }
 
+  /// TYC3: Calculate lane buffs (damage/shield) from Inspire/Command/Fortify
+  /// For TYC3, 'lane' means column.
+  ({int damage, int shield}) calculateLaneBuffsTYC3(int col, String playerId) {
+    if (_currentMatch == null) return (damage: 0, shield: 0);
+
+    int damage = 0;
+    int shield = 0;
+
+    // Iterate all 3 rows in this column
+    for (int r = 0; r < 3; r++) {
+      final tile = _currentMatch!.board.getTile(r, col);
+      // Get player's cards on this tile
+      final myCards = tile.cards.where(
+        (c) => c.isAlive && c.ownerId == playerId,
+      );
+
+      for (final card in myCards) {
+        for (final ability in card.abilities) {
+          if (ability.startsWith('inspire_')) {
+            damage += int.tryParse(ability.split('_').last) ?? 0;
+          }
+          if (ability.startsWith('fortify_')) {
+            shield += int.tryParse(ability.split('_').last) ?? 0;
+          }
+          if (ability.startsWith('command_')) {
+            final val = int.tryParse(ability.split('_').last) ?? 0;
+            damage += val;
+            shield += val;
+          }
+        }
+      }
+    }
+    return (damage: damage, shield: shield);
+  }
+
   /// TYC3: Attack a target card
   /// Returns the AttackResult, or null if attack is invalid
   AttackResult? attackCardTYC3(
@@ -2179,6 +2214,9 @@ class MatchManager {
       '   Position: ($attackerRow,$attackerCol) → ($targetRow,$targetCol) | Terrain: ${tileTerrain ?? "none"}',
     );
 
+    // Calculate lane buffs (Inspire, Fortify, Command)
+    final laneBuffs = calculateLaneBuffsTYC3(attackerCol, attacker.ownerId!);
+
     // Resolve the attack (pass hero damage boost if player is attacking)
     final result = _combatResolver.resolveAttackTYC3(
       attacker,
@@ -2186,6 +2224,8 @@ class MatchManager {
       isPlayerAttacking: isPlayerAttacking,
       tileTerrain: tileTerrain,
       playerDamageBoost: isPlayerAttacking ? playerDamageBoost : 0,
+      laneDamageBonus: laneBuffs.damage,
+      laneShieldBonus: laneBuffs.shield,
     );
 
     _log(
@@ -2302,12 +2342,32 @@ class MatchManager {
     final targetTile = _currentMatch!.board.getTile(targetRow, targetCol);
     final tileTerrain = targetTile.terrain;
 
+    // Find attacker column (it might be different from targetCol if moving or ranged)
+    int attackerCol = targetCol;
+    // Try to find attacker on board to get correct column
+    for (int r = 0; r < 3; r++) {
+      for (int c = 0; c < 3; c++) {
+        if (_currentMatch!.board
+            .getTile(r, c)
+            .cards
+            .any((card) => card.id == attacker.id)) {
+          attackerCol = c;
+          break;
+        }
+      }
+    }
+
+    // Calculate lane buffs
+    final laneBuffs = calculateLaneBuffsTYC3(attackerCol, attacker.ownerId!);
+
     return _combatResolver.previewAttackTYC3(
       attacker,
       target,
       isPlayerAttacking: isPlayerTurn,
       tileTerrain: tileTerrain,
       playerDamageBoost: isPlayerTurn ? playerDamageBoost : 0,
+      laneDamageBonus: laneBuffs.damage,
+      laneShieldBonus: laneBuffs.shield,
     );
   }
 
@@ -2435,6 +2495,10 @@ class MatchManager {
       terrainBonus = 1;
       damage += terrainBonus;
     }
+
+    // Apply lane buffs (Inspire, Command)
+    final laneBuffs = calculateLaneBuffsTYC3(attackerCol, attacker.ownerId!);
+    damage += laneBuffs.damage;
 
     final targetPlayer = isPlayerAttacking
         ? _currentMatch!.opponent

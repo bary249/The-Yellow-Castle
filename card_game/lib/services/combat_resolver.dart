@@ -768,11 +768,126 @@ class CombatResolver {
     bool isPlayerAttacking = true,
     String? tileTerrain,
     int playerDamageBoost = 0,
+    int laneDamageBonus = 0,
+    int laneShieldBonus = 0,
   }) {
     // Calculate base damage
     int damage = attacker.damage;
     final List<String> modifiers = [];
 
+    // Apply lane damage bonus if set
+    if (isPlayerAttacking) {
+      final totalBonus = _playerLaneDamageBonus + laneDamageBonus;
+      if (totalBonus > 0) {
+        damage += totalBonus;
+        modifiers.add('+$totalBonus Lane Buff');
+      }
+    } else {
+      final totalBonus = _opponentLaneDamageBonus + laneDamageBonus;
+      if (totalBonus > 0) {
+        damage += totalBonus;
+        modifiers.add('+$totalBonus Lane Buff');
+      }
+    }
+
+    // Apply hero ability damage boost (player only)
+    if (isPlayerAttacking && playerDamageBoost > 0) {
+      damage += playerDamageBoost;
+      modifiers.add('+$playerDamageBoost Hero Boost');
+    }
+
+    // Apply terrain buff for attacker (+1 if attacker's element matches tile terrain)
+    if (tileTerrain != null &&
+        attacker.element != null &&
+        attacker.element!.toLowerCase() == tileTerrain.toLowerCase()) {
+      damage += 1;
+      modifiers.add('+1 Terrain');
+    }
+
+    // Apply fury bonus
+    final furyBonus = _getFuryBonus(attacker);
+    if (furyBonus > 0) {
+      damage += furyBonus;
+      modifiers.add('+$furyBonus Fury');
+    }
+
+    // =========================================================================
+    // UNIT COUNTERS (Rock-Paper-Scissors)
+    // =========================================================================
+    final isPikeman = attacker.abilities.contains('pikeman');
+  final isCavalry = attacker.abilities.contains('cavalry');
+  // final isArcher = attacker.abilities.contains('archer'); // Unused
+  final isRanged = attacker.isRanged; // Checks 'ranged' ability
+
+  final targetIsCavalry = target.abilities.contains('cavalry');
+  final targetIsArcher = target.abilities.contains('archer');
+  final targetIsShieldGuard = target.abilities.contains('shield_guard');
+
+  // 1. Pikeman > Cavalry (+4 DMG)
+  if (isPikeman && targetIsCavalry) {
+    damage += 4;
+    modifiers.add('+4 vs Cavalry');
+  }
+
+  // 2. Cavalry > Archer (+4 DMG)
+  if (isCavalry && targetIsArcher) {
+    damage += 4;
+    modifiers.add('+4 vs Archer');
+  }
+
+  // 3. Shield Guard vs Ranged (-2 DMG)
+  if (isRanged && targetIsShieldGuard) {
+    damage -= 2;
+    modifiers.add('-2 Shield Guard');
+  }
+  // =========================================================================
+
+  // Scale damage based on attacker's current HP (soft floor 50%-100%)
+  final attackerMaxHp = attacker.health;
+  if (attackerMaxHp > 0) {
+    final attackerHpRatio = attacker.currentHealth / attackerMaxHp;
+    final hpMultiplier = 0.5 + 0.5 * attackerHpRatio;
+    damage = (damage * hpMultiplier).ceil();
+  }
+
+  // Deal damage to target
+  final targetHpBefore = target.currentHealth;
+  final targetDied = target.takeDamage(damage);
+  final targetHpAfter = target.currentHealth;
+
+  // Log the attack
+  combatLog.add(
+    BattleLogEntry(
+      tick: 0, // TYC3 doesn't use ticks
+      laneDescription: 'TYC3',
+      action: '⚔️ ${attacker.name} ATTACKS',
+      details:
+          '${target.name} takes $damage damage | HP: $targetHpBefore → $targetHpAfter${targetDied ? " 💀" : ""}',
+      isImportant: targetDied,
+      level: targetDied ? LogLevel.important : LogLevel.normal,
+      damageDealt: damage,
+      attackerName: attacker.name,
+      targetName: target.name,
+      targetHpBefore: targetHpBefore,
+      targetHpAfter: targetHpAfter,
+      targetDied: targetDied,
+    ),
+  );
+
+  // Check for retaliation (melee attackers always receive retaliation, even from dying units)
+  // This represents simultaneous combat - both units strike at the same time
+  int retaliationDamage = 0;
+  bool attackerDied = false;
+
+  // Retaliation happens if attacker is melee (not ranged) and target has damage > 0
+  // Note: We use target.damage (base stat) not currentHealth since target retaliates before dying
+  final List<String> retModifiers = [];
+  if (!attacker.isRanged && target.damage > 0) {
+    // Target retaliates
+    retaliationDamage = target.damage;
+
+    // Apply target's fury
+    final furyBonus = _getFuryBonus(target);
     // Apply fury bonus
     final furyBonus = _getFuryBonus(attacker);
     if (furyBonus > 0) {
@@ -798,14 +913,16 @@ class CombatResolver {
 
     // Apply lane damage bonus if set
     if (isPlayerAttacking) {
-      if (_playerLaneDamageBonus > 0) {
-        damage += _playerLaneDamageBonus;
-        modifiers.add('+$_playerLaneDamageBonus Lane Buff');
+      final totalBonus = _playerLaneDamageBonus + laneDamageBonus;
+      if (totalBonus > 0) {
+        damage += totalBonus;
+        modifiers.add('+$totalBonus Lane Buff');
       }
     } else {
-      if (_opponentLaneDamageBonus > 0) {
-        damage += _opponentLaneDamageBonus;
-        modifiers.add('+$_opponentLaneDamageBonus Lane Buff');
+      final totalBonus = _opponentLaneDamageBonus + laneDamageBonus;
+      if (totalBonus > 0) {
+        damage += totalBonus;
+        modifiers.add('+$totalBonus Lane Buff');
       }
     }
 
@@ -850,10 +967,11 @@ class CombatResolver {
 
     // Apply shield reduction on target
     final targetShield = _getShieldValue(target);
-    final shieldBonus = isPlayerAttacking
+    final baseShieldBonus = isPlayerAttacking
         ? _opponentLaneShieldBonus
         : _playerLaneShieldBonus;
-    final totalShield = targetShield + shieldBonus;
+    final effectiveShieldBonus = baseShieldBonus + laneShieldBonus;
+    final totalShield = targetShield + effectiveShieldBonus;
     damage = (damage - totalShield).clamp(0, damage);
 
     // Deal damage to target
@@ -1028,6 +1146,8 @@ class CombatResolver {
     bool isPlayerAttacking = true,
     String? tileTerrain,
     int playerDamageBoost = 0,
+    int laneDamageBonus = 0,
+    int laneShieldBonus = 0,
   }) {
     // Calculate base damage
     int damage = attacker.damage;
@@ -1056,14 +1176,16 @@ class CombatResolver {
 
     // Apply lane damage bonus if set
     if (isPlayerAttacking) {
-      if (_playerLaneDamageBonus > 0) {
-        damage += _playerLaneDamageBonus;
-        modifiers.add('+$_playerLaneDamageBonus Lane Buff');
+      final totalBonus = _playerLaneDamageBonus + laneDamageBonus;
+      if (totalBonus > 0) {
+        damage += totalBonus;
+        modifiers.add('+$totalBonus Lane Buff');
       }
     } else {
-      if (_opponentLaneDamageBonus > 0) {
-        damage += _opponentLaneDamageBonus;
-        modifiers.add('+$_opponentLaneDamageBonus Lane Buff');
+      final totalBonus = _opponentLaneDamageBonus + laneDamageBonus;
+      if (totalBonus > 0) {
+        damage += totalBonus;
+        modifiers.add('+$totalBonus Lane Buff');
       }
     }
 
@@ -1107,10 +1229,11 @@ class CombatResolver {
 
     // Apply shield reduction on target
     final targetShield = _getShieldValue(target);
-    final shieldBonus = isPlayerAttacking
+    final baseShieldBonus = isPlayerAttacking
         ? _opponentLaneShieldBonus
         : _playerLaneShieldBonus;
-    final totalShield = targetShield + shieldBonus;
+    final effectiveShieldBonus = baseShieldBonus + laneShieldBonus;
+    final totalShield = targetShield + effectiveShieldBonus;
     damage = (damage - totalShield).clamp(0, damage);
 
     // Predict target death

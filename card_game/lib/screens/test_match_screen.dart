@@ -1785,9 +1785,16 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         tileTerrain != null && attacker.element == tileTerrain;
     final terrainBonus = hasTerrainBuff ? 1 : 0;
 
+    // Calculate lane buffs (Inspire, Command)
+    final laneBuffs = _matchManager.calculateLaneBuffsTYC3(
+      col,
+      attacker.ownerId!,
+    );
+    final buffBonus = laneBuffs.damage;
+
     final enemyHp = match.opponent.baseHP;
     final baseDamage = attacker.currentDamage;
-    final totalDamage = baseDamage + terrainBonus;
+    final totalDamage = baseDamage + terrainBonus + buffBonus;
     final hpAfter = (enemyHp - totalDamage).clamp(0, 999);
     final willWin = hpAfter <= 0;
     final laneName = _getLaneName(col);
@@ -1839,26 +1846,45 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                       const Text(' damage'),
                     ],
                   ),
-                  // Show terrain buff breakdown
-                  if (hasTerrainBuff)
+                  // Show buff breakdown
+                  if (hasTerrainBuff || buffBonus > 0)
                     Padding(
                       padding: const EdgeInsets.only(top: 4),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            '($baseDamage base + $terrainBonus ',
+                            '($baseDamage base',
                             style: TextStyle(
                               fontSize: 12,
                               color: Colors.green[700],
                               fontWeight: FontWeight.bold,
                             ),
                           ),
-                          Icon(
-                            _getTerrainIcon(tileTerrain!),
-                            size: 14,
-                            color: _getTerrainColor(tileTerrain),
-                          ),
+                          if (terrainBonus > 0) ...[
+                            Text(
+                              ' + $terrainBonus ',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.green[700],
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Icon(
+                              _getTerrainIcon(tileTerrain!),
+                              size: 14,
+                              color: _getTerrainColor(tileTerrain),
+                            ),
+                          ],
+                          if (buffBonus > 0)
+                            Text(
+                              ' + $buffBonus buff',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.green[700],
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                           Text(
                             ')',
                             style: TextStyle(
