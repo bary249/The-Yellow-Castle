@@ -59,6 +59,8 @@ class MatchManager {
     int? predefinedRelicColumn, // For online: relic column from host
     bool skipOpponentShuffle =
         false, // For online: opponent deck already in synced order
+    String? relicName, // Custom relic name (e.g. for campaign)
+    String? relicDescription, // Custom relic description
   }) {
     // Create players with heroes (copy heroes to reset ability state)
     final player = Player(
@@ -117,7 +119,10 @@ class MatchManager {
       _log('🏺 Relic placed at column $predefinedRelicColumn (from host)');
     } else {
       // Local mode: random relic placement
-      _currentMatch!.relicManager.initializeRelics();
+      _currentMatch!.relicManager.initializeRelics(
+        name: relicName,
+        description: relicDescription,
+      );
       _log('🏺 Relic hidden on a middle tile (location unknown)');
     }
 
@@ -1279,6 +1284,8 @@ class MatchManager {
     int? predefinedRelicColumn, // For online: relic column from host
     bool skipOpponentShuffle =
         false, // For online: opponent deck already in synced order
+    String? relicName, // Custom relic name (e.g. for campaign)
+    String? relicDescription, // Custom relic description
   }) {
     // Use the existing startMatch logic
     startMatch(
@@ -1296,6 +1303,8 @@ class MatchManager {
       predefinedTerrains: predefinedTerrains,
       predefinedRelicColumn: predefinedRelicColumn,
       skipOpponentShuffle: skipOpponentShuffle,
+      relicName: relicName,
+      relicDescription: relicDescription,
     );
 
     if (_currentMatch == null) return;

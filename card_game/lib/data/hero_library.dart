@@ -7,6 +7,7 @@ class HeroLibrary {
     napoleon(),
     saladin(),
     admiralNelson(),
+    archdukeCharles(),
   ];
 
   /// Get a hero by ID.
@@ -55,5 +56,18 @@ class HeroLibrary {
     terrainAffinities: ['Lake'],
     abilityType: HeroAbilityType.healUnits,
     abilityDescription: 'Heal all surviving units by 3 HP.',
+  );
+
+  /// Archduke Charles - Austrian Field Marshal.
+  /// Affinity: Woods (Alpine/Forest terrain)
+  /// Ability: Give all your units +1 damage this turn.
+  static GameHero archdukeCharles() => GameHero(
+    id: 'archduke_charles',
+    name: 'Archduke Charles',
+    description:
+        'A capable Austrian commander and one of Napoleon\'s most formidable opponents.',
+    terrainAffinities: ['Woods'],
+    abilityType: HeroAbilityType.damageBoost,
+    abilityDescription: 'Give all your units +1 damage this turn.',
   );
 }

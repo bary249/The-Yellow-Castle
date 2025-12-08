@@ -3601,7 +3601,13 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     } else {
       // AI mode: use widget hero or default
       playerHero = widget.selectedHero ?? HeroLibrary.napoleon();
-      opponentHero = HeroLibrary.saladin();
+
+      // Select opponent hero based on campaign act
+      if (widget.forceCampaignDeck && widget.campaignAct == 1) {
+        opponentHero = HeroLibrary.archdukeCharles();
+      } else {
+        opponentHero = HeroLibrary.saladin();
+      }
     }
 
     // Determine which deck to use
@@ -3726,6 +3732,15 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       // Skip opponent shuffle if we have synced deck (already in correct order)
       final skipOppShuffle = _isOnlineMode && _opponentDeckCardNames != null;
 
+      // Define custom relic for campaign (if applicable)
+      String? relicName;
+      String? relicDescription;
+      if (widget.forceCampaignDeck && widget.campaignAct == 1) {
+        relicName = 'Austrian Supply Wagon';
+        relicDescription =
+            'Supplies captured from the Austrian army. Contains a useful card.';
+      }
+
       _matchManager.startMatchTYC3(
         playerId: id,
         playerName: name,
@@ -3742,6 +3757,8 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         predefinedTerrains: terrainsToUse,
         predefinedRelicColumn: _isOnlineMode ? _predefinedRelicColumn : null,
         skipOpponentShuffle: skipOppShuffle,
+        relicName: relicName,
+        relicDescription: relicDescription,
       );
 
       // Set up relic discovery callback

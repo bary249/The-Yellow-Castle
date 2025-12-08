@@ -39,12 +39,12 @@ class Relic {
   });
 
   /// Create a random card relic
-  factory Relic.randomCard({String? id}) {
+  factory Relic.randomCard({String? id, String? name, String? description}) {
     return Relic(
       id: id ?? 'relic_${DateTime.now().millisecondsSinceEpoch}',
       type: RelicType.randomCard,
-      name: 'Ancient Artifact',
-      description: 'Grants a random card when claimed.',
+      name: name ?? 'Ancient Artifact',
+      description: description ?? 'Grants a random card when claimed.',
     );
   }
 
@@ -107,10 +107,14 @@ class RelicManager {
 
   /// Initialize relics for a new match.
   /// Places a random card relic on a random middle tile.
-  void initializeRelics() {
+  void initializeRelics({String? name, String? description}) {
     final random = Random();
     relicColumn = random.nextInt(3); // 0, 1, or 2
-    middleRelic = Relic.randomCard(id: 'middle_relic');
+    middleRelic = Relic.randomCard(
+      id: 'middle_relic',
+      name: name,
+      description: description,
+    );
   }
 
   /// Set the relic column to a specific value (for online multiplayer sync).
