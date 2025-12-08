@@ -5984,10 +5984,57 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
           if (distance <= _selectedCardForAction!.attackRange) {
             // Check no enemy cards blocking in base tile
             final baseTile = _matchManager.currentMatch!.board.getTile(0, col);
-            final hasEnemyCards = baseTile.cards.any((c) => c.isAlive);
+            final hasEnemyCards = baseTile.cards.any(
+              (c) =>
+                  c.isAlive &&
+                  c.ownerId != _matchManager.currentMatch!.player.id,
+            );
+
             if (!hasEnemyCards) {
-              canAttackBase = true;
-              break;
+              // FOW Check: Can only attack if we have visibility of the base lane
+              final playerId = _matchManager.currentMatch!.player.id;
+
+              // Check presence in middle row or enemy base row
+              final middleTile = _matchManager.currentMatch!.board.getTile(
+                1,
+                col,
+              );
+              final playerHasMiddleCard = middleTile.cards.any(
+                (c) => c.ownerId == playerId && c.isAlive,
+              );
+              final playerHasEnemyBaseCard = baseTile.cards.any(
+                (c) => c.ownerId == playerId && c.isAlive,
+              );
+
+              // Check scout visibility
+              bool scoutCanSee = false;
+              for (int sCol = 0; sCol < 3; sCol++) {
+                final sTile = _matchManager.currentMatch!.board.getTile(
+                  1,
+                  sCol,
+                );
+                final hasScout = sTile.cards.any(
+                  (c) =>
+                      c.ownerId == playerId &&
+                      c.isAlive &&
+                      c.abilities.contains('scout'),
+                );
+
+                if (hasScout) {
+                  // Scout sees own lane, adjacent lanes, and if in center sees all
+                  if (sCol == col || (sCol - col).abs() == 1 || sCol == 1) {
+                    scoutCanSee = true;
+                    break;
+                  }
+                }
+              }
+
+              if (playerHasMiddleCard ||
+                  playerHasEnemyBaseCard ||
+                  scoutCanSee) {
+                canAttackBase = true;
+                break;
+              }
             }
           }
         }
