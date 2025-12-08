@@ -47,7 +47,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   final SimpleAI _ai = SimpleAI();
   final AuthService _authService = AuthService();
   final DeckStorageService _deckStorage = DeckStorageService();
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  FirebaseFirestore? _firestore;
 
   String? _playerId;
   String? _playerName;
@@ -125,6 +125,11 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   @override
   void initState() {
     super.initState();
+    try {
+      _firestore = FirebaseFirestore.instance;
+    } catch (e) {
+      debugPrint('TestMatchScreen: Firebase not available ($e)');
+    }
     _initPlayerAndMatch();
   }
 
@@ -167,7 +172,9 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   /// Call this after every action (place, move, attack, end turn)
   /// Only syncs if it's currently our turn (we're the authority)
   void _syncOnlineState() {
-    if (_onlineGameManager == null || _matchManager.currentMatch == null)
+    if (_onlineGameManager == null ||
+        _matchManager.currentMatch == null ||
+        _firestore == null)
       return;
 
     // Only sync if it's our turn - we're the authority during our turn
@@ -2363,11 +2370,12 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
 
   /// Initialize online multiplayer match
   Future<void> _initOnlineMatch() async {
-    if (widget.onlineMatchId == null || _playerId == null) return;
+    if (widget.onlineMatchId == null || _playerId == null || _firestore == null)
+      return;
 
     try {
       // Get match data to determine which player we are
-      final matchDoc = await _firestore
+      final matchDoc = await _firestore!
           .collection('matches')
           .doc(widget.onlineMatchId)
           .get();
@@ -2472,7 +2480,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
 
       // Store hero selection in Firebase (deck will be synced after match starts)
       final myKey = _amPlayer1 ? 'player1' : 'player2';
-      await _firestore.collection('matches').doc(widget.onlineMatchId).update({
+      await _firestore!.collection('matches').doc(widget.onlineMatchId).update({
         '$myKey.heroId': selected.id,
       });
 
@@ -3243,13 +3251,13 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
 
   /// Listen to Firebase match document updates
   void _listenToMatchUpdates() {
-    if (widget.onlineMatchId == null) return;
+    if (widget.onlineMatchId == null || _firestore == null) return;
 
     debugPrint(
       '📡 Starting Firebase listener for match: ${widget.onlineMatchId}',
     );
 
-    _matchListener = _firestore
+    _matchListener = _firestore!
         .collection('matches')
         .doc(widget.onlineMatchId)
         .snapshots()
@@ -3353,7 +3361,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         }
 
         // Store all board setup in Firebase
-        _firestore.collection('matches').doc(widget.onlineMatchId).update({
+        _firestore!.collection('matches').doc(widget.onlineMatchId).update({
           'boardSetup': {
             'firstPlayerId': _firstPlayerId,
             'relicColumn': _predefinedRelicColumn,
@@ -3961,7 +3969,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
 
       // Upload my placements to Firebase
       final myKey = _amPlayer1 ? 'player1' : 'player2';
-      await _firestore.collection('matches').doc(widget.onlineMatchId).update({
+      await _firestore!.collection('matches').doc(widget.onlineMatchId).update({
         '$myKey.submitted': true,
         '$myKey.stagedCards': stagedCardsData,
       });
@@ -4104,11 +4112,13 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     String actionType,
     Map<String, dynamic> actionData,
   ) async {
-    if (!_isOnlineMode || widget.onlineMatchId == null) return;
+    if (widget.onlineMatchId == null || _firestore == null) return;
 
     try {
-      // Add action to action log
-      await _firestore.collection('matches').doc(widget.onlineMatchId).update({
+      final docRef = _firestore!
+          .collection('matches')
+          .doc(widget.onlineMatchId);
+      await docRef.update({
         'tyc3Actions': FieldValue.arrayUnion([
           {
             'type': actionType,
@@ -4288,7 +4298,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       );
 
       // Reset submitted flags and staged cards for next turn
-      await _firestore.collection('matches').doc(widget.onlineMatchId).update({
+      await _firestore!.collection('matches').doc(widget.onlineMatchId).update({
         'player1.submitted': false,
         'player2.submitted': false,
         'player1.stagedCards': {},
