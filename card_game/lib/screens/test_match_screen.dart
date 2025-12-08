@@ -4049,7 +4049,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         );
       }
 
-      await _firestore
+      await _firestore!
           .collection('matches')
           .doc(widget.onlineMatchId)
           .update(updateData);
