@@ -815,121 +815,6 @@ class CombatResolver {
     // UNIT COUNTERS (Rock-Paper-Scissors)
     // =========================================================================
     final isPikeman = attacker.abilities.contains('pikeman');
-  final isCavalry = attacker.abilities.contains('cavalry');
-  // final isArcher = attacker.abilities.contains('archer'); // Unused
-  final isRanged = attacker.isRanged; // Checks 'ranged' ability
-
-  final targetIsCavalry = target.abilities.contains('cavalry');
-  final targetIsArcher = target.abilities.contains('archer');
-  final targetIsShieldGuard = target.abilities.contains('shield_guard');
-
-  // 1. Pikeman > Cavalry (+4 DMG)
-  if (isPikeman && targetIsCavalry) {
-    damage += 4;
-    modifiers.add('+4 vs Cavalry');
-  }
-
-  // 2. Cavalry > Archer (+4 DMG)
-  if (isCavalry && targetIsArcher) {
-    damage += 4;
-    modifiers.add('+4 vs Archer');
-  }
-
-  // 3. Shield Guard vs Ranged (-2 DMG)
-  if (isRanged && targetIsShieldGuard) {
-    damage -= 2;
-    modifiers.add('-2 Shield Guard');
-  }
-  // =========================================================================
-
-  // Scale damage based on attacker's current HP (soft floor 50%-100%)
-  final attackerMaxHp = attacker.health;
-  if (attackerMaxHp > 0) {
-    final attackerHpRatio = attacker.currentHealth / attackerMaxHp;
-    final hpMultiplier = 0.5 + 0.5 * attackerHpRatio;
-    damage = (damage * hpMultiplier).ceil();
-  }
-
-  // Deal damage to target
-  final targetHpBefore = target.currentHealth;
-  final targetDied = target.takeDamage(damage);
-  final targetHpAfter = target.currentHealth;
-
-  // Log the attack
-  combatLog.add(
-    BattleLogEntry(
-      tick: 0, // TYC3 doesn't use ticks
-      laneDescription: 'TYC3',
-      action: '⚔️ ${attacker.name} ATTACKS',
-      details:
-          '${target.name} takes $damage damage | HP: $targetHpBefore → $targetHpAfter${targetDied ? " 💀" : ""}',
-      isImportant: targetDied,
-      level: targetDied ? LogLevel.important : LogLevel.normal,
-      damageDealt: damage,
-      attackerName: attacker.name,
-      targetName: target.name,
-      targetHpBefore: targetHpBefore,
-      targetHpAfter: targetHpAfter,
-      targetDied: targetDied,
-    ),
-  );
-
-  // Check for retaliation (melee attackers always receive retaliation, even from dying units)
-  // This represents simultaneous combat - both units strike at the same time
-  int retaliationDamage = 0;
-  bool attackerDied = false;
-
-  // Retaliation happens if attacker is melee (not ranged) and target has damage > 0
-  // Note: We use target.damage (base stat) not currentHealth since target retaliates before dying
-  final List<String> retModifiers = [];
-  if (!attacker.isRanged && target.damage > 0) {
-    // Target retaliates
-    retaliationDamage = target.damage;
-
-    // Apply target's fury
-    final furyBonus = _getFuryBonus(target);
-    // Apply fury bonus
-    final furyBonus = _getFuryBonus(attacker);
-    if (furyBonus > 0) {
-      damage += furyBonus;
-      modifiers.add('+$furyBonus Fury');
-    }
-
-    // Apply terrain buff for attacker (+1 if attacker's element matches tile terrain)
-    int attackerTerrainBonus = 0;
-    if (tileTerrain != null &&
-        attacker.element != null &&
-        attacker.element!.toLowerCase() == tileTerrain.toLowerCase()) {
-      attackerTerrainBonus = 1;
-      damage += attackerTerrainBonus;
-      modifiers.add('+1 Terrain');
-    }
-
-    // Apply hero ability damage boost (player only)
-    if (isPlayerAttacking && playerDamageBoost > 0) {
-      damage += playerDamageBoost;
-      modifiers.add('+$playerDamageBoost Hero Boost');
-    }
-
-    // Apply lane damage bonus if set
-    if (isPlayerAttacking) {
-      final totalBonus = _playerLaneDamageBonus + laneDamageBonus;
-      if (totalBonus > 0) {
-        damage += totalBonus;
-        modifiers.add('+$totalBonus Lane Buff');
-      }
-    } else {
-      final totalBonus = _opponentLaneDamageBonus + laneDamageBonus;
-      if (totalBonus > 0) {
-        damage += totalBonus;
-        modifiers.add('+$totalBonus Lane Buff');
-      }
-    }
-
-    // =========================================================================
-    // UNIT COUNTERS (Rock-Paper-Scissors)
-    // =========================================================================
-    final isPikeman = attacker.abilities.contains('pikeman');
     final isCavalry = attacker.abilities.contains('cavalry');
     // final isArcher = attacker.abilities.contains('archer'); // Unused
     final isRanged = attacker.isRanged; // Checks 'ranged' ability
@@ -1058,8 +943,9 @@ class CombatResolver {
       final attackerShieldBonus = isPlayerAttacking
           ? _playerLaneShieldBonus
           : _opponentLaneShieldBonus;
+      final effectiveShieldBonus = attackerShieldBonus + laneShieldBonus;
       retaliationDamage =
-          (retaliationDamage - attackerShield - attackerShieldBonus).clamp(
+          (retaliationDamage - attackerShield - effectiveShieldBonus).clamp(
             0,
             retaliationDamage,
           );
@@ -1236,7 +1122,7 @@ class CombatResolver {
     final totalShield = targetShield + effectiveShieldBonus;
     damage = (damage - totalShield).clamp(0, damage);
 
-    // Predict target death
+    // Predict target death (no side effects)
     final targetHpAfter = (target.currentHealth - damage).clamp(
       0,
       target.health,
@@ -1302,30 +1188,75 @@ class CombatResolver {
       final attackerShieldBonus = isPlayerAttacking
           ? _playerLaneShieldBonus
           : _opponentLaneShieldBonus;
+      final effectiveShieldBonus = attackerShieldBonus + laneShieldBonus;
       retaliationDamage =
-          (retaliationDamage - attackerShield - attackerShieldBonus).clamp(
+          (retaliationDamage - attackerShield - effectiveShieldBonus).clamp(
             0,
             retaliationDamage,
           );
 
+      // Calculate retaliation damage (PREVIEW ONLY - no side effects)
       attackerHpAfter = (attacker.currentHealth - retaliationDamage).clamp(
         0,
         attacker.health,
       );
       attackerDied = attackerHpAfter <= 0;
+
+      // Log retaliation (preview)
+      combatLog.add(
+        BattleLogEntry(
+          tick: 0,
+          laneDescription: 'TYC3',
+          action: '↩️ ${target.name} RETALIATES (Preview)',
+          details:
+              '${attacker.name} takes $retaliationDamage damage | HP: ${attacker.currentHealth} → $attackerHpAfter${attackerDied ? " 💀" : ""}',
+          isImportant: attackerDied,
+          level: attackerDied ? LogLevel.important : LogLevel.normal,
+          damageDealt: retaliationDamage,
+          attackerName: target.name,
+          targetName: attacker.name,
+          targetHpBefore: attacker.currentHealth,
+          targetHpAfter: attackerHpAfter,
+          targetDied: attackerDied,
+        ),
+      );
+    } else if (!targetDied && attacker.isRanged) {
+      // Log that ranged attack avoided retaliation
+      combatLog.add(
+        BattleLogEntry(
+          tick: 0,
+          laneDescription: 'TYC3',
+          action: '🏹 RANGED - No retaliation',
+          details:
+              '${attacker.name} is ranged, ${target.name} cannot retaliate',
+          level: LogLevel.verbose,
+        ),
+      );
     }
 
-    // Add thorns damageR
-    int thornsDamage = 0;
-    if (!attackerDied && !targetDied) {
-      thornsDamage = _getThornsDamage(target);
-      if (thornsDamage > 0) {
-        attackerHpAfter = (attackerHpAfter - thornsDamage).clamp(
+    // Apply thorns damage if target has thorns ability
+    int actualThornsDamage = 0;
+    if (!attackerDied && target.isAlive) {
+      actualThornsDamage = _getThornsDamage(target);
+      if (actualThornsDamage > 0) {
+        // PREVIEW ONLY - no side effects
+        attackerHpAfter = (attackerHpAfter - actualThornsDamage).clamp(
           0,
           attacker.health,
         );
         attackerDied = attackerHpAfter <= 0;
-        // Don't add thorns to retaliation - keep them separate
+
+        combatLog.add(
+          BattleLogEntry(
+            tick: 0,
+            laneDescription: 'TYC3',
+            action: '🌿 ${target.name} THORNS (Preview)',
+            details:
+                '${attacker.name} takes $actualThornsDamage thorns damage | HP: ${attacker.currentHealth} → $attackerHpAfter${attackerDied ? " 💀" : ""}',
+            isImportant: attackerDied,
+            level: attackerDied ? LogLevel.important : LogLevel.normal,
+          ),
+        );
       }
     }
 
@@ -1333,7 +1264,7 @@ class CombatResolver {
       success: true,
       damageDealt: damage,
       retaliationDamage: retaliationDamage,
-      thornsDamage: thornsDamage,
+      thornsDamage: actualThornsDamage,
       targetDied: targetDied,
       attackerDied: attackerDied,
       message: 'Preview: ${attacker.name} → $damage dmg → ${target.name}',
