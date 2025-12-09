@@ -159,6 +159,27 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
 
                       const SizedBox(height: 20),
 
+                      // Play Online Chess Mode button
+                      _buildMenuButton(
+                        icon: Icons.timer,
+                        label: 'PLAY ONLINE CHESS MODE',
+                        sublabel: '5 minute cumulative timer',
+                        color: Colors.indigo,
+                        onTap: () {
+                          // Pass chess mode flag to matchmaking
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const MatchmakingScreen(
+                                isChessTimerMode: true,
+                              ),
+                            ),
+                          );
+                        },
+                        enabled: true,
+                      ),
+
+                      const SizedBox(height: 20),
+
                       // Deck Editor button
                       _buildMenuButton(
                         icon: Icons.style,
@@ -326,8 +347,8 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
     return GestureDetector(
       onTap: enabled ? onTap : null,
       child: Container(
-        width: 280,
-        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+        width: 350,
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 10),
         decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: enabled

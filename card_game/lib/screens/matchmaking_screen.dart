@@ -6,7 +6,9 @@ import 'test_match_screen.dart';
 
 /// Screen that handles matchmaking queue
 class MatchmakingScreen extends StatefulWidget {
-  const MatchmakingScreen({super.key});
+  final bool isChessTimerMode;
+
+  const MatchmakingScreen({super.key, this.isChessTimerMode = false});
 
   @override
   State<MatchmakingScreen> createState() => _MatchmakingScreenState();
@@ -177,6 +179,7 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> {
         'status': 'waiting', // waiting for both players to be ready
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
+        'isChessTimerMode': widget.isChessTimerMode,
         'player1': {
           'userId': myId,
           'displayName': myName,

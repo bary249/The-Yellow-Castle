@@ -509,6 +509,11 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         _onlineGameManager!.syncState(_matchManager.currentMatch!);
       }
 
+      // In Chess Mode, keep timer running to tick opponent time
+      if (_useChessTimer) {
+        _startTurnTimer();
+      }
+
       // Timer will be managed by stream listener when turn changes
       setState(() {});
       return;
@@ -4224,6 +4229,10 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
           _startTurnTimer();
         } else {
           debugPrint('🎮 It is opponent turn - waiting for their state');
+          // In Chess Mode, timer runs constantly to tick opponent clock
+          if (_useChessTimer) {
+            _startTurnTimer();
+          }
         }
       } else {
         // Single player: Start turn timer if it's player's turn
