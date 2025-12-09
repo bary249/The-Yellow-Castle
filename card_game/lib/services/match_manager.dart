@@ -38,11 +38,13 @@ class MatchManager {
       newState.history.addAll(_currentMatch!.history);
     }
 
-    // Check if a turn has passed
+    // Check if a turn has passed OR game over state reached (to capture final frame)
     if (_currentMatch != null &&
-        newState.turnNumber > _currentMatch!.turnNumber) {
-      // Capture snapshot of the NEW state (which is the state at the start of this new turn)
-      // This effectively captures the result of the opponent's turn that just finished
+        (newState.turnNumber > _currentMatch!.turnNumber ||
+            (newState.isGameOver && !_currentMatch!.isGameOver))) {
+      // Capture snapshot of the NEW state
+      // If turn changed: captures result of opponent's turn
+      // If game over: captures final board state
       newState.history.add(
         TurnSnapshot.fromState(
           matchState: newState,
@@ -2627,6 +2629,15 @@ class MatchManager {
           ? _currentMatch!.player.id
           : _currentMatch!.opponent.id;
       _log('🏆 GAME OVER! ${isPlayerAttacking ? "Player" : "Opponent"} wins!');
+
+      // Capture final snapshot for replay
+      _currentMatch!.history.add(
+        TurnSnapshot.fromState(
+          matchState: _currentMatch!,
+          playerHand: _currentMatch!.player.hand,
+          opponentHand: _currentMatch!.opponent.hand,
+        ),
+      );
     }
 
     // Store combat result for PvP sync (so opponent can see the base attack result)
