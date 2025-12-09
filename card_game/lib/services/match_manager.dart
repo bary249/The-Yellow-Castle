@@ -1,11 +1,12 @@
 import '../models/match_state.dart';
 import '../models/player.dart';
+import '../models/tile.dart';
+import '../models/turn_snapshot.dart';
 import '../models/deck.dart';
 import '../models/lane.dart';
 import '../models/card.dart';
 import '../models/hero.dart';
 import '../models/game_board.dart';
-import '../models/tile.dart';
 import 'combat_resolver.dart';
 
 /// Coordinates the entire match flow
@@ -1344,6 +1345,15 @@ class MatchManager {
       '📍 Turn 1 - ${_currentMatch!.isFirstTurn ? "First turn (1 card limit)" : ""}',
     );
 
+    // Capture initial state for replay (Turn 1 start)
+    _currentMatch!.history.add(
+      TurnSnapshot.fromState(
+        matchState: _currentMatch!,
+        playerHand: _currentMatch!.player.hand,
+        opponentHand: _currentMatch!.opponent.hand,
+      ),
+    );
+
     onTurnChanged?.call(firstPlayerId);
   }
 
@@ -1530,6 +1540,17 @@ class MatchManager {
     if (wasFirstTurn) {
       _currentMatch!.isFirstTurn = false;
       _log('📍 First turn phase complete');
+    }
+
+    // Capture state for replay before switching turns
+    if (_currentMatch != null) {
+      _currentMatch!.history.add(
+        TurnSnapshot.fromState(
+          matchState: _currentMatch!,
+          playerHand: _currentMatch!.player.hand,
+          opponentHand: _currentMatch!.opponent.hand,
+        ),
+      );
     }
 
     // Switch active player

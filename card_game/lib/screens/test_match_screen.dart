@@ -11,6 +11,8 @@ import '../models/match_state.dart';
 import '../models/lane.dart';
 import '../models/card.dart';
 import '../models/hero.dart';
+import '../models/turn_snapshot.dart';
+
 import '../models/tile.dart';
 import '../models/game_board.dart';
 import '../data/hero_library.dart';
@@ -122,6 +124,11 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   List<GameCard> _getStagedCards(int row, int col) {
     return _stagedCards[_tileKey(row, col)] ?? [];
   }
+
+  // Replay mode state
+  bool _isReplayMode = false;
+  int _replayTurnIndex = 0;
+  TurnSnapshot? _currentReplaySnapshot;
 
   @override
   void initState() {
@@ -995,6 +1002,55 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     if (mounted) {
       setState(() {});
     }
+  }
+
+  /// Start replay mode
+  void _startReplay() {
+    final match = _matchManager.currentMatch;
+    if (match == null || match.history.isEmpty) {
+      _showError('No replay history available');
+      return;
+    }
+
+    setState(() {
+      _isReplayMode = true;
+      _replayTurnIndex = 0;
+      _currentReplaySnapshot = match.history.first;
+    });
+  }
+
+  /// Go to next replay turn
+  void _nextReplayTurn() {
+    final match = _matchManager.currentMatch;
+    if (match == null || !_isReplayMode) return;
+
+    if (_replayTurnIndex < match.history.length - 1) {
+      setState(() {
+        _replayTurnIndex++;
+        _currentReplaySnapshot = match.history[_replayTurnIndex];
+      });
+    }
+  }
+
+  /// Go to previous replay turn
+  void _prevReplayTurn() {
+    final match = _matchManager.currentMatch;
+    if (match == null || !_isReplayMode) return;
+
+    if (_replayTurnIndex > 0) {
+      setState(() {
+        _replayTurnIndex--;
+        _currentReplaySnapshot = match.history[_replayTurnIndex];
+      });
+    }
+  }
+
+  /// Exit replay mode
+  void _exitReplay() {
+    setState(() {
+      _isReplayMode = false;
+      _currentReplaySnapshot = null;
+    });
   }
 
   /// Show battle result dialog with animation
@@ -4447,6 +4503,11 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // If in replay mode, render from snapshot
+    if (_isReplayMode && _currentReplaySnapshot != null) {
+      return _buildReplayUI();
+    }
+
     final match = _matchManager.currentMatch;
 
     // Show waiting screen for online mode while waiting for opponent's hero
@@ -4580,6 +4641,89 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                 heroTag: 'skip',
               )
             : _buildSubmitButton(match),
+      ),
+    );
+  }
+
+  Widget _buildReplayUI() {
+    final snapshot = _currentReplaySnapshot!;
+    final board = snapshot.boardState;
+
+    // Create a temporary MatchState to reuse existing UI builders
+    final replayMatch = MatchState(
+      player: _matchManager.currentMatch!.player, // Keep original players
+      opponent: _matchManager.currentMatch!.opponent,
+      board: board,
+      currentPhase: MatchPhase.gameOver,
+      turnNumber: snapshot.turnNumber,
+    )..activePlayerId = snapshot.activePlayerId;
+
+    // Use existing board view but with replay controls overlay
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Replay - Turn ${snapshot.turnNumber}'),
+        backgroundColor: Colors.blueGrey[900],
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.close),
+            onPressed: _exitReplay,
+            tooltip: 'Exit Replay',
+          ),
+        ],
+      ),
+      body: Stack(
+        children: [
+          _buildMatchView(replayMatch),
+
+          // Replay Control Bar
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              color: Colors.black.withOpacity(0.8),
+              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.skip_previous, size: 32),
+                    color: Colors.white,
+                    onPressed: _replayTurnIndex > 0 ? _prevReplayTurn : null,
+                  ),
+                  const SizedBox(width: 24),
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Turn ${snapshot.turnNumber}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        '${_replayTurnIndex + 1} / ${_matchManager.currentMatch!.history.length}',
+                        style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(width: 24),
+                  IconButton(
+                    icon: const Icon(Icons.skip_next, size: 32),
+                    color: Colors.white,
+                    onPressed:
+                        _replayTurnIndex <
+                            _matchManager.currentMatch!.history.length - 1
+                        ? _nextReplayTurn
+                        : null,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -4746,6 +4890,24 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
           const SizedBox(height: 20),
           Text('Total Turns: ${match.turnNumber}'),
           const SizedBox(height: 30),
+          // Replay Button
+          if (match.history.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: ElevatedButton.icon(
+                onPressed: _startReplay,
+                icon: const Icon(Icons.history),
+                label: const Text('WATCH REPLAY'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue[700],
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
+                ),
+              ),
+            ),
           // Continue button - returns result to campaign
           ElevatedButton.icon(
             onPressed: () {

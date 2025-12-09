@@ -4,6 +4,7 @@ import 'game_board.dart';
 import 'tile.dart';
 import 'relic.dart';
 import '../data/hero_library.dart';
+import 'turn_snapshot.dart';
 
 /// Serializable combat result for syncing between players in PvP
 /// This allows the "resting" player to see combat results from opponent's attacks
@@ -136,6 +137,9 @@ enum MatchPhase {
 class MatchState {
   final Player player;
   final Player opponent;
+
+  /// Match history for replay
+  final List<TurnSnapshot> history = [];
 
   /// Legacy lane system (kept for backward compatibility during migration).
   final List<Lane> lanes;
