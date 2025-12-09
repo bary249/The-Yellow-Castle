@@ -3086,6 +3086,52 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     );
   }
 
+  void _showCombatLogDialog(Gravestone gravestone) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.sentiment_very_dissatisfied, color: Colors.grey),
+            const SizedBox(width: 8),
+            Expanded(child: Text('R.I.P. ${gravestone.cardName}')),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Battle Summary:',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.grey[200],
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: Colors.grey[400]!),
+              ),
+              child: Text(gravestone.deathLog),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Time: ${gravestone.timestamp.hour}:${gravestone.timestamp.minute.toString().padLeft(2, '0')}:${gravestone.timestamp.second.toString().padLeft(2, '0')}',
+              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// Show celebratory dialog when a relic is discovered
   void _showRelicDiscoveredDialog(
     String playerName,
@@ -6296,6 +6342,52 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                     ),
 
                   const SizedBox(height: 2),
+
+                  // Gravestones (destroyed cards)
+                  if (tile.gravestones.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Wrap(
+                        spacing: 2,
+                        runSpacing: 2,
+                        alignment: WrapAlignment.center,
+                        children: tile.gravestones.map((gs) {
+                          return GestureDetector(
+                            onTap: () => _showCombatLogDialog(gs),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                                vertical: 1,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.grey[300],
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: Colors.grey[500]!),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    Icons.sentiment_very_dissatisfied,
+                                    size: 10,
+                                    color: Colors.grey,
+                                  ),
+                                  const SizedBox(width: 2),
+                                  Text(
+                                    gs.cardName,
+                                    style: TextStyle(
+                                      fontSize: 9,
+                                      color: Colors.grey[800],
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
 
                   // Cards on this tile
                   if (cardsToShow.isEmpty)

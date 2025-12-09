@@ -2245,6 +2245,15 @@ class MatchManager {
 
     if (result.targetDied) {
       _log('   💀 ${target.name} destroyed!');
+
+      // Create gravestone with battle summary
+      final deathLog = _combatResolver.combatLog.isNotEmpty
+          ? _combatResolver.combatLog.last.combatSummary
+          : 'Died in battle';
+      targetTile.addGravestone(
+        Gravestone(cardName: target.name, deathLog: deathLog),
+      );
+
       // Remove dead card from tile
       targetTile.cards.remove(target);
 
@@ -2301,6 +2310,15 @@ class MatchManager {
       );
       if (result.attackerDied) {
         _log('   💀 ${attacker.name} destroyed!');
+
+        // Create gravestone with battle summary
+        final deathLog = _combatResolver.combatLog.isNotEmpty
+            ? _combatResolver.combatLog.last.combatSummary
+            : 'Died in battle';
+        attackerTile.addGravestone(
+          Gravestone(cardName: attacker.name, deathLog: deathLog),
+        );
+
         // Remove dead attacker from tile
         attackerTile.cards.remove(attacker);
       }

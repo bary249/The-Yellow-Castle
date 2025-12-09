@@ -7,6 +7,33 @@ enum TileOwner {
   neutral, // Middle row starts neutral
 }
 
+/// Represents a destroyed card's remains on the battlefield.
+class Gravestone {
+  final String cardName;
+  final String deathLog; // Summary of how it died
+  final DateTime timestamp;
+
+  Gravestone({
+    required this.cardName,
+    required this.deathLog,
+    DateTime? timestamp,
+  }) : timestamp = timestamp ?? DateTime.now();
+
+  Map<String, dynamic> toJson() => {
+    'cardName': cardName,
+    'deathLog': deathLog,
+    'timestamp': timestamp.toIso8601String(),
+  };
+
+  factory Gravestone.fromJson(Map<String, dynamic> json) {
+    return Gravestone(
+      cardName: json['cardName'] as String,
+      deathLog: json['deathLog'] as String,
+      timestamp: DateTime.parse(json['timestamp'] as String),
+    );
+  }
+}
+
 /// Represents a single tile on the 3×3 game board.
 /// TYC3: Updated for 4-card capacity (2×2 grid per tile)
 ///
@@ -44,12 +71,16 @@ class Tile {
   /// Layout: [0]=front-left, [1]=front-right, [2]=back-left, [3]=back-right
   final List<GameCard> cards;
 
+  /// Gravestones of cards destroyed on this tile.
+  final List<Gravestone> gravestones;
+
   Tile({
     required this.row,
     required this.column,
     this.terrain,
     required this.owner,
-  }) : cards = [];
+  }) : cards = [],
+       gravestones = [];
 
   /// Check if this tile is in the player's base row.
   bool get isPlayerBase => row == 2;
@@ -140,6 +171,11 @@ class Tile {
     return true;
   }
 
+  /// Add a gravestone to this tile.
+  void addGravestone(Gravestone gravestone) {
+    gravestones.add(gravestone);
+  }
+
   /// Remove a specific card from this tile.
   bool removeCard(GameCard card) {
     return cards.remove(card);
@@ -185,6 +221,7 @@ class Tile {
     'terrain': terrain,
     'owner': owner.name,
     'cards': cards.map((c) => c.toJson()).toList(),
+    'gravestones': gravestones.map((g) => g.toJson()).toList(),
   };
 
   /// Create from JSON
@@ -201,6 +238,10 @@ class Tile {
     final cardsData = json['cards'] as List<dynamic>? ?? [];
     for (final cardJson in cardsData) {
       tile.cards.add(GameCard.fromJson(cardJson as Map<String, dynamic>));
+    }
+    final gravestonesData = json['gravestones'] as List<dynamic>? ?? [];
+    for (final gsJson in gravestonesData) {
+      tile.gravestones.add(Gravestone.fromJson(gsJson as Map<String, dynamic>));
     }
     return tile;
   }
