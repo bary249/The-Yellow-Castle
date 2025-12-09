@@ -2247,9 +2247,7 @@ class MatchManager {
       _log('   💀 ${target.name} destroyed!');
 
       // Create gravestone with battle summary
-      final deathLog = _combatResolver.combatLog.isNotEmpty
-          ? _combatResolver.combatLog.last.detailedCombatSummary
-          : 'Died in battle';
+      final deathLog = result.getDetailedSummary(attacker.name, target.name);
       targetTile.addGravestone(
         Gravestone(cardName: target.name, deathLog: deathLog),
       );
@@ -2312,9 +2310,7 @@ class MatchManager {
         _log('   💀 ${attacker.name} destroyed!');
 
         // Create gravestone with battle summary
-        final deathLog = _combatResolver.combatLog.isNotEmpty
-            ? _combatResolver.combatLog.last.detailedCombatSummary
-            : 'Died in battle';
+        final deathLog = result.getDetailedSummary(attacker.name, target.name);
         attackerTile.addGravestone(
           Gravestone(cardName: attacker.name, deathLog: deathLog),
         );

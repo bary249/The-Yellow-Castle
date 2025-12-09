@@ -24,6 +24,38 @@ class AttackResult {
     this.modifiers = const [],
     this.retaliationModifiers = const [],
   });
+
+  /// Generate a detailed summary of the combat interaction
+  String getDetailedSummary(String attackerName, String targetName) {
+    final buffer = StringBuffer();
+
+    // Attack Phase
+    buffer.writeln('⚔️ Attack: $attackerName → $targetName');
+    buffer.writeln('Damage Dealt: $damageDealt');
+    if (modifiers.isNotEmpty) {
+      for (final mod in modifiers) {
+        buffer.writeln(' • $mod');
+      }
+    }
+    if (targetDied) buffer.writeln(' 💀 Target Destroyed!');
+
+    // Retaliation Phase (if applicable)
+    if (retaliationDamage > 0 || retaliationModifiers.isNotEmpty) {
+      buffer.writeln('\n🛡️ Retaliation: $targetName → $attackerName');
+      buffer.writeln('Damage Received: $retaliationDamage');
+      if (retaliationModifiers.isNotEmpty) {
+        for (final mod in retaliationModifiers) {
+          buffer.writeln(' • $mod');
+        }
+      }
+      if (attackerDied) buffer.writeln(' 💀 Attacker Destroyed!');
+    } else if (!targetDied && !attackerDied && message.contains('ranged')) {
+      // Ranged attack with no retaliation
+      buffer.writeln('\n🛡️ No Retaliation (Ranged)');
+    }
+
+    return buffer.toString().trim();
+  }
 }
 
 /// Log importance levels
