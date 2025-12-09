@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math';
+import 'package:flame_audio/flame_audio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
@@ -160,7 +161,8 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
 
         // Play ticking sound in last 10 seconds
         if (_turnSecondsRemaining <= 10 && _turnSecondsRemaining > 0) {
-          SystemSound.play(SystemSoundType.click);
+          // SystemSound.play(SystemSoundType.click);
+          FlameAudio.play('ticking_clock.mp3');
         }
 
         if (_turnSecondsRemaining <= 0) {
