@@ -2270,7 +2270,11 @@ class MatchManager {
       // Create gravestone with battle summary
       final deathLog = result.getDetailedSummary(attacker.name, target.name);
       targetTile.addGravestone(
-        Gravestone(cardName: target.name, deathLog: deathLog),
+        Gravestone(
+          cardName: target.name,
+          deathLog: deathLog,
+          ownerId: target.ownerId,
+        ),
       );
 
       // Remove dead card from tile
@@ -2333,7 +2337,11 @@ class MatchManager {
         // Create gravestone with battle summary
         final deathLog = result.getDetailedSummary(attacker.name, target.name);
         attackerTile.addGravestone(
-          Gravestone(cardName: attacker.name, deathLog: deathLog),
+          Gravestone(
+            cardName: attacker.name,
+            deathLog: deathLog,
+            ownerId: attacker.ownerId,
+          ),
         );
 
         // Remove dead attacker from tile

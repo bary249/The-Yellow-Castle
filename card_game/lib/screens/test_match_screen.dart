@@ -6519,6 +6519,17 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                         runSpacing: 2,
                         alignment: WrapAlignment.center,
                         children: tile.gravestones.map((gs) {
+                          final isPlayerCard = gs.ownerId == match.player.id;
+                          final chipColor = isPlayerCard
+                              ? Colors.blue[50]!
+                              : Colors.red[50]!;
+                          final borderColor = isPlayerCard
+                              ? Colors.blue[300]!
+                              : Colors.red[300]!;
+                          final textColor = isPlayerCard
+                              ? Colors.blue[900]!
+                              : Colors.red[900]!;
+
                           return GestureDetector(
                             onTap: () => _showCombatLogDialog(gs),
                             child: Container(
@@ -6527,24 +6538,24 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                                 vertical: 1,
                               ),
                               decoration: BoxDecoration(
-                                color: Colors.grey[300],
+                                color: chipColor,
                                 borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: Colors.grey[500]!),
+                                border: Border.all(color: borderColor),
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  const Icon(
+                                  Icon(
                                     Icons.sentiment_very_dissatisfied,
                                     size: 10,
-                                    color: Colors.grey,
+                                    color: borderColor,
                                   ),
                                   const SizedBox(width: 2),
                                   Text(
                                     gs.cardName,
                                     style: TextStyle(
                                       fontSize: 9,
-                                      color: Colors.grey[800],
+                                      color: textColor,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),

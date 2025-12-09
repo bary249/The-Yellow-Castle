@@ -12,17 +12,20 @@ class Gravestone {
   final String cardName;
   final String deathLog; // Summary of how it died
   final DateTime timestamp;
+  final String? ownerId; // Owner of the destroyed card
 
   Gravestone({
     required this.cardName,
     required this.deathLog,
     DateTime? timestamp,
+    this.ownerId,
   }) : timestamp = timestamp ?? DateTime.now();
 
   Map<String, dynamic> toJson() => {
     'cardName': cardName,
     'deathLog': deathLog,
     'timestamp': timestamp.toIso8601String(),
+    'ownerId': ownerId,
   };
 
   factory Gravestone.fromJson(Map<String, dynamic> json) {
@@ -30,6 +33,7 @@ class Gravestone {
       cardName: json['cardName'] as String,
       deathLog: json['deathLog'] as String,
       timestamp: DateTime.parse(json['timestamp'] as String),
+      ownerId: json['ownerId'] as String?,
     );
   }
 }
