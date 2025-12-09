@@ -165,4 +165,29 @@ class Player {
     }
     return player;
   }
+
+  /// Create a deep copy of the player state
+  Player copy() {
+    final newPlayer = Player(
+      id: id,
+      name: name,
+      deck: Deck(
+        id: deck.id,
+        name: deck.name,
+        cards: [],
+      ), // Deck copy handled separately if needed
+      isHuman: isHuman,
+      baseHP: baseHP,
+      gold: gold,
+      attunedElement: attunedElement,
+      hero: hero?.copy(),
+    );
+
+    // Copy hand
+    for (final card in hand) {
+      newPlayer.hand.add(card.copy());
+    }
+
+    return newPlayer;
+  }
 }

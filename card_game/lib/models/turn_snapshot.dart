@@ -1,36 +1,28 @@
 import '../models/game_board.dart';
-import '../models/card.dart';
 import '../models/match_state.dart';
 import '../models/tile.dart';
+import '../models/player.dart';
 
 /// Represents a snapshot of the game state at the end of a turn
 class TurnSnapshot {
   final int turnNumber;
   final String activePlayerId;
   final GameBoard boardState;
-  final List<GameCard> playerHand;
-  final List<GameCard> opponentHand;
-  final int playerCrystal;
-  final int opponentCrystal;
+  final Player playerState;
+  final Player opponentState;
   final SyncedCombatResult? combatResult; // Combat that happened this turn
 
   TurnSnapshot({
     required this.turnNumber,
     required this.activePlayerId,
     required this.boardState,
-    required this.playerHand,
-    required this.opponentHand,
-    required this.playerCrystal,
-    required this.opponentCrystal,
+    required this.playerState,
+    required this.opponentState,
     this.combatResult,
   });
 
   /// Create a deep copy of the current state
-  factory TurnSnapshot.fromState({
-    required MatchState matchState,
-    required List<GameCard> playerHand,
-    required List<GameCard> opponentHand,
-  }) {
+  factory TurnSnapshot.fromState({required MatchState matchState}) {
     // Deep copy the board
     final boardCopy = GameBoard.fromTerrains(matchState.board.toTerrainGrid());
 
@@ -64,10 +56,8 @@ class TurnSnapshot {
       turnNumber: matchState.turnNumber,
       activePlayerId: matchState.activePlayerId ?? '',
       boardState: boardCopy,
-      playerHand: playerHand.map((c) => c.copy()).toList(),
-      opponentHand: opponentHand.map((c) => c.copy()).toList(),
-      playerCrystal: matchState.player.crystalHP,
-      opponentCrystal: matchState.opponent.crystalHP,
+      playerState: matchState.player.copy(),
+      opponentState: matchState.opponent.copy(),
       combatResult: matchState.lastCombatResult,
     );
   }

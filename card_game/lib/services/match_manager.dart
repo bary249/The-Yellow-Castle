@@ -42,25 +42,12 @@ class MatchManager {
     if (_currentMatch != null &&
         (newState.turnNumber > _currentMatch!.turnNumber ||
             (newState.isGameOver && !_currentMatch!.isGameOver))) {
-      // Capture snapshot of the NEW state
-      // If turn changed: captures result of opponent's turn
-      // If game over: captures final board state
-      newState.history.add(
-        TurnSnapshot.fromState(
-          matchState: newState,
-          playerHand: newState.player.hand,
-          opponentHand: newState.opponent.hand,
-        ),
-      );
+      // Capture snapshot of the NEW state (which is the state at the start of this new turn)
+      // This effectively captures the result of the opponent's turn that just finished
+      newState.history.add(TurnSnapshot.fromState(matchState: newState));
     } else if (_currentMatch == null) {
       // First sync (start of match)
-      newState.history.add(
-        TurnSnapshot.fromState(
-          matchState: newState,
-          playerHand: newState.player.hand,
-          opponentHand: newState.opponent.hand,
-        ),
-      );
+      newState.history.add(TurnSnapshot.fromState(matchState: newState));
     }
 
     _currentMatch = newState;
@@ -1377,11 +1364,7 @@ class MatchManager {
 
     // Capture initial state for replay (Turn 1 start)
     _currentMatch!.history.add(
-      TurnSnapshot.fromState(
-        matchState: _currentMatch!,
-        playerHand: _currentMatch!.player.hand,
-        opponentHand: _currentMatch!.opponent.hand,
-      ),
+      TurnSnapshot.fromState(matchState: _currentMatch!),
     );
 
     onTurnChanged?.call(firstPlayerId);
@@ -1577,11 +1560,7 @@ class MatchManager {
     // Capture state for replay before switching turns
     if (_currentMatch != null) {
       _currentMatch!.history.add(
-        TurnSnapshot.fromState(
-          matchState: _currentMatch!,
-          playerHand: _currentMatch!.player.hand,
-          opponentHand: _currentMatch!.opponent.hand,
-        ),
+        TurnSnapshot.fromState(matchState: _currentMatch!),
       );
     }
 
@@ -2632,11 +2611,7 @@ class MatchManager {
 
       // Capture final snapshot for replay
       _currentMatch!.history.add(
-        TurnSnapshot.fromState(
-          matchState: _currentMatch!,
-          playerHand: _currentMatch!.player.hand,
-          opponentHand: _currentMatch!.opponent.hand,
-        ),
+        TurnSnapshot.fromState(matchState: _currentMatch!),
       );
     }
 
