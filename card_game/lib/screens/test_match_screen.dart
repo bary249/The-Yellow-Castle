@@ -130,6 +130,9 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   int _replayTurnIndex = 0;
   TurnSnapshot? _currentReplaySnapshot;
 
+  // Dialog timers
+  Timer? _turnDialogTimer;
+
   @override
   void initState() {
     super.initState();
@@ -139,15 +142,100 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       debugPrint('TestMatchScreen: Firebase not available ($e)');
     }
     _initPlayerAndMatch();
+
+    // Listen for turn changes to show dialog
+    _matchManager.onTurnChanged = (activePlayerId) {
+      if (!mounted) return;
+
+      final isMyTurn = activePlayerId == _matchManager.currentMatch?.player.id;
+      _showTurnChangeDialog(isMyTurn);
+
+      // Also handle normal turn change logic
+      if (isMyTurn && _isOnlineMode) {
+        _startTurnTimer();
+      }
+    };
   }
 
   @override
   void dispose() {
     _matchListener?.cancel();
     _turnTimer?.cancel();
+    _turnDialogTimer?.cancel();
     _onlineStateSubscription?.cancel();
     _onlineGameManager?.dispose();
     super.dispose();
+  }
+
+  /// Show a dialog when turn changes
+  void _showTurnChangeDialog(bool isMyTurn) {
+    // Cancel any existing timer
+    _turnDialogTimer?.cancel();
+
+    // Close any open dialogs first (like previous turn dialogs)
+    if (Navigator.of(context).canPop()) {
+      // Be careful not to close the game screen itself or essential dialogs
+      // This is a bit risky if other dialogs are open, but for turn flow it's usually fine
+      // Better approach: use a specific route/key or just show overlay
+    }
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        // Auto-dismiss after 2 seconds
+        _turnDialogTimer = Timer(const Duration(seconds: 2), () {
+          if (mounted && Navigator.of(context).canPop()) {
+            Navigator.of(context).pop();
+          }
+        });
+
+        return AlertDialog(
+          backgroundColor: isMyTurn
+              ? Colors.blue[900]!.withOpacity(0.9)
+              : Colors.red[900]!.withOpacity(0.9),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                isMyTurn ? Icons.person : Icons.warning,
+                size: 48,
+                color: Colors.white,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                isMyTurn ? "YOUR TURN" : "ENEMY TURN",
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 2.0,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                isMyTurn ? "Make your move!" : "Opponent is thinking...",
+                style: const TextStyle(color: Colors.white70),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                _turnDialogTimer?.cancel();
+                Navigator.of(context).pop();
+              },
+              child: const Text('OK', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   // ===== TYC3: Turn timer methods =====
