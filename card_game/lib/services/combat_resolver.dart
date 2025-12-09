@@ -821,6 +821,7 @@ class CombatResolver {
     int playerDamageBoost = 0,
     int laneDamageBonus = 0,
     int laneShieldBonus = 0,
+    int targetLaneShieldBonus = 0,
   }) {
     // Calculate base damage
     int damage = attacker.damage;
@@ -903,10 +904,11 @@ class CombatResolver {
 
     // Apply shield reduction on target
     final targetShield = _getShieldValue(target);
+    // Use target's lane shield bonus + internal opponent shield bonus (if any)
     final baseShieldBonus = isPlayerAttacking
         ? _opponentLaneShieldBonus
         : _playerLaneShieldBonus;
-    final effectiveShieldBonus = baseShieldBonus + laneShieldBonus;
+    final effectiveShieldBonus = baseShieldBonus + targetLaneShieldBonus;
     final totalShield = targetShield + effectiveShieldBonus;
     damage = (damage - totalShield).clamp(0, damage);
 
@@ -1087,6 +1089,7 @@ class CombatResolver {
     int playerDamageBoost = 0,
     int laneDamageBonus = 0,
     int laneShieldBonus = 0,
+    int targetLaneShieldBonus = 0,
   }) {
     // Calculate base damage
     int damage = attacker.damage;
@@ -1168,10 +1171,11 @@ class CombatResolver {
 
     // Apply shield reduction on target
     final targetShield = _getShieldValue(target);
+    // Use target's lane shield bonus + internal opponent shield bonus (if any)
     final baseShieldBonus = isPlayerAttacking
         ? _opponentLaneShieldBonus
         : _playerLaneShieldBonus;
-    final effectiveShieldBonus = baseShieldBonus + laneShieldBonus;
+    final effectiveShieldBonus = baseShieldBonus + targetLaneShieldBonus;
     final totalShield = targetShield + effectiveShieldBonus;
     damage = (damage - totalShield).clamp(0, damage);
 
