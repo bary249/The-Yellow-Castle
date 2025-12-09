@@ -45,6 +45,9 @@ class BattleLogEntry {
   final int? targetHpBefore;
   final int? targetHpAfter;
   final bool? targetDied;
+  final List<String> modifiers;
+  final int? retaliationDamage;
+  final List<String> retaliationModifiers;
 
   BattleLogEntry({
     required this.tick,
@@ -59,6 +62,9 @@ class BattleLogEntry {
     this.targetHpBefore,
     this.targetHpAfter,
     this.targetDied,
+    this.modifiers = const [],
+    this.retaliationDamage,
+    this.retaliationModifiers = const [],
   });
 
   String get formattedMessage {
@@ -73,6 +79,19 @@ class BattleLogEntry {
       return '$attackerName → $targetName: $damageDealt dmg$hpInfo$deathInfo';
     }
     return action;
+  }
+
+  /// Get detailed combat summary including calculations
+  String get detailedCombatSummary {
+    final buffer = StringBuffer();
+    buffer.writeln(combatSummary);
+    if (modifiers.isNotEmpty) {
+      buffer.writeln('\nCalculations:');
+      for (final mod in modifiers) {
+        buffer.writeln('• $mod');
+      }
+    }
+    return buffer.toString().trim();
   }
 }
 
@@ -880,6 +899,7 @@ class CombatResolver {
         targetHpBefore: targetHpBefore,
         targetHpAfter: targetHpAfter,
         targetDied: targetDied,
+        modifiers: modifiers,
       ),
     );
 
@@ -971,6 +991,7 @@ class CombatResolver {
           targetHpBefore: attackerHpBefore,
           targetHpAfter: attackerHpAfter,
           targetDied: attackerDied,
+          modifiers: retModifiers,
         ),
       );
     } else if (!targetDied && attacker.isRanged) {

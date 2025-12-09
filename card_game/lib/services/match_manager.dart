@@ -2248,7 +2248,7 @@ class MatchManager {
 
       // Create gravestone with battle summary
       final deathLog = _combatResolver.combatLog.isNotEmpty
-          ? _combatResolver.combatLog.last.combatSummary
+          ? _combatResolver.combatLog.last.detailedCombatSummary
           : 'Died in battle';
       targetTile.addGravestone(
         Gravestone(cardName: target.name, deathLog: deathLog),
@@ -2313,7 +2313,7 @@ class MatchManager {
 
         // Create gravestone with battle summary
         final deathLog = _combatResolver.combatLog.isNotEmpty
-            ? _combatResolver.combatLog.last.combatSummary
+            ? _combatResolver.combatLog.last.detailedCombatSummary
             : 'Died in battle';
         attackerTile.addGravestone(
           Gravestone(cardName: attacker.name, deathLog: deathLog),
