@@ -88,7 +88,7 @@ GameCard pikeman(int index) => GameCard(
 GameCard shieldGuard(int index) => GameCard(
   id: 'shield_guard_$index',
   name: 'Shield Guard',
-  damage: 8,
+  damage: 3,
   health: 15,
   tick: 5,
   moveSpeed: 0, // Stationary

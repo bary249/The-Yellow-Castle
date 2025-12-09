@@ -157,6 +157,12 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       }
       setState(() {
         _turnSecondsRemaining--;
+
+        // Play ticking sound in last 10 seconds
+        if (_turnSecondsRemaining <= 10 && _turnSecondsRemaining > 0) {
+          SystemSound.play(SystemSoundType.click);
+        }
+
         if (_turnSecondsRemaining <= 0) {
           timer.cancel();
           // Auto-end turn when timer expires
