@@ -33,6 +33,34 @@ class MatchManager {
   /// Replace the current match state (for online sync)
   /// This completely replaces the local state with the received state
   void replaceMatchState(MatchState newState) {
+    // Preserve local history if available
+    if (_currentMatch != null && _currentMatch!.history.isNotEmpty) {
+      newState.history.addAll(_currentMatch!.history);
+    }
+
+    // Check if a turn has passed
+    if (_currentMatch != null &&
+        newState.turnNumber > _currentMatch!.turnNumber) {
+      // Capture snapshot of the NEW state (which is the state at the start of this new turn)
+      // This effectively captures the result of the opponent's turn that just finished
+      newState.history.add(
+        TurnSnapshot.fromState(
+          matchState: newState,
+          playerHand: newState.player.hand,
+          opponentHand: newState.opponent.hand,
+        ),
+      );
+    } else if (_currentMatch == null) {
+      // First sync (start of match)
+      newState.history.add(
+        TurnSnapshot.fromState(
+          matchState: newState,
+          playerHand: newState.player.hand,
+          opponentHand: newState.opponent.hand,
+        ),
+      );
+    }
+
     _currentMatch = newState;
     _log('🔄 Match state replaced from online sync');
   }
