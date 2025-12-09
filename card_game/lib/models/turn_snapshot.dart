@@ -52,6 +52,8 @@ class TurnSnapshot {
               cardName: gs.cardName,
               deathLog: gs.deathLog,
               timestamp: gs.timestamp,
+              ownerId: gs.ownerId,
+              turnCreated: gs.turnCreated,
             ),
           );
         }

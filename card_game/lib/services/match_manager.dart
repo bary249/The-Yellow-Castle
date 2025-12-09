@@ -1566,6 +1566,9 @@ class MatchManager {
     // This ensures both players see the same turn count
     _currentMatch!.turnNumber++;
 
+    // Cleanup old gravestones (remove after 1 turn)
+    _cleanupGravestones();
+
     // Clean up enemy units that attacked more than 1 turn ago (fog of war)
     final currentTurn = _currentMatch!.turnNumber;
     _currentMatch!.recentlyAttackedEnemyUnits.removeWhere(
@@ -1601,6 +1604,27 @@ class MatchManager {
     _logBoardStateSummary();
 
     onTurnChanged?.call(_currentMatch!.activePlayerId!);
+  }
+
+  /// Clean up gravestones that are older than 1 turn
+  void _cleanupGravestones() {
+    if (_currentMatch == null) return;
+    final currentTurn = _currentMatch!.turnNumber;
+
+    for (int r = 0; r < 3; r++) {
+      for (int c = 0; c < 3; c++) {
+        final tile = _currentMatch!.board.getTile(r, c);
+        tile.gravestones.removeWhere((gs) {
+          // Remove if created before the previous turn (older than 1 turn cycle)
+          // Since turns increment by 1 for each player's turn, 2 turns = 1 full round
+          // Actually, "remove after 1 turn" usually means it stays for the opponent's turn and then disappears
+          // So if created at turn X, it should be removed at turn X+2 (next time it's this player's turn?)
+          // Or just strictly > 1 turn difference.
+          // Let's keep it for 2 "half-turns" (1 full round) so both players see it.
+          return currentTurn - gs.turnCreated > 1;
+        });
+      }
+    }
   }
 
   /// Regenerate AP for all cards belonging to the active player
@@ -2274,6 +2298,7 @@ class MatchManager {
           cardName: target.name,
           deathLog: deathLog,
           ownerId: target.ownerId,
+          turnCreated: _currentMatch!.turnNumber,
         ),
       );
 
@@ -2341,6 +2366,7 @@ class MatchManager {
             cardName: attacker.name,
             deathLog: deathLog,
             ownerId: attacker.ownerId,
+            turnCreated: _currentMatch!.turnNumber,
           ),
         );
 
