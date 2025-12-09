@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import 'hero_selection_screen.dart';
-import 'matchmaking_screen.dart';
 import 'deck_editor_screen.dart';
 import 'campaign_select_screen.dart';
 import 'ui_test_screen.dart';
@@ -54,9 +53,11 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
   }
 
   void _playOnline() {
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => const MatchmakingScreen()));
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const HeroSelectionScreen(isOnline: true),
+      ),
+    );
   }
 
   void _editDeck() {
@@ -166,10 +167,11 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                         sublabel: '5 minute cumulative timer',
                         color: Colors.indigo,
                         onTap: () {
-                          // Pass chess mode flag to matchmaking
+                          // Pass chess mode flag to hero selection
                           Navigator.of(context).push(
                             MaterialPageRoute(
-                              builder: (_) => const MatchmakingScreen(
+                              builder: (_) => const HeroSelectionScreen(
+                                isOnline: true,
                                 isChessTimerMode: true,
                               ),
                             ),

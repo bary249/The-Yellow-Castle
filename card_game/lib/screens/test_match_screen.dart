@@ -22,6 +22,7 @@ import '../services/auth_service.dart';
 import '../services/deck_storage_service.dart';
 import '../services/combat_resolver.dart' show AttackResult;
 import '../services/online_game_manager.dart';
+import 'deck_selection_screen.dart';
 
 /// Test screen for playing a match vs AI opponent or online multiplayer
 class TestMatchScreen extends StatefulWidget {
@@ -31,6 +32,8 @@ class TestMatchScreen extends StatefulWidget {
   forceCampaignDeck; // If true, use hero's campaign deck instead of saved deck
   final Deck? enemyDeck; // Custom enemy deck (for campaign battles)
   final int campaignAct; // Current campaign act (1, 2, or 3)
+  final List<GameCard>?
+  customDeck; // Custom player deck (overrides default/saved)
 
   const TestMatchScreen({
     super.key,
@@ -39,6 +42,7 @@ class TestMatchScreen extends StatefulWidget {
     this.forceCampaignDeck = false,
     this.enemyDeck,
     this.campaignAct = 1,
+    this.customDeck,
   });
 
   @override
@@ -80,6 +84,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   GameHero? _selectedHero;
   GameHero? _opponentHero;
   bool _heroSelectionComplete = false;
+  List<GameCard>? _selectedOnlineDeck; // Deck selected in online dialog
   String?
   _firstPlayerId; // Who goes first in online mode (determined by player1)
 
@@ -109,6 +114,11 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       true; // Toggle between old ListView and new stacked card UI
   double _handFanAngle = 5.0; // Degrees of fan spread for hand
   double _handCardOverlap = 0.4; // How much hand cards overlap
+
+  // UI Settings
+  bool _showSettings = false;
+  double _cardOverlapRatio = 0.6; // How much board cards overlap
+  double _cardSeparation = 0.0; // Extra horizontal separation on board
 
   // TYC3 action state
   GameCard? _selectedCardForAction; // Card selected for move/attack
@@ -2700,9 +2710,29 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       // This ensures we don't miss opponent's hero selection
       _listenToMatchUpdates();
 
-      // Show hero selection dialog
-      if (mounted) {
-        await _showHeroSelectionDialog();
+      // Check if we already selected hero/deck (from DeckSelectionScreen)
+      final myData = _amPlayer1 ? matchData['player1'] : matchData['player2'];
+      final myHeroId = myData?['heroId'] as String?;
+      final myDeckNames = (myData?['deck'] as List<dynamic>?)?.cast<String>();
+
+      if (myHeroId != null && myDeckNames != null) {
+        _selectedHero = HeroLibrary.getHeroById(myHeroId);
+        // Build deck from names
+        if (_playerId != null) {
+          final deck = Deck.fromCardNames(
+            playerId: _playerId!,
+            cardNames: myDeckNames,
+          );
+          _selectedOnlineDeck = deck.cards;
+        }
+        debugPrint(
+          'Loaded pre-selected hero: ${_selectedHero?.name}, deck: ${_selectedOnlineDeck?.length} cards',
+        );
+      } else {
+        // Fallback: Show selection dialog if not selected
+        if (mounted) {
+          await _showHeroSelectionDialog();
+        }
       }
 
       if (mounted) {
@@ -2781,6 +2811,29 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     } else {
       // Default to Napoleon if dialog dismissed somehow
       _selectedHero = HeroLibrary.napoleon();
+    }
+
+    // 2. Select Deck (if hero selected)
+    if (_selectedHero != null && mounted) {
+      final selectedDeck = await Navigator.of(context).push<List<GameCard>>(
+        MaterialPageRoute(
+          builder: (_) => DeckSelectionScreen(
+            heroId: _selectedHero!.id,
+            onDeckSelected: (deck) {
+              Navigator.of(context).pop(deck);
+            },
+          ),
+        ),
+      );
+
+      if (selectedDeck != null) {
+        _selectedOnlineDeck = selectedDeck;
+        debugPrint('Selected online deck: ${selectedDeck.length} cards');
+      } else {
+        // Fallback to default deck for hero
+        // Logic handled in _startNewMatch via _selectedOnlineDeck being null
+        debugPrint('No deck selected - using default');
+      }
     }
   }
 
@@ -2863,13 +2916,13 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             // Player Clock
-            _buildChessClockItem(
-              label: 'YOU',
-              seconds: match.playerTotalTimeRemaining,
-              isActive: _matchManager.isPlayerTurn,
-              isCritical: match.playerTotalTimeRemaining <= 30,
-            ),
-            const SizedBox(width: 8),
+            // _buildChessClockItem(
+            //   label: 'YOU',
+            //   seconds: match.playerTotalTimeRemaining,
+            //   isActive: _matchManager.isPlayerTurn,
+            //   isCritical: match.playerTotalTimeRemaining <= 30,
+            // ),
+            // const SizedBox(width: 8),
             // Opponent Clock
             _buildChessClockItem(
               label: 'OPP',
@@ -4037,6 +4090,18 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
           '🎖️ CAMPAIGN MODE: Using starter deck for ${playerHero.name}',
         );
       }
+    } else if (_isOnlineMode && _selectedOnlineDeck != null) {
+      // Use online selected deck
+      playerDeck = Deck.fromCards(playerId: id, cards: _selectedOnlineDeck!);
+      debugPrint(
+        'Using online selected deck (${_selectedOnlineDeck!.length} cards)',
+      );
+    } else if (widget.customDeck != null) {
+      // Use custom deck passed in constructor
+      playerDeck = Deck.fromCards(playerId: id, cards: widget.customDeck!);
+      debugPrint(
+        'Using custom selected deck (${widget.customDeck!.length} cards)',
+      );
     } else if (_savedDeck != null && _savedDeck!.isNotEmpty) {
       // Use saved deck if available (custom deck overrides hero default)
       // Note: This might need changing if we want to force hero decks
@@ -4908,17 +4973,32 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                 tooltip: 'Clear all placements',
               ),
             // UI Mode Toggle
+            // IconButton(
+            //   icon: Icon(_useStackedCardUI ? Icons.view_list : Icons.layers),
+            //   onPressed: () =>
+            //       setState(() => _useStackedCardUI = !_useStackedCardUI),
+            //   tooltip: _useStackedCardUI
+            //       ? 'Switch to List View'
+            //       : 'Switch to Stacked View',
+            // ),
+            // Settings Toggle
             IconButton(
-              icon: Icon(_useStackedCardUI ? Icons.view_list : Icons.layers),
-              onPressed: () =>
-                  setState(() => _useStackedCardUI = !_useStackedCardUI),
-              tooltip: _useStackedCardUI
-                  ? 'Switch to List View'
-                  : 'Switch to Stacked View',
+              icon: Icon(_showSettings ? Icons.visibility_off : Icons.tune),
+              onPressed: () => setState(() => _showSettings = !_showSettings),
+              tooltip: 'UI Settings',
             ),
           ],
         ),
-        body: match.isGameOver ? _buildGameOver(match) : _buildMatchView(match),
+        body: Column(
+          children: [
+            if (_showSettings) _buildSettingsPanel(),
+            Expanded(
+              child: match.isGameOver
+                  ? _buildGameOver(match)
+                  : _buildMatchView(match),
+            ),
+          ],
+        ),
         floatingActionButton: _useTYC3Mode
             ? _buildTYC3ActionButton(match)
             : match.currentPhase == MatchPhase.combatPhase
@@ -7917,13 +7997,124 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   Widget _buildHand(player) {
     // Calculate available cards (not yet staged)
     final stagedCardSet = _stagedCards.values.expand((list) => list).toSet();
-    final availableCards = player.hand
+    final availableCards = (player.hand as List<GameCard>)
         .where((card) => !stagedCardSet.contains(card))
         .toList();
 
-    // Use new fanned hand UI when stacked card UI is enabled
     if (_useStackedCardUI) {
-      return _buildFannedHand(availableCards);
+      return Container(
+        height: 160,
+        color: Colors.brown[200],
+        child: Stack(
+          children: [
+            Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    'Your Hand (${availableCards.length}) - Tap to select, drag to place',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.brown[800],
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: availableCards.isEmpty
+                      ? Center(
+                          child: Text(
+                            'No cards in hand',
+                            style: TextStyle(color: Colors.brown[600]),
+                          ),
+                        )
+                      : LayoutBuilder(
+                          builder: (context, constraints) {
+                            final availableHeight = constraints.maxHeight;
+                            final cardHeight = availableHeight * 0.85;
+                            final cardWidth = cardHeight / 1.4;
+                            final overlapWidth =
+                                cardWidth * (1 - _handCardOverlap);
+                            final totalCardsWidth =
+                                cardWidth +
+                                (availableCards.length - 1) * overlapWidth;
+                            final totalAngle =
+                                _handFanAngle * (availableCards.length - 1);
+                            final startAngle = -totalAngle / 2;
+
+                            return Center(
+                              child: SizedBox(
+                                width: totalCardsWidth + 40,
+                                height: availableHeight,
+                                child: Stack(
+                                  alignment: Alignment.center,
+                                  clipBehavior: Clip.none,
+                                  children: List.generate(
+                                    availableCards.length,
+                                    (index) {
+                                      final card = availableCards[index];
+                                      final isSelected = _selectedCard == card;
+                                      final centerIndex =
+                                          (availableCards.length - 1) / 2;
+                                      final offsetFromCenter =
+                                          index - centerIndex;
+                                      final xOffset =
+                                          offsetFromCenter * overlapWidth;
+                                      final angle = availableCards.length > 1
+                                          ? (startAngle +
+                                                    index * _handFanAngle) *
+                                                (pi / 180)
+                                          : 0.0;
+                                      final distanceFromCenter =
+                                          offsetFromCenter.abs();
+                                      final yOffset =
+                                          distanceFromCenter *
+                                          distanceFromCenter *
+                                          3;
+
+                                      return Positioned(
+                                        left:
+                                            (totalCardsWidth + 40) / 2 -
+                                            cardWidth / 2 +
+                                            xOffset,
+                                        top: yOffset + (isSelected ? -15 : 5),
+                                        child: Transform.rotate(
+                                          angle: angle,
+                                          alignment: Alignment.bottomCenter,
+                                          child: _buildDraggableHandCard(
+                                            card,
+                                            cardWidth,
+                                            cardHeight,
+                                            isSelected,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
+            if (_useChessTimer && _matchManager.currentMatch != null)
+              Positioned(
+                left: 8,
+                bottom: 8,
+                child: _buildChessClockItem(
+                  label: 'YOU',
+                  seconds: _matchManager.currentMatch!.playerTotalTimeRemaining,
+                  isActive: _matchManager.isPlayerTurn,
+                  isCritical:
+                      _matchManager.currentMatch!.playerTotalTimeRemaining <=
+                      30,
+                ),
+              ),
+          ],
+        ),
+      );
     }
 
     return Container(
@@ -8134,129 +8325,66 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     );
   }
 
-  /// Build poker-style fanned hand (new UI mode)
-  Widget _buildFannedHand(List<GameCard> availableCards) {
+  Widget _buildSettingsPanel() {
     return Container(
-      height: 160, // Hand container height
-      color: Colors.brown[200],
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      color: Colors.grey[100],
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          // Label
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Text(
-              'Your Hand (${availableCards.length}) - Tap to select, drag to place',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                color: Colors.brown[800],
-              ),
-            ),
+          const Text(
+            'Board Cards',
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
           ),
-          // Fanned cards
-          Expanded(
-            child: availableCards.isEmpty
-                ? Center(
-                    child: Text(
-                      'No cards in hand',
-                      style: TextStyle(color: Colors.brown[600]),
-                    ),
-                  )
-                : LayoutBuilder(
-                    builder: (context, constraints) {
-                      // Card dimensions - fixed size so they don't get cut off
-                      const cardHeight = 120.0;
-                      const cardWidth = cardHeight / 1.4;
-
-                      // Calculate total width needed for all cards with overlap
-                      final overlapWidth = cardWidth * (1 - _handCardOverlap);
-                      final totalCardsWidth =
-                          cardWidth +
-                          (availableCards.length - 1) * overlapWidth;
-
-                      // Fan rotation calculations
-                      final totalAngle =
-                          _handFanAngle * (availableCards.length - 1);
-                      final startAngle = -totalAngle / 2;
-
-                      // Sort cards so selected card is rendered last (on top)
-                      final sortedIndices = List.generate(
-                        availableCards.length,
-                        (i) => i,
-                      );
-                      if (_selectedCard != null) {
-                        final selectedIndex = availableCards.indexOf(
-                          _selectedCard!,
-                        );
-                        if (selectedIndex >= 0) {
-                          sortedIndices.remove(selectedIndex);
-                          sortedIndices.add(selectedIndex);
-                        }
-                      }
-
-                      return Center(
-                        child: SizedBox(
-                          width: totalCardsWidth + 40,
-                          height:
-                              cardHeight +
-                              30, // Card height + space for pop-out
-                          child: Stack(
-                            clipBehavior: Clip.none,
-                            children: sortedIndices.map((index) {
-                              final card = availableCards[index];
-                              final isSelected = _selectedCard == card;
-
-                              // Calculate position relative to center
-                              final centerIndex =
-                                  (availableCards.length - 1) / 2;
-                              final offsetFromCenter = index - centerIndex;
-
-                              // Horizontal position from center
-                              final xOffset = offsetFromCenter * overlapWidth;
-
-                              // Rotation angle
-                              final angle = availableCards.length > 1
-                                  ? (startAngle + index * _handFanAngle) *
-                                        (pi / 180)
-                                  : 0.0;
-
-                              // Vertical offset based on position (arc effect)
-                              final distanceFromCenter = offsetFromCenter.abs();
-                              final yOffset =
-                                  distanceFromCenter * distanceFromCenter * 2;
-
-                              // Selected card pops out significantly above others
-                              // Non-selected cards start at 5px from top, selected pops up
-                              final popOutOffset = isSelected ? -25.0 : 5.0;
-                              final selectedScale = isSelected ? 1.2 : 1.0;
-                              final selectedAngle = isSelected ? 0.0 : angle;
-
-                              return Positioned(
-                                left:
-                                    (totalCardsWidth + 40) / 2 -
-                                    cardWidth / 2 +
-                                    xOffset,
-                                top: yOffset + popOutOffset,
-                                child: Transform.scale(
-                                  scale: selectedScale,
-                                  child: Transform.rotate(
-                                    angle: selectedAngle,
-                                    alignment: Alignment.bottomCenter,
-                                    child: _buildDraggableHandCard(
-                                      card,
-                                      cardWidth,
-                                      cardHeight,
-                                      isSelected,
-                                    ),
-                                  ),
-                                ),
-                              );
-                            }).toList(),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
+          Row(
+            children: [
+              const Text('Overlap:', style: TextStyle(fontSize: 11)),
+              Expanded(
+                child: Slider(
+                  value: _cardOverlapRatio,
+                  min: 0.2,
+                  max: 0.9,
+                  onChanged: (v) => setState(() => _cardOverlapRatio = v),
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Text('Spread:', style: TextStyle(fontSize: 11)),
+              Expanded(
+                child: Slider(
+                  value: _cardSeparation,
+                  min: 0,
+                  max: 30,
+                  onChanged: (v) => setState(() => _cardSeparation = v),
+                ),
+              ),
+            ],
+          ),
+          const Text(
+            'Hand Cards',
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+          ),
+          Row(
+            children: [
+              const Text('Fan:', style: TextStyle(fontSize: 11)),
+              Expanded(
+                child: Slider(
+                  value: _handFanAngle,
+                  min: 0,
+                  max: 20,
+                  onChanged: (v) => setState(() => _handFanAngle = v),
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Text('Overlap:', style: TextStyle(fontSize: 11)),
+              Expanded(
+                child: Slider(
+                  value: _handCardOverlap,
+                  min: 0.2,
+                  max: 0.8,
+                  onChanged: (v) => setState(() => _handCardOverlap = v),
+                ),
+              ),
+            ],
           ),
         ],
       ),

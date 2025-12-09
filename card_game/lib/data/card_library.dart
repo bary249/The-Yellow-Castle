@@ -1327,6 +1327,136 @@ List<GameCard> buildNelsonStarterDeck() {
   return cards;
 }
 
+/// Saladin's "Sandstorm" Deck - Swarm/Rush
+/// Focus: Many cheap units, overwhelm opponent.
+List<GameCard> buildSaladinSandstormDeck() {
+  final cards = <GameCard>[];
+  cards.add(scoutUnit(0));
+
+  // 18 Common low-cost units
+  for (int i = 0; i < 6; i++) {
+    cards.add(desertQuickStrike(i).copyWith(name: 'Desert Raider'));
+  }
+  for (int i = 0; i < 6; i++) {
+    cards.add(desertWarrior(i).copyWith(name: 'Light Infantry'));
+  }
+  for (int i = 0; i < 6; i++) {
+    cards.add(desertArcher(i).copyWith(name: 'Skirmisher'));
+  }
+
+  // 6 Rare units (Fast/Support)
+  for (int i = 0; i < 3; i++) {
+    cards.add(desertEliteStriker(i).copyWith(name: 'Swift Lancer'));
+  }
+  for (int i = 0; i < 3; i++) {
+    cards.add(desertWarBanner(i)); // Buffs
+  }
+
+  return cards;
+}
+
+/// Nelson's "Blockade" Deck - Control/Defense
+/// Focus: High HP units, holding the line.
+List<GameCard> buildNelsonBlockadeDeck() {
+  final cards = <GameCard>[];
+  cards.add(scoutUnit(0));
+
+  // 12 Common Tanks/Defenders
+  for (int i = 0; i < 6; i++) {
+    cards.add(lakeTank(i).copyWith(name: 'Ironclad Hull'));
+  }
+  for (int i = 0; i < 6; i++) {
+    cards.add(lakeWarrior(i).copyWith(name: 'Line Marine'));
+  }
+
+  // 6 Rare Defenders
+  for (int i = 0; i < 3; i++) {
+    cards.add(lakeVeteran(i).copyWith(name: 'Elite Guard'));
+  }
+  for (int i = 0; i < 3; i++) {
+    cards.add(lakeShieldTotem(i).copyWith(name: 'Supply Ship')); // Buffs
+  }
+
+  // 6 Support/Ranged
+  for (int i = 0; i < 6; i++) {
+    cards.add(lakeArcher(i).copyWith(name: 'Deck Gunner'));
+  }
+
+  return cards;
+}
+
+/// Nelson's "Broadside" Deck - Aggressive/Ranged
+/// Focus: Massed cannons and ranged damage.
+List<GameCard> buildNelsonBroadsideDeck() {
+  final cards = <GameCard>[];
+  cards.add(scoutUnit(0));
+
+  // 12 Common Ranged
+  for (int i = 0; i < 6; i++) {
+    cards.add(lakeArcher(i).copyWith(name: 'Musketeer'));
+  }
+  for (int i = 0; i < 6; i++) {
+    cards.add(lakeQuickStrike(i).copyWith(name: 'Boarding Party'));
+  }
+
+  // 12 Rare Cannons/Elites
+  for (int i = 0; i < 6; i++) {
+    cards.add(lakeCannon(i).copyWith(name: 'Naval Cannon'));
+  }
+  for (int i = 0; i < 6; i++) {
+    cards.add(lakeEliteStriker(i).copyWith(name: 'First Mate'));
+  }
+
+  return cards;
+}
+
+/// Archduke's "Alpine Defense" Deck
+/// Focus: Woods units, defensive bonuses.
+List<GameCard> buildArchdukeDefenseDeck() {
+  final cards = <GameCard>[];
+  cards.add(scoutUnit(0));
+
+  // 12 Common Woods Units
+  for (int i = 0; i < 6; i++) {
+    cards.add(woodsTank(i).copyWith(name: 'Alpine Guard'));
+  }
+  for (int i = 0; i < 6; i++) {
+    cards.add(woodsWarrior(i).copyWith(name: 'Forest Ranger'));
+  }
+
+  // 12 Rare Woods Units
+  for (int i = 0; i < 4; i++) {
+    cards.add(woodsVeteran(i).copyWith(name: 'Mountain Hunter'));
+  }
+  for (int i = 0; i < 4; i++) {
+    cards.add(woodsHealingTree(i).copyWith(name: 'Field Hospital'));
+  }
+  for (int i = 0; i < 4; i++) {
+    cards.add(woodsCannon(i).copyWith(name: 'Mountain Gun'));
+  }
+
+  return cards;
+}
+
+/// Archduke's "Coalition" Deck - Balanced
+/// Focus: Mix of Woods and Lake units.
+List<GameCard> buildArchdukeCoalitionDeck() {
+  final cards = <GameCard>[];
+  cards.add(scoutUnit(0));
+
+  // 8 Woods, 8 Lake Commons
+  for (int i = 0; i < 4; i++) cards.add(woodsWarrior(i));
+  for (int i = 0; i < 4; i++) cards.add(lakeWarrior(i));
+  for (int i = 0; i < 4; i++) cards.add(woodsArcher(i));
+  for (int i = 0; i < 4; i++) cards.add(lakeArcher(i));
+
+  // 8 Rares
+  for (int i = 0; i < 4; i++) cards.add(woodsEliteStriker(i));
+  for (int i = 0; i < 4; i++) cards.add(lakeCannon(i));
+
+  return cards;
+}
+
 /// All cards available for Napoleon to acquire during campaign.
 /// Does NOT include starter deck cards.
 List<GameCard> buildNapoleonCampaignCardPool() {

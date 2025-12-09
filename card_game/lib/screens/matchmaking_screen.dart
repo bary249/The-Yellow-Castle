@@ -2,13 +2,22 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/auth_service.dart';
+import '../models/card.dart';
+import 'deck_selection_screen.dart';
 import 'test_match_screen.dart';
 
 /// Screen that handles matchmaking queue
 class MatchmakingScreen extends StatefulWidget {
   final bool isChessTimerMode;
+  final String? heroId;
+  final List<GameCard>? deck;
 
-  const MatchmakingScreen({super.key, this.isChessTimerMode = false});
+  const MatchmakingScreen({
+    super.key,
+    this.isChessTimerMode = false,
+    this.heroId,
+    this.deck,
+  });
 
   @override
   State<MatchmakingScreen> createState() => _MatchmakingScreenState();
@@ -76,6 +85,8 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> {
         'elo': playerElo,
         'timestamp': FieldValue.serverTimestamp(),
         'searching': true,
+        'heroId': widget.heroId, // Store selected hero
+        'deck': widget.deck?.map((c) => c.name).toList(), // Store selected deck
       });
 
       setState(() => _status = 'Searching for opponent...');
@@ -93,13 +104,18 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> {
 
             if (opponents.isNotEmpty && _isSearching) {
               final opponent = opponents.first;
+              final oppData = opponent.data();
 
               // Try to create match (only one player should succeed)
               await _tryCreateMatch(
                 user.uid,
                 opponent.id,
                 playerName,
-                opponent.data()['displayName'] as String? ?? 'Opponent',
+                oppData['displayName'] as String? ?? 'Opponent',
+                widget.heroId,
+                oppData['heroId'] as String?,
+                widget.deck?.map((c) => c.name).toList(),
+                (oppData['deck'] as List<dynamic>?)?.cast<String>(),
               );
             }
           });
@@ -153,6 +169,10 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> {
     String opponentId,
     String myName,
     String opponentName,
+    String? myHeroId,
+    String? opponentHeroId,
+    List<String>? myDeck,
+    List<String>? opponentDeck,
   ) async {
     // Use a transaction to avoid race conditions
     // The player with the "lower" ID creates the match
@@ -176,23 +196,28 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> {
       // Create match with ready flags
       await matchRef.set({
         'matchId': matchRef.id,
-        'status': 'waiting', // waiting for both players to be ready
+        'status':
+            'waiting', // waiting for both players to be ready (or active if pre-selected)
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
         'isChessTimerMode': widget.isChessTimerMode,
         'player1': {
           'userId': myId,
           'displayName': myName,
-          'ready': false,
+          'ready': myDeck != null, // Ready if deck provided
           'submitted': false,
           'crystalHP': 100,
+          'heroId': myHeroId,
+          'deck': myDeck,
         },
         'player2': {
           'userId': opponentId,
           'displayName': opponentName,
-          'ready': false,
+          'ready': opponentDeck != null, // Ready if deck provided
           'submitted': false,
           'crystalHP': 100,
+          'heroId': opponentHeroId,
+          'deck': opponentDeck,
         },
         'playerIds': [myId, opponentId],
         'turnNumber': 1,
@@ -222,11 +247,24 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> {
     _cancelSearch();
 
     if (mounted) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (_) => TestMatchScreen(onlineMatchId: matchId),
-        ),
-      );
+      if (widget.deck != null) {
+        // Deck already selected: Go straight to game
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => TestMatchScreen(onlineMatchId: matchId),
+          ),
+        );
+      } else {
+        // Legacy/Fallback: Go to Deck Selection Lobby
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => DeckSelectionScreen(
+              heroId: widget.heroId ?? 'napoleon', // Fallback if null
+              onlineMatchId: matchId,
+            ),
+          ),
+        );
+      }
     }
   }
 

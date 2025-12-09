@@ -2,10 +2,19 @@ import 'package:flutter/material.dart';
 import '../models/hero.dart';
 import '../data/hero_library.dart';
 import 'test_match_screen.dart';
+import 'deck_selection_screen.dart';
+import 'matchmaking_screen.dart';
 
 /// Screen for selecting a hero before starting a match.
 class HeroSelectionScreen extends StatefulWidget {
-  const HeroSelectionScreen({super.key});
+  final bool isOnline;
+  final bool isChessTimerMode;
+
+  const HeroSelectionScreen({
+    super.key,
+    this.isOnline = false,
+    this.isChessTimerMode = false,
+  });
 
   @override
   State<HeroSelectionScreen> createState() => _HeroSelectionScreenState();
@@ -24,18 +33,45 @@ class _HeroSelectionScreenState extends State<HeroSelectionScreen> {
   void _startMatch() {
     if (_selectedHero == null) return;
 
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (_) => TestMatchScreen(selectedHero: _selectedHero),
-      ),
-    );
+    if (widget.isOnline) {
+      // Online: Go to Matchmaking with selected hero
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => MatchmakingScreen(
+            heroId: _selectedHero!.id,
+            isChessTimerMode: widget.isChessTimerMode,
+          ),
+        ),
+      );
+    } else {
+      // Local: Go to Deck Selection
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => DeckSelectionScreen(
+            heroId: _selectedHero!.id,
+            onDeckSelected: (deckCards) {
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(
+                  builder: (_) => TestMatchScreen(
+                    selectedHero: _selectedHero,
+                    customDeck: deckCards,
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Select Your Army'),
+        title: Text(
+          widget.isOnline ? 'Select Your Commander' : 'Select Your Army',
+        ),
         backgroundColor: Colors.indigo[800],
         foregroundColor: Colors.white,
       ),
