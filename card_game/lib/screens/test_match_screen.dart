@@ -100,6 +100,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
 
   // ===== TYC3: Turn-based AP system state =====
   bool _useTYC3Mode = true; // Enable TYC3 by default for testing
+  bool _useChessTimer = true; // Enable Chess Timer mode by default
   Timer? _turnTimer;
   int _turnSecondsRemaining = 100;
 
@@ -289,33 +290,90 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     if (!_isOnlineMode) return;
 
     _turnTimer?.cancel();
-    _turnSecondsRemaining = 100;
+
+    // For normal turn timer, reset to 100s
+    if (!_useChessTimer) {
+      _turnSecondsRemaining = 100;
+    }
+
     _turnTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) {
         timer.cancel();
         return;
       }
-      setState(() {
-        _turnSecondsRemaining--;
 
-        // Play ticking sound in last 10 seconds
-        if (!_matchManager.currentMatch!.isGameOver &&
-            _turnSecondsRemaining <= 10 &&
-            _turnSecondsRemaining > 0) {
-          // SystemSound.play(SystemSoundType.click);
-          FlameAudio.play('ticking_clock.mp3');
+      setState(() {
+        final match = _matchManager.currentMatch;
+        if (match == null || match.isGameOver) {
+          timer.cancel();
+          return;
         }
 
-        if (_turnSecondsRemaining <= 0) {
-          timer.cancel();
-          // Auto-end turn when timer expires
-          if (_matchManager.isPlayerTurn &&
-              !_matchManager.currentMatch!.isGameOver) {
-            _endTurnTYC3();
+        if (_useChessTimer) {
+          // CHESS TIMER LOGIC
+          if (_matchManager.isPlayerTurn) {
+            match.playerTotalTimeRemaining--;
+            if (match.playerTotalTimeRemaining <= 0) {
+              timer.cancel();
+              // Player ran out of time - Defeat
+              _handleTimeOutDefeat();
+            }
+
+            // Sound effect for low time
+            if (match.playerTotalTimeRemaining <= 10 &&
+                match.playerTotalTimeRemaining > 0) {
+              FlameAudio.play('ticking_clock.mp3');
+            }
+          } else {
+            // Visual decrement for opponent (actual value comes from sync)
+            match.opponentTotalTimeRemaining--;
+            // We don't trigger victory here - wait for opponent to resign/sync
+          }
+        } else {
+          // STANDARD TURN TIMER LOGIC
+          _turnSecondsRemaining--;
+
+          // Play ticking sound in last 10 seconds
+          if (_turnSecondsRemaining <= 10 && _turnSecondsRemaining > 0) {
+            // SystemSound.play(SystemSoundType.click);
+            FlameAudio.play('ticking_clock.mp3');
+          }
+
+          if (_turnSecondsRemaining <= 0) {
+            timer.cancel();
+            // Auto-end turn when timer expires
+            if (_matchManager.isPlayerTurn) {
+              _endTurnTYC3();
+            }
           }
         }
       });
     });
+  }
+
+  /// Handle defeat due to time running out
+  void _handleTimeOutDefeat() {
+    // Show dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('⏰ Time Out!'),
+        content: const Text('You ran out of time. Defeat.'),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              // Surrender/End Match
+              _matchManager.currentMatch?.endMatch(_opponentId ?? 'opponent');
+              _syncTYC3Action('surrender', {}); // Or endMatch action
+              setState(() {});
+            },
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   /// Sync current game state to Firebase (for online mode)
@@ -2792,6 +2850,99 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     }
   }
 
+  Widget _buildTimerDisplay(MatchState match) {
+    if (_useChessTimer) {
+      return Container(
+        margin: const EdgeInsets.only(right: 8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Player Clock
+            _buildChessClockItem(
+              label: 'YOU',
+              seconds: match.playerTotalTimeRemaining,
+              isActive: _matchManager.isPlayerTurn,
+              isCritical: match.playerTotalTimeRemaining <= 30,
+            ),
+            const SizedBox(width: 8),
+            // Opponent Clock
+            _buildChessClockItem(
+              label: 'OPP',
+              seconds: match.opponentTotalTimeRemaining,
+              isActive: !(_matchManager.isPlayerTurn), // Opponent turn
+              isCritical: match.opponentTotalTimeRemaining <= 30,
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Standard Timer (only show if player turn)
+    if (!_matchManager.isPlayerTurn) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      margin: const EdgeInsets.only(right: 8),
+      decoration: BoxDecoration(
+        color: _turnSecondsRemaining <= 10 ? Colors.red : Colors.green,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.timer, size: 16, color: Colors.white),
+          const SizedBox(width: 4),
+          Text(
+            '$_turnSecondsRemaining s',
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChessClockItem({
+    required String label,
+    required int seconds,
+    required bool isActive,
+    required bool isCritical,
+  }) {
+    // Format MM:SS
+    final m = seconds ~/ 60;
+    final s = seconds % 60;
+    final timeStr = '$m:${s.toString().padLeft(2, '0')}';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: isActive
+            ? (isCritical ? Colors.red : Colors.green[700])
+            : Colors.grey[700],
+        borderRadius: BorderRadius.circular(4),
+        border: isActive ? Border.all(color: Colors.white, width: 2) : null,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(fontSize: 8, color: Colors.white70),
+          ),
+          Text(
+            timeStr,
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildStatIcon(IconData icon, int value, {double size = 10}) {
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -4030,6 +4181,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         skipOpponentShuffle: skipOppShuffle,
         relicName: relicName,
         relicDescription: relicDescription,
+        isChessTimerMode: _useChessTimer, // Add this line
       );
 
       // Set up relic discovery callback
@@ -4730,37 +4882,8 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
               ),
 
             // TYC3: Show turn timer (only in online mode)
-            if (_useTYC3Mode &&
-                _isOnlineMode &&
-                !match.isGameOver &&
-                _matchManager.isPlayerTurn)
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 4,
-                ),
-                margin: const EdgeInsets.only(right: 8),
-                decoration: BoxDecoration(
-                  color: _turnSecondsRemaining <= 10
-                      ? Colors.red
-                      : Colors.green,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.timer, size: 16, color: Colors.white),
-                    const SizedBox(width: 4),
-                    Text(
-                      '$_turnSecondsRemaining s',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+            if (_useTYC3Mode && _isOnlineMode && !match.isGameOver)
+              _buildTimerDisplay(match),
             if (match.isGameOver)
               IconButton(
                 icon: const Icon(Icons.refresh),

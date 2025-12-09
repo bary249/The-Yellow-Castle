@@ -79,6 +79,7 @@ class MatchManager {
         false, // For online: opponent deck already in synced order
     String? relicName, // Custom relic name (e.g. for campaign)
     String? relicDescription, // Custom relic description
+    bool isChessTimerMode = false, // Whether to use chess timer
   }) {
     // Create players with heroes (copy heroes to reset ability state)
     final player = Player(
@@ -129,6 +130,7 @@ class MatchManager {
       opponent: opponent,
       board: board,
     );
+    _currentMatch!.isChessTimerMode = isChessTimerMode;
 
     // Initialize relics on the battlefield
     if (predefinedRelicColumn != null) {
@@ -1327,6 +1329,7 @@ class MatchManager {
         false, // For online: opponent deck already in synced order
     String? relicName, // Custom relic name (e.g. for campaign)
     String? relicDescription, // Custom relic description
+    bool isChessTimerMode = false, // Whether to use chess timer
   }) {
     // Use the existing startMatch logic
     startMatch(
@@ -1346,6 +1349,7 @@ class MatchManager {
       skipOpponentShuffle: skipOpponentShuffle,
       relicName: relicName,
       relicDescription: relicDescription,
+      isChessTimerMode: isChessTimerMode,
     );
 
     if (_currentMatch == null) return;

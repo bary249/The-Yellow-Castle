@@ -169,6 +169,18 @@ class MatchState {
   /// Turn duration in seconds
   static const int turnDurationSeconds = 100;
 
+  /// Default chess timer total duration (5 minutes)
+  static const int defaultChessTimeSeconds = 300;
+
+  /// Whether match uses chess timer mode (accumulative time)
+  bool isChessTimerMode = false;
+
+  /// Total time remaining for player (in seconds)
+  int playerTotalTimeRemaining = defaultChessTimeSeconds;
+
+  /// Total time remaining for opponent (in seconds)
+  int opponentTotalTimeRemaining = defaultChessTimeSeconds;
+
   // ===== END TYC3 =====
 
   // LEGACY: Turn submission tracking (kept for backward compatibility)
@@ -335,6 +347,9 @@ class MatchState {
     'relicClaimedBy': relicManager.relicClaimedBy,
     'lastCombatResult': lastCombatResult?.toJson(),
     'lastHeroAbility': lastHeroAbility?.toJson(),
+    'isChessTimerMode': isChessTimerMode,
+    'playerTotalTimeRemaining': playerTotalTimeRemaining,
+    'opponentTotalTimeRemaining': opponentTotalTimeRemaining,
   };
 
   /// Create from JSON (for online sync)
@@ -418,6 +433,22 @@ class MatchState {
     final heroAbilityJson = json['lastHeroAbility'] as Map<String, dynamic>?;
     if (heroAbilityJson != null) {
       match.lastHeroAbility = SyncedHeroAbility.fromJson(heroAbilityJson);
+    }
+
+    // Restore chess timer state
+    match.isChessTimerMode = json['isChessTimerMode'] as bool? ?? false;
+    final pTime =
+        json['playerTotalTimeRemaining'] as int? ?? defaultChessTimeSeconds;
+    final oTime =
+        json['opponentTotalTimeRemaining'] as int? ?? defaultChessTimeSeconds;
+
+    if (iAmPlayer) {
+      match.playerTotalTimeRemaining = pTime;
+      match.opponentTotalTimeRemaining = oTime;
+    } else {
+      // Swap times if viewing from opponent's perspective
+      match.playerTotalTimeRemaining = oTime;
+      match.opponentTotalTimeRemaining = pTime;
     }
 
     return match;
