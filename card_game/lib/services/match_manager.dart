@@ -1548,7 +1548,7 @@ class MatchManager {
     // Clean up enemy units that attacked more than 1 turn ago (fog of war)
     final currentTurn = _currentMatch!.turnNumber;
     _currentMatch!.recentlyAttackedEnemyUnits.removeWhere(
-      (unitId, attackTurn) => currentTurn - attackTurn > 1,
+      (unitId, attackTurn) => currentTurn - attackTurn >= 1,
     );
 
     // Reset turn state
