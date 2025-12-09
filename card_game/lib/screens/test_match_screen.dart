@@ -834,7 +834,10 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                     size: 12,
                     color: Colors.orange,
                   ),
-                  Text('${card.damage}', style: const TextStyle(fontSize: 12)),
+                  Text(
+                    '${card.currentDamage}/${card.damage}',
+                    style: const TextStyle(fontSize: 12),
+                  ),
                 ],
               ),
               const SizedBox(height: 2),
@@ -7142,9 +7145,9 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                       color: Colors.orange[700],
                     ),
                     Text(
-                      '${card.currentDamage}',
+                      '${card.currentDamage}/${card.damage}',
                       style: TextStyle(
-                        fontSize: width * 0.11,
+                        fontSize: width * 0.10,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
