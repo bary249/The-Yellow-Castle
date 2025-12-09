@@ -179,70 +179,95 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     final overlay = Overlay.of(context);
 
     _turnDialogOverlay = OverlayEntry(
-      builder: (context) => Positioned(
-        top: MediaQuery.of(context).size.height * 0.2, // Top 20%
-        left: 0,
-        right: 0,
-        child: Material(
-          color: Colors.transparent,
-          child: Center(
-            child: TweenAnimationBuilder<double>(
-              tween: Tween(begin: 0.0, end: 1.0),
-              duration: const Duration(milliseconds: 300),
-              builder: (context, value, child) {
-                return Opacity(
-                  opacity: value,
-                  child: Transform.scale(
-                    scale: 0.8 + (0.2 * value),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 32,
-                        vertical: 16,
-                      ),
-                      decoration: BoxDecoration(
-                        color: isMyTurn
-                            ? Colors.blue[900]!.withOpacity(0.9)
-                            : Colors.red[900]!.withOpacity(0.9),
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.5),
-                            blurRadius: 10,
-                            spreadRadius: 2,
-                          ),
-                        ],
-                        border: Border.all(
-                          color: Colors.white.withOpacity(0.5),
-                          width: 2,
-                        ),
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            isMyTurn ? Icons.person : Icons.warning,
-                            size: 48,
-                            color: Colors.white,
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            isMyTurn ? "YOUR TURN" : "ENEMY TURN",
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 2.0,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
+      builder: (context) => Stack(
+        children: [
+          // Full screen touch detector to dismiss on tap outside
+          Positioned.fill(
+            child: GestureDetector(
+              onTap: () {
+                _turnDialogOverlay?.remove();
+                _turnDialogOverlay = null;
+                _turnOverlayTimer?.cancel();
               },
+              behavior: HitTestBehavior.translucent,
+              child: Container(color: Colors.transparent),
             ),
           ),
-        ),
+          // Dialog content
+          Positioned(
+            top: MediaQuery.of(context).size.height * 0.2, // Top 20%
+            left: 0,
+            right: 0,
+            child: Material(
+              color: Colors.transparent,
+              child: Center(
+                child: TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0.0, end: 1.0),
+                  duration: const Duration(milliseconds: 300),
+                  builder: (context, value, child) {
+                    return Opacity(
+                      opacity: value,
+                      child: Transform.scale(
+                        scale: 0.8 + (0.2 * value),
+                        // Also allow dismissing by tapping the banner itself
+                        child: GestureDetector(
+                          onTap: () {
+                            _turnDialogOverlay?.remove();
+                            _turnDialogOverlay = null;
+                            _turnOverlayTimer?.cancel();
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 32,
+                              vertical: 16,
+                            ),
+                            decoration: BoxDecoration(
+                              color: isMyTurn
+                                  ? Colors.blue[900]!.withOpacity(0.9)
+                                  : Colors.red[900]!.withOpacity(0.9),
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.5),
+                                  blurRadius: 10,
+                                  spreadRadius: 2,
+                                ),
+                              ],
+                              border: Border.all(
+                                color: Colors.white.withOpacity(0.5),
+                                width: 2,
+                              ),
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  isMyTurn ? Icons.person : Icons.warning,
+                                  size: 48,
+                                  color: Colors.white,
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  isMyTurn ? "YOUR TURN" : "ENEMY TURN",
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 2.0,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
 
