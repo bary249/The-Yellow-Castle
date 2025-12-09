@@ -3867,29 +3867,48 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       'forceCampaignDeck: ${widget.forceCampaignDeck}, hero: ${playerHero.name}',
     );
     final Deck playerDeck;
-    final isNapoleon = playerHero.name.toLowerCase().contains('napoleon');
+
+    // Check for specific hero decks
     if (widget.forceCampaignDeck) {
       // Campaign mode: always use hero's campaign deck
-      if (isNapoleon) {
+      if (playerHero.id == 'napoleon') {
         playerDeck = Deck.napoleon(playerId: id);
         debugPrint('🎖️ CAMPAIGN MODE: Using Napoleon starter deck (25 cards)');
       } else {
+        // Fallback for other campaign heroes
         playerDeck = Deck.starter(playerId: id);
         debugPrint(
           '🎖️ CAMPAIGN MODE: Using starter deck for ${playerHero.name}',
         );
       }
     } else if (_savedDeck != null && _savedDeck!.isNotEmpty) {
-      // Use saved deck if available
+      // Use saved deck if available (custom deck overrides hero default)
+      // Note: This might need changing if we want to force hero decks
       playerDeck = Deck.fromCards(playerId: id, cards: _savedDeck!);
       debugPrint('Using saved deck (${_savedDeck!.length} cards)');
-    } else if (isNapoleon) {
-      // Default to Napoleon's deck for Napoleon hero
-      playerDeck = Deck.napoleon(playerId: id);
-      debugPrint('Using Napoleon starter deck (25 cards)');
     } else {
-      playerDeck = Deck.starter(playerId: id);
-      debugPrint('Using generic starter deck');
+      // Default deck based on hero ID
+      switch (playerHero.id) {
+        case 'napoleon':
+          playerDeck = Deck.napoleon(playerId: id);
+          debugPrint('Using Napoleon\'s Grand Army deck');
+          break;
+        case 'saladin':
+          playerDeck = Deck.saladin(playerId: id);
+          debugPrint('Using Saladin\'s Desert Warriors deck');
+          break;
+        case 'admiral_nelson':
+          playerDeck = Deck.nelson(playerId: id);
+          debugPrint('Using Nelson\'s Royal Navy deck');
+          break;
+        case 'archduke_charles':
+          playerDeck = Deck.archduke(playerId: id);
+          debugPrint('Using Archduke\'s Austrian Army deck');
+          break;
+        default:
+          playerDeck = Deck.starter(playerId: id);
+          debugPrint('Using generic starter deck');
+      }
     }
 
     // Determine opponent name and deck

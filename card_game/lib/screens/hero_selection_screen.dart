@@ -35,7 +35,7 @@ class _HeroSelectionScreenState extends State<HeroSelectionScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Choose Your Hero'),
+        title: const Text('Select Your Army'),
         backgroundColor: Colors.indigo[800],
         foregroundColor: Colors.white,
       ),
@@ -160,6 +160,16 @@ class _HeroSelectionScreenState extends State<HeroSelectionScreen> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _getArmyName(hero),
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey[700],
+                        fontWeight: FontWeight.w600,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
                     const SizedBox(height: 4),
                     Row(
                       children: [
@@ -234,6 +244,21 @@ class _HeroSelectionScreenState extends State<HeroSelectionScreen> {
         return Colors.teal[700]!;
       default:
         return Colors.grey[700]!;
+    }
+  }
+
+  String _getArmyName(GameHero hero) {
+    switch (hero.id) {
+      case 'napoleon':
+        return "French Grand Army";
+      case 'saladin':
+        return "Desert Warriors";
+      case 'admiral_nelson':
+        return "Royal Navy";
+      case 'archduke_charles':
+        return "Austrian Forces";
+      default:
+        return "Standard Army";
     }
   }
 

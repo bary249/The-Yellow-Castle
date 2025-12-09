@@ -95,6 +95,43 @@ class GameCard {
     );
   }
 
+  /// Create a copy with some properties changed
+  GameCard copyWith({
+    String? id,
+    String? name,
+    int? damage,
+    int? health,
+    int? tick,
+    int? moveSpeed,
+    int? maxAP,
+    int? apPerTurn,
+    int? attackAPCost,
+    int? attackRange,
+    String? element,
+    String? family,
+    List<String>? abilities,
+    int? cost,
+    int? rarity,
+  }) {
+    return GameCard(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      damage: damage ?? this.damage,
+      health: health ?? this.health,
+      tick: tick ?? this.tick,
+      moveSpeed: moveSpeed ?? this.moveSpeed,
+      maxAP: maxAP ?? this.maxAP,
+      apPerTurn: apPerTurn ?? this.apPerTurn,
+      attackAPCost: attackAPCost ?? this.attackAPCost,
+      attackRange: attackRange ?? this.attackRange,
+      element: element ?? this.element,
+      family: family ?? this.family,
+      abilities: abilities ?? this.abilities,
+      cost: cost ?? this.cost,
+      rarity: rarity ?? this.rarity,
+    );
+  }
+
   /// Create a deep copy including runtime state (for snapshots/replays)
   GameCard clone() {
     final copy = GameCard(

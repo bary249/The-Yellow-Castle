@@ -1216,6 +1216,108 @@ List<GameCard> buildNapoleonStarterDeck() {
   return cards;
 }
 
+/// Saladin's 25-card starter deck (Desert Theme).
+/// Focus: High damage, fast units (Cavalry), but fragile.
+List<GameCard> buildSaladinStarterDeck() {
+  final cards = <GameCard>[];
+
+  // 1 Scout
+  cards.add(scoutUnit(0));
+
+  // === COMMON CARDS (15 total) ===
+
+  // Desert Quick Strike (Cavalry) x4 - Fast, High AP
+  for (int i = 0; i < 4; i++) {
+    cards.add(desertQuickStrike(i).copyWith(name: 'Mamluk Cavalry'));
+  }
+
+  // Desert Warrior (Pikeman) x4 - Balanced
+  for (int i = 0; i < 4; i++) {
+    cards.add(desertWarrior(i).copyWith(name: 'Saracen Infantry'));
+  }
+
+  // Desert Tank (Shield Guard) x3 - High HP
+  for (int i = 0; i < 3; i++) {
+    cards.add(desertTank(i).copyWith(name: 'Desert Guard'));
+  }
+
+  // Desert Archer (Archer) x4 - Ranged
+  for (int i = 0; i < 4; i++) {
+    cards.add(desertArcher(i).copyWith(name: 'Bedouin Archer'));
+  }
+
+  // === RARE CARDS (9 total) ===
+
+  // Desert Elite Striker (Cavalry+) x3
+  for (int i = 0; i < 3; i++) {
+    cards.add(desertEliteStriker(i).copyWith(name: 'Royal Mamluk'));
+  }
+
+  // Desert Veteran (Pikeman+) x3
+  for (int i = 0; i < 3; i++) {
+    cards.add(desertVeteran(i).copyWith(name: 'Saladin\'s Chosen'));
+  }
+
+  // Desert Cannon (Cannon) x3 - Long range
+  for (int i = 0; i < 3; i++) {
+    cards.add(desertCannon(i).copyWith(name: 'Siege Catapult'));
+  }
+
+  assert(cards.length == 25, 'Saladin starter deck must have 25 cards');
+  return cards;
+}
+
+/// Admiral Nelson's 25-card starter deck (Water/Navy Theme).
+/// Focus: Defensive, Healing, Ranged.
+List<GameCard> buildNelsonStarterDeck() {
+  final cards = <GameCard>[];
+
+  // 1 Scout
+  cards.add(scoutUnit(0));
+
+  // === COMMON CARDS (15 total) ===
+
+  // Lake Quick Strike (Cavalry - Boarding Party) x3
+  for (int i = 0; i < 3; i++) {
+    cards.add(lakeQuickStrike(i).copyWith(name: 'Boarding Party'));
+  }
+
+  // Lake Warrior (Pikeman - Marine) x4
+  for (int i = 0; i < 4; i++) {
+    cards.add(lakeWarrior(i).copyWith(name: 'Royal Marine'));
+  }
+
+  // Lake Tank (Shield Guard - Hull) x4
+  for (int i = 0; i < 4; i++) {
+    cards.add(lakeTank(i).copyWith(name: 'Ironclad Hull'));
+  }
+
+  // Lake Archer (Archer - Musketman) x4
+  for (int i = 0; i < 4; i++) {
+    cards.add(lakeArcher(i).copyWith(name: 'Naval Gunner'));
+  }
+
+  // === RARE CARDS (9 total) ===
+
+  // Lake Elite Striker x3
+  for (int i = 0; i < 3; i++) {
+    cards.add(lakeEliteStriker(i).copyWith(name: 'First Mate'));
+  }
+
+  // Lake Veteran x3
+  for (int i = 0; i < 3; i++) {
+    cards.add(lakeVeteran(i).copyWith(name: 'Veteran Sailor'));
+  }
+
+  // Lake Cannon x3
+  for (int i = 0; i < 3; i++) {
+    cards.add(lakeCannon(i).copyWith(name: 'Ship Cannon'));
+  }
+
+  assert(cards.length == 25, 'Nelson starter deck must have 25 cards');
+  return cards;
+}
+
 /// All cards available for Napoleon to acquire during campaign.
 /// Does NOT include starter deck cards.
 List<GameCard> buildNapoleonCampaignCardPool() {

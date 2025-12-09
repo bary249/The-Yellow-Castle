@@ -81,11 +81,37 @@ class Deck {
     );
   }
 
+  /// Create Saladin's Desert Warriors deck
+  factory Deck.saladin({String? playerId}) {
+    final cards = buildSaladinStarterDeck();
+    return Deck(
+      id: 'saladin_${playerId ?? "default"}',
+      name: "Saladin's Warriors",
+      cards: cards,
+    );
+  }
+
+  /// Create Admiral Nelson's Royal Navy deck
+  factory Deck.nelson({String? playerId}) {
+    final cards = buildNelsonStarterDeck();
+    return Deck(
+      id: 'nelson_${playerId ?? "default"}',
+      name: "Nelson's Fleet",
+      cards: cards,
+    );
+  }
+
   /// Create Act 1 enemy deck (Austrian forces - Italian Campaign)
+  /// Now associated with Archduke Charles
   factory Deck.act1Enemy({String? playerId}) {
+    return Deck.archduke(playerId: playerId);
+  }
+
+  /// Create Archduke Charles's Austrian Army deck
+  factory Deck.archduke({String? playerId}) {
     final cards = buildAct1EnemyDeck();
     return Deck(
-      id: 'act1_enemy_${playerId ?? "default"}',
+      id: 'archduke_${playerId ?? "default"}',
       name: 'Austrian Forces',
       cards: cards,
     );
