@@ -4653,9 +4653,10 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     final board = snapshot.boardState;
 
     // Create a temporary MatchState to reuse existing UI builders
+    // IMPORTANT: Use the player/opponent states from the snapshot!
     final replayMatch = MatchState(
-      player: _matchManager.currentMatch!.player, // Keep original players
-      opponent: _matchManager.currentMatch!.opponent,
+      player: snapshot.playerState,
+      opponent: snapshot.opponentState,
       board: board,
       currentPhase: MatchPhase.gameOver,
       turnNumber: snapshot.turnNumber,
