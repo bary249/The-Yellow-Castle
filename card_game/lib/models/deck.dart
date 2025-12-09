@@ -11,12 +11,18 @@ class Deck {
   final String name;
   final List<GameCard> _cards;
 
-  Deck({required this.id, required this.name, required List<GameCard> cards})
-    : _cards = cards.map((c) => c.copy()).toList() {
-    assert(
-      cards.length >= minDeckSize && cards.length <= maxDeckSize,
-      'Deck must have $minDeckSize-$maxDeckSize cards (got ${cards.length})',
-    );
+  Deck({
+    required this.id,
+    required this.name,
+    required List<GameCard> cards,
+    bool skipValidation = false,
+  }) : _cards = cards.map((c) => c.copy()).toList() {
+    if (!skipValidation) {
+      assert(
+        cards.length >= minDeckSize && cards.length <= maxDeckSize,
+        'Deck must have $minDeckSize-$maxDeckSize cards (got ${cards.length})',
+      );
+    }
   }
 
   /// Get remaining cards in deck

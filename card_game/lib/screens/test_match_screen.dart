@@ -130,8 +130,9 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   int _replayTurnIndex = 0;
   TurnSnapshot? _currentReplaySnapshot;
 
-  // Dialog timers
-  Timer? _turnDialogTimer;
+  // Overlay for turn notification
+  OverlayEntry? _turnDialogOverlay;
+  Timer? _turnOverlayTimer;
 
   @override
   void initState() {
@@ -143,12 +144,12 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     }
     _initPlayerAndMatch();
 
-    // Listen for turn changes to show dialog
+    // Listen for turn changes to show overlay
     _matchManager.onTurnChanged = (activePlayerId) {
       if (!mounted) return;
 
       final isMyTurn = activePlayerId == _matchManager.currentMatch?.player.id;
-      _showTurnChangeDialog(isMyTurn);
+      _showTurnChangeOverlay(isMyTurn);
 
       // Also handle normal turn change logic
       if (isMyTurn && _isOnlineMode) {
@@ -161,81 +162,99 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   void dispose() {
     _matchListener?.cancel();
     _turnTimer?.cancel();
-    _turnDialogTimer?.cancel();
+    _turnOverlayTimer?.cancel();
+    _turnDialogOverlay?.remove();
     _onlineStateSubscription?.cancel();
     _onlineGameManager?.dispose();
     super.dispose();
   }
 
-  /// Show a dialog when turn changes
-  void _showTurnChangeDialog(bool isMyTurn) {
-    // Cancel any existing timer
-    _turnDialogTimer?.cancel();
+  /// Show a non-blocking overlay when turn changes
+  void _showTurnChangeOverlay(bool isMyTurn) {
+    // Remove existing overlay if any
+    _turnOverlayTimer?.cancel();
+    _turnDialogOverlay?.remove();
+    _turnDialogOverlay = null;
 
-    // Close any open dialogs first (like previous turn dialogs)
-    if (Navigator.of(context).canPop()) {
-      // Be careful not to close the game screen itself or essential dialogs
-      // This is a bit risky if other dialogs are open, but for turn flow it's usually fine
-      // Better approach: use a specific route/key or just show overlay
-    }
+    final overlay = Overlay.of(context);
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) {
-        // Auto-dismiss after 2 seconds
-        _turnDialogTimer = Timer(const Duration(seconds: 2), () {
-          if (mounted && Navigator.of(context).canPop()) {
-            Navigator.of(context).pop();
-          }
-        });
-
-        return AlertDialog(
-          backgroundColor: isMyTurn
-              ? Colors.blue[900]!.withOpacity(0.9)
-              : Colors.red[900]!.withOpacity(0.9),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                isMyTurn ? Icons.person : Icons.warning,
-                size: 48,
-                color: Colors.white,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                isMyTurn ? "YOUR TURN" : "ENEMY TURN",
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 2.0,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                isMyTurn ? "Make your move!" : "Opponent is thinking...",
-                style: const TextStyle(color: Colors.white70),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                _turnDialogTimer?.cancel();
-                Navigator.of(context).pop();
+    _turnDialogOverlay = OverlayEntry(
+      builder: (context) => Positioned(
+        top: MediaQuery.of(context).size.height * 0.2, // Top 20%
+        left: 0,
+        right: 0,
+        child: Material(
+          color: Colors.transparent,
+          child: Center(
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0.0, end: 1.0),
+              duration: const Duration(milliseconds: 300),
+              builder: (context, value, child) {
+                return Opacity(
+                  opacity: value,
+                  child: Transform.scale(
+                    scale: 0.8 + (0.2 * value),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 32,
+                        vertical: 16,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isMyTurn
+                            ? Colors.blue[900]!.withOpacity(0.9)
+                            : Colors.red[900]!.withOpacity(0.9),
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.5),
+                            blurRadius: 10,
+                            spreadRadius: 2,
+                          ),
+                        ],
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.5),
+                          width: 2,
+                        ),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            isMyTurn ? Icons.person : Icons.warning,
+                            size: 48,
+                            color: Colors.white,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            isMyTurn ? "YOUR TURN" : "ENEMY TURN",
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 2.0,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
               },
-              child: const Text('OK', style: TextStyle(color: Colors.white)),
             ),
-          ],
-        );
-      },
+          ),
+        ),
+      ),
     );
+
+    overlay.insert(_turnDialogOverlay!);
+
+    // Auto-dismiss after 2 seconds
+    _turnOverlayTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted && _turnDialogOverlay != null) {
+        _turnDialogOverlay!.remove();
+        _turnDialogOverlay = null;
+      }
+    });
   }
 
   // ===== TYC3: Turn timer methods =====
@@ -367,10 +386,12 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     if (isMyTurnNow && !wasMyTurn) {
       // Turn just switched to us - start timer
       debugPrint('🔄 Turn switched to us!');
+      _showTurnChangeOverlay(true);
       _startTurnTimer();
     } else if (!isMyTurnNow && wasMyTurn) {
       // Turn just switched away from us - stop timer
       debugPrint('🔄 Turn switched to opponent');
+      _showTurnChangeOverlay(false);
       _turnTimer?.cancel();
 
       // Close any open attack preview dialog
@@ -2292,6 +2313,28 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     // If tapping an opponent card without selection, show details
     if (isOpponent) {
       _showCardDetails(card);
+    }
+  }
+
+  /// Get cards at a specific tile, filtered by owner
+  List<GameCard> _getCardsAtTile(
+    int row,
+    int col, {
+    required bool isOpponent,
+    MatchState? matchState,
+  }) {
+    final match = matchState ?? _matchManager.currentMatch;
+    if (match == null) return [];
+
+    final tile = match.board.getTile(row, col);
+    if (isOpponent) {
+      return tile.cards
+          .where((c) => c.ownerId == match.opponent.id && c.isAlive)
+          .toList();
+    } else {
+      return tile.cards
+          .where((c) => c.ownerId == match.player.id && c.isAlive)
+          .toList();
     }
   }
 

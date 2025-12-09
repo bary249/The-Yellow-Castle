@@ -35,7 +35,7 @@ class TurnSnapshot {
         targetTile.owner = sourceTile.owner;
 
         for (final card in sourceTile.cards) {
-          targetTile.cards.add(card.copy());
+          targetTile.cards.add(card.clone());
         }
 
         for (final gs in sourceTile.gravestones) {

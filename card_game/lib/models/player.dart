@@ -174,8 +174,9 @@ class Player {
       deck: Deck(
         id: deck.id,
         name: deck.name,
-        cards: [],
-      ), // Deck copy handled separately if needed
+        cards: deck.cards,
+        skipValidation: true,
+      ),
       isHuman: isHuman,
       baseHP: baseHP,
       gold: gold,
@@ -185,7 +186,7 @@ class Player {
 
     // Copy hand
     for (final card in hand) {
-      newPlayer.hand.add(card.copy());
+      newPlayer.hand.add(card.clone());
     }
 
     return newPlayer;

@@ -95,6 +95,32 @@ class GameCard {
     );
   }
 
+  /// Create a deep copy including runtime state (for snapshots/replays)
+  GameCard clone() {
+    final copy = GameCard(
+      id: id,
+      name: name,
+      damage: damage,
+      health: health,
+      tick: tick,
+      moveSpeed: moveSpeed,
+      maxAP: maxAP,
+      apPerTurn: apPerTurn,
+      attackAPCost: attackAPCost,
+      attackRange: attackRange,
+      element: element,
+      family: family,
+      abilities: abilities,
+      cost: cost,
+      rarity: rarity,
+    );
+    // Copy runtime state
+    copy.currentHealth = currentHealth;
+    copy.currentAP = currentAP;
+    copy.ownerId = ownerId;
+    return copy;
+  }
+
   /// Check if card is still alive
   bool get isAlive => currentHealth > 0;
 
