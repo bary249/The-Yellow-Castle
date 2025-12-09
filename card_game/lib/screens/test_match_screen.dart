@@ -2341,28 +2341,6 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     }
   }
 
-  /// Get cards at a specific tile, filtered by owner
-  List<GameCard> _getCardsAtTile(
-    int row,
-    int col, {
-    required bool isOpponent,
-    MatchState? matchState,
-  }) {
-    final match = matchState ?? _matchManager.currentMatch;
-    if (match == null) return [];
-
-    final tile = match.board.getTile(row, col);
-    if (isOpponent) {
-      return tile.cards
-          .where((c) => c.ownerId == match.opponent.id && c.isAlive)
-          .toList();
-    } else {
-      return tile.cards
-          .where((c) => c.ownerId == match.player.id && c.isAlive)
-          .toList();
-    }
-  }
-
   /// Count AI cards in a specific lane (all rows)
   int _countAICardsInLane(MatchState match, int col) {
     int count = 0;
@@ -2751,6 +2729,8 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         return Icons.flash_on;
       case HeroAbilityType.healUnits:
         return Icons.healing;
+      case HeroAbilityType.directBaseDamage:
+        return Icons.local_fire_department;
     }
   }
 

@@ -57,5 +57,8 @@ enum HeroAbilityType {
   /// Heal all surviving units by 3 HP.
   healUnits,
 
+  /// Deal direct damage to enemy base (e.g. 2 damage).
+  directBaseDamage,
+
   /// (Future) More ability types can be added here.
 }

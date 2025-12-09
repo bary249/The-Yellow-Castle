@@ -270,6 +270,29 @@ class MatchManager {
         }
         _log('   Healed $healed surviving units by up to 3 HP.');
         break;
+
+      case HeroAbilityType.directBaseDamage:
+        // Deal 2 damage to enemy base
+        _currentMatch!.opponent.crystalHP -= 2;
+        if (_currentMatch!.opponent.crystalHP < 0) {
+          _currentMatch!.opponent.crystalHP = 0;
+        }
+        _log(
+          '   Dealt 2 direct damage to enemy base! Opponent HP: ${_currentMatch!.opponent.crystalHP}',
+        );
+
+        // Check for immediate win
+        if (_currentMatch!.opponent.crystalHP <= 0) {
+          _currentMatch!.currentPhase = MatchPhase.gameOver;
+          _currentMatch!.winnerId = _currentMatch!.player.id;
+          _log('🏆 GAME OVER! Player wins via Hero Ability!');
+
+          // Capture final snapshot for replay
+          _currentMatch!.history.add(
+            TurnSnapshot.fromState(matchState: _currentMatch!),
+          );
+        }
+        break;
     }
 
     return true;

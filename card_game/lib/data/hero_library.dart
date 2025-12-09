@@ -60,14 +60,14 @@ class HeroLibrary {
 
   /// Archduke Charles - Austrian Field Marshal.
   /// Affinity: Woods (Alpine/Forest terrain)
-  /// Ability: Give all your units +1 damage this turn.
+  /// Ability: Deal 2 direct damage to the enemy base.
   static GameHero archdukeCharles() => GameHero(
     id: 'archduke_charles',
     name: 'Archduke Charles',
     description:
         'A capable Austrian commander and one of Napoleon\'s most formidable opponents.',
     terrainAffinities: ['Woods'],
-    abilityType: HeroAbilityType.damageBoost,
-    abilityDescription: 'Give all your units +1 damage this turn.',
+    abilityType: HeroAbilityType.directBaseDamage,
+    abilityDescription: 'Deal 2 direct damage to the enemy base.',
   );
 }
