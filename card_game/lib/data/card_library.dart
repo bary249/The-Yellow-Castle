@@ -959,10 +959,11 @@ List<GameCard> buildStarterCardPool() {
   cards.add(lakeEliteStriker(0));
   cards.add(woodsEliteStriker(0));
 
-  // 3 Common Warriors: 1 of each element (reduced from 6)
+  // 2 Common Warriors (Reduced for Decoy)
   cards.add(desertWarrior(0));
   cards.add(lakeWarrior(0));
-  cards.add(woodsWarrior(0));
+  // 1 Decoy Warrior (Woods)
+  cards.add(woodsWarrior(99).copyWith(isDecoy: true));
 
   // 3 Rare Veterans: 1 of each element
   cards.add(desertVeteran(0));
@@ -1170,10 +1171,12 @@ List<GameCard> buildNapoleonStarterDeck() {
     cards.add(napoleonVoltigeur(i));
   }
 
-  // Fusilier ×3 - Standard infantry (tick 3, move 1)
-  for (int i = 0; i < 3; i++) {
+  // Fusilier ×2 (Reduced from 3 for Decoy)
+  for (int i = 0; i < 2; i++) {
     cards.add(napoleonFusilier(i));
   }
+  // 1 Decoy Fusilier
+  cards.add(napoleonFusilier(99).copyWith(isDecoy: true));
 
   // Line Infantry ×3 - Veteran soldiers (tick 4, move 1)
   for (int i = 0; i < 3; i++) {
@@ -1231,10 +1234,14 @@ List<GameCard> buildSaladinStarterDeck() {
     cards.add(desertQuickStrike(i).copyWith(name: 'Mamluk Cavalry'));
   }
 
-  // Desert Warrior (Pikeman) x4 - Balanced
-  for (int i = 0; i < 4; i++) {
+  // Desert Warrior (Pikeman) x3 (Reduced for Decoy)
+  for (int i = 0; i < 3; i++) {
     cards.add(desertWarrior(i).copyWith(name: 'Saracen Infantry'));
   }
+  // 1 Decoy Warrior
+  cards.add(
+    desertWarrior(99).copyWith(name: 'Saracen Infantry', isDecoy: true),
+  );
 
   // Desert Tank (Shield Guard) x3 - High HP
   for (int i = 0; i < 3; i++) {
@@ -1282,10 +1289,12 @@ List<GameCard> buildNelsonStarterDeck() {
     cards.add(lakeQuickStrike(i).copyWith(name: 'Boarding Party'));
   }
 
-  // Lake Warrior (Pikeman - Marine) x4
-  for (int i = 0; i < 4; i++) {
+  // Lake Warrior (Pikeman - Marine) x3 (Reduced for Decoy)
+  for (int i = 0; i < 3; i++) {
     cards.add(lakeWarrior(i).copyWith(name: 'Royal Marine'));
   }
+  // 1 Decoy Warrior
+  cards.add(lakeWarrior(99).copyWith(name: 'Royal Marine', isDecoy: true));
 
   // Lake Tank (Shield Guard - Hull) x4
   for (int i = 0; i < 4; i++) {
@@ -1520,10 +1529,12 @@ List<GameCard> buildAct1EnemyDeck() {
     cards.add(austrianJager(i));
   }
 
-  // Line Infantry ×4 (reduced by 1 for Scout)
-  for (int i = 0; i < 4; i++) {
+  // Line Infantry ×3 (Reduced for Decoy)
+  for (int i = 0; i < 3; i++) {
     cards.add(austrianLineInfantry(i));
   }
+  // 1 Decoy Infantry
+  cards.add(austrianLineInfantry(99).copyWith(isDecoy: true));
 
   // Grenadiers ×3
   for (int i = 0; i < 3; i++) {

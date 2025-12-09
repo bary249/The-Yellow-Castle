@@ -5928,6 +5928,23 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             // Position label
+            if (card.isDecoy && isPlayer)
+              Container(
+                margin: const EdgeInsets.only(bottom: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.purple,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Text(
+                  '⚠️ DECOY UNIT',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
             Text(
               position,
               style: TextStyle(
@@ -7450,6 +7467,22 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Card name
+            if (card.isDecoy && isPlayerCard)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+                decoration: BoxDecoration(
+                  color: Colors.black54,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+                child: const Text(
+                  'DECOY',
+                  style: TextStyle(
+                    fontSize: 6,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
             Text(
               card.name,
               style: TextStyle(
@@ -8138,6 +8171,24 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Decoy indicator (always true for player hand cards)
+            if (card.isDecoy)
+              Container(
+                margin: const EdgeInsets.only(bottom: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.purple,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Text(
+                  '⚠️ DECOY UNIT',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
             // Card name
             Text(
               card.name,

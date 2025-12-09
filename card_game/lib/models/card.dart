@@ -35,6 +35,9 @@ class GameCard {
   /// Owner player ID (set when card is placed on board)
   String? ownerId;
 
+  /// Is this card a decoy? (Looks like real card, but 0 DMG / 1 HP logic)
+  final bool isDecoy;
+
   // ===== END TYC3 =====
 
   /// Optional element for terrain matching (e.g. 'Woods', 'Lake', 'Desert')
@@ -70,6 +73,7 @@ class GameCard {
     List<String>? abilities,
     this.cost = 0,
     this.rarity = 1,
+    this.isDecoy = false,
   }) : abilities = List.unmodifiable(abilities ?? const []),
        currentHealth = health,
        currentAP = apPerTurn; // Cards start with apPerTurn AP
@@ -92,6 +96,7 @@ class GameCard {
       abilities: abilities,
       cost: cost,
       rarity: rarity,
+      isDecoy: isDecoy,
     );
   }
 
@@ -112,6 +117,7 @@ class GameCard {
     List<String>? abilities,
     int? cost,
     int? rarity,
+    bool? isDecoy,
   }) {
     return GameCard(
       id: id ?? this.id,
@@ -129,6 +135,7 @@ class GameCard {
       abilities: abilities ?? this.abilities,
       cost: cost ?? this.cost,
       rarity: rarity ?? this.rarity,
+      isDecoy: isDecoy ?? this.isDecoy,
     );
   }
 
@@ -150,6 +157,7 @@ class GameCard {
       abilities: abilities,
       cost: cost,
       rarity: rarity,
+      isDecoy: isDecoy,
     );
     // Copy runtime state
     copy.currentHealth = currentHealth;
@@ -163,6 +171,7 @@ class GameCard {
 
   /// Get current damage output (scaled by HP ratio, 50%-100%)
   /// This is the actual damage the card will deal based on its current health
+  /// Decoys deal 0 effective damage (handled in combat resolver, but can force 0 here too if safer)
   int get currentDamage {
     if (health <= 0) return damage;
     final hpRatio = currentHealth / health;
@@ -172,6 +181,12 @@ class GameCard {
 
   /// Take damage and return true if card dies
   bool takeDamage(int amount) {
+    // Decoys die from any damage
+    if (isDecoy && amount > 0) {
+      currentHealth = 0;
+      return true;
+    }
+
     currentHealth -= amount;
     if (currentHealth < 0) currentHealth = 0;
     return !isAlive;
@@ -224,7 +239,7 @@ class GameCard {
 
   @override
   String toString() =>
-      '$name (HP: $currentHealth/$health, DMG: $damage, AP: $currentAP/$maxAP, AtkCost: $attackAPCost)';
+      '$name (HP: $currentHealth/$health, DMG: $damage, AP: $currentAP/$maxAP, AtkCost: $attackAPCost)${isDecoy ? " [DECOY]" : ""}';
 
   /// Serialize to JSON for saving
   Map<String, dynamic> toJson() => {
@@ -246,6 +261,7 @@ class GameCard {
     'currentHealth': currentHealth,
     'currentAP': currentAP,
     'ownerId': ownerId,
+    'isDecoy': isDecoy,
   };
 
   /// Create from JSON
@@ -266,6 +282,7 @@ class GameCard {
       abilities: List<String>.from(json['abilities'] ?? []),
       cost: json['cost'] as int? ?? 0,
       rarity: json['rarity'] as int? ?? 1,
+      isDecoy: json['isDecoy'] as bool? ?? false,
     );
     card.currentHealth = json['currentHealth'] as int? ?? json['health'] as int;
     card.currentAP = json['currentAP'] as int? ?? 0;
