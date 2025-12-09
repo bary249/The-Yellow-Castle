@@ -1532,6 +1532,8 @@ class MatchManager {
   void endTurnTYC3() {
     if (_currentMatch == null) return;
     if (!useTurnBasedSystem) return;
+    if (_currentMatch!.isGameOver)
+      return; // Prevent turn change if game is over
 
     final wasFirstTurn = _currentMatch!.isFirstTurn;
 

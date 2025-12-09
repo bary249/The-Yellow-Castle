@@ -167,7 +167,9 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         _turnSecondsRemaining--;
 
         // Play ticking sound in last 10 seconds
-        if (_turnSecondsRemaining <= 10 && _turnSecondsRemaining > 0) {
+        if (!_matchManager.currentMatch!.isGameOver &&
+            _turnSecondsRemaining <= 10 &&
+            _turnSecondsRemaining > 0) {
           // SystemSound.play(SystemSoundType.click);
           FlameAudio.play('ticking_clock.mp3');
         }
@@ -175,7 +177,8 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         if (_turnSecondsRemaining <= 0) {
           timer.cancel();
           // Auto-end turn when timer expires
-          if (_matchManager.isPlayerTurn) {
+          if (_matchManager.isPlayerTurn &&
+              !_matchManager.currentMatch!.isGameOver) {
             _endTurnTYC3();
           }
         }
