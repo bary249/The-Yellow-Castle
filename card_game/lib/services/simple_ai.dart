@@ -5,6 +5,7 @@ import '../models/player.dart';
 import '../models/tile.dart';
 import '../models/game_board.dart';
 import '../services/match_manager.dart';
+import '../services/combat_resolver.dart';
 
 /// Simple AI opponent that makes basic decisions
 class SimpleAI {
@@ -15,6 +16,9 @@ class SimpleAI {
   Future<void> executeTurnTYC3(
     MatchManager matchManager, {
     Function(String description)? onAction,
+    Function(GameCard attacker, GameCard target, AttackResult result, int col)?
+    onCombatResult,
+    Function(GameCard attacker, int damage, int col)? onBaseAttack,
     int delayMs = 0,
   }) async {
     final match = matchManager.currentMatch;
@@ -200,6 +204,10 @@ class SimpleAI {
                 tc,
               );
               if (result != null) {
+                // Notify via callback if provided
+                if (onCombatResult != null) {
+                  await onCombatResult(card, target, result, tc);
+                }
                 await logAndWait('Attacked ${target.name} (${result.message})');
               }
               break;
@@ -214,6 +222,9 @@ class SimpleAI {
         if (distToBase <= card.attackRange) {
           final dmg = matchManager.attackBaseTYC3(card, row, col);
           if (dmg > 0) {
+            if (onBaseAttack != null) {
+              await onBaseAttack(card, dmg, col);
+            }
             await logAndWait('Attacked base for $dmg damage');
           }
         }

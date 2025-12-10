@@ -169,8 +169,8 @@ class MatchState {
   /// Turn duration in seconds
   static const int turnDurationSeconds = 100;
 
-  /// Default chess timer total duration (5 minutes)
-  static const int defaultChessTimeSeconds = 300;
+  /// Default chess timer total duration (8 minutes)
+  static const int defaultChessTimeSeconds = 480;
 
   /// Whether match uses chess timer mode (accumulative time)
   bool isChessTimerMode = false;

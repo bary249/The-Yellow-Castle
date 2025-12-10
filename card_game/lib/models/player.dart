@@ -73,6 +73,22 @@ class Player {
     }
   }
 
+  /// Replace specific cards in hand with new ones from deck (Mulligan)
+  void replaceCards(List<GameCard> cardsToReplace) {
+    int count = 0;
+    for (final card in cardsToReplace) {
+      if (hand.contains(card)) {
+        hand.remove(card);
+        deck.returnCard(card);
+        count++;
+      }
+    }
+    deck.shuffle();
+
+    final newCards = deck.drawCards(count);
+    hand.addAll(newCards);
+  }
+
   /// Play a card from hand
   bool playCard(GameCard card) {
     if (!hand.contains(card)) return false;

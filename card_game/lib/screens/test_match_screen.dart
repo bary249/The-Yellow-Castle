@@ -510,6 +510,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     if (isMyTurnNow && !wasMyTurn) {
       // Turn just switched to us - start timer and draw a card
       debugPrint('🔄 Turn switched to us!');
+      FlameAudio.play('turn_pass.mp3');
       _showTurnChangeOverlay(true);
       _startTurnTimer();
 
@@ -594,6 +595,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     }
 
     _matchManager.endTurnTYC3();
+    FlameAudio.play('turn_pass.mp3');
     _clearTYC3Selection();
     _selectedCard = null; // Also clear hand card selection
 
@@ -2463,18 +2465,6 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     }
   }
 
-  /// Count AI cards in a specific lane (all rows)
-  int _countAICardsInLane(MatchState match, int col) {
-    int count = 0;
-    for (int row = 0; row < 3; row++) {
-      final tile = match.board.getTile(row, col);
-      count += tile.cards
-          .where((c) => c.ownerId == match.opponent.id && c.isAlive)
-          .length;
-    }
-    return count;
-  }
-
   Future<void> _doAITurnTYC3() async {
     // Guard: Only run if it's actually the AI's turn
     if (!_matchManager.isOpponentTurn) {
@@ -2489,200 +2479,31 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       'AI TURN START - isOpponentTurn: ${_matchManager.isOpponentTurn}',
     );
 
-    // Wait a bit for visual feedback
-    await Future.delayed(const Duration(milliseconds: 500));
-
-    // AI places cards with smart lane selection
-    final hand = match.opponent.hand;
-    final maxCards = _matchManager.maxCardsThisTurn;
-    int cardsPlaced = 0;
-    final random = Random();
-
-    // Shuffle hand for variety
-    final shuffledHand = hand.toList()..shuffle(random);
-
-    for (final card in shuffledHand) {
-      if (cardsPlaced >= maxCards) break;
-
-      // Smart lane selection: prefer lanes with fewer enemy cards or matching terrain
-      final laneScores = <int, double>{};
-      for (int col = 0; col < 3; col++) {
-        double score = random.nextDouble() * 2; // Base randomness (0-2)
-
-        // Check player presence in this lane (middle row)
-        final middleTile = match.board.getTile(1, col);
-        final playerCardsInMiddle = middleTile.cards
-            .where((c) => c.ownerId == match.player.id && c.isAlive)
-            .length;
-
-        // Prefer lanes where player has cards (to contest)
-        score += playerCardsInMiddle * 1.5;
-
-        // Check AI presence in this lane
-        final aiCardsInLane = _countAICardsInLane(match, col);
-        // Spread cards across lanes (penalty for overcrowding)
-        score -= aiCardsInLane * 0.5;
-
-        // Terrain bonus: prefer placing cards on matching terrain
-        final baseTile = match.board.getTile(0, col);
-        if (baseTile.terrain != null && card.element == baseTile.terrain) {
-          score += 2.0;
-        }
-
-        laneScores[col] = score;
-      }
-
-      // Sort lanes by score (highest first)
-      final sortedLanes = laneScores.entries.toList()
-        ..sort((a, b) => b.value.compareTo(a.value));
-
-      // Try to place in best lane
-      for (final entry in sortedLanes) {
-        if (_matchManager.placeCardTYC3(card, 0, entry.key)) {
-          cardsPlaced++;
-          debugPrint(
-            'AI placed ${card.name} in lane ${entry.key} (score: ${entry.value.toStringAsFixed(1)})',
-          );
-          if (mounted) setState(() {});
-          await Future.delayed(const Duration(milliseconds: 200));
-          break;
-        }
-      }
-    }
-
-    // AI moves cards forward with smart decisions
-    // Collect all AI cards that can move
-    final movableCards = <({GameCard card, int row, int col})>[];
-    for (int row = 0; row <= 1; row++) {
-      for (int col = 0; col < 3; col++) {
-        final tile = match.board.getTile(row, col);
-        for (final card in tile.cards) {
-          if (card.isAlive &&
-              card.canMove() &&
-              card.ownerId == match.opponent.id) {
-            movableCards.add((card: card, row: row, col: col));
-          }
-        }
-      }
-    }
-
-    // Shuffle for variety
-    movableCards.shuffle(random);
-
-    for (final entry in movableCards) {
-      final card = entry.card;
-      final row = entry.row;
-      final col = entry.col;
-
-      if (!card.canMove()) continue; // May have used AP
-
-      final targetRow = row + 1;
-      if (targetRow > 2) continue;
-
-      // Check if moving is beneficial
-      final targetTile = match.board.getTile(targetRow, col);
-      final hasEnemyCards = targetTile.cards.any(
-        (c) => c.ownerId == match.player.id && c.isAlive,
-      );
-
-      // Don't move if enemies block (need to attack first)
-      if (hasEnemyCards) continue;
-
-      // Random chance to not move (adds unpredictability)
-      if (random.nextDouble() < 0.2) continue;
-
-      if (_matchManager.moveCardTYC3(card, row, col, targetRow, col)) {
-        debugPrint('AI moved ${card.name} from row $row to row $targetRow');
+    // Use shared SimpleAI logic
+    await _ai.executeTurnTYC3(
+      _matchManager,
+      delayMs: 300,
+      onAction: (description) {
+        debugPrint('AI Action: $description');
         if (mounted) setState(() {});
-        await Future.delayed(const Duration(milliseconds: 200));
-      }
-    }
-
-    // AI attacks with cards that have AP
-    // Collect all AI cards that can attack
-    final attackers = <({GameCard card, int row, int col})>[];
-    for (int row = 0; row < 3; row++) {
-      for (int col = 0; col < 3; col++) {
-        final tile = match.board.getTile(row, col);
-        for (final card in tile.cards) {
-          if (card.isAlive &&
-              card.canAttack() &&
-              card.ownerId == match.opponent.id) {
-            attackers.add((card: card, row: row, col: col));
-          }
+      },
+      onCombatResult: (attacker, target, result, col) async {
+        if (mounted) {
+          setState(() {});
+          await _showAIBattleResultDialog(result, attacker, target, col);
         }
-      }
-    }
-
-    // Shuffle attackers for variety
-    attackers.shuffle(random);
-
-    for (final entry in attackers) {
-      final card = entry.card;
-      final row = entry.row;
-      final col = entry.col;
-
-      if (!card.canAttack()) continue; // May have used AP
-
-      // Try to attack enemy cards
-      final targets = _matchManager.getValidTargetsTYC3(card, row, col);
-      if (targets.isNotEmpty) {
-        // Smart target selection: prefer low HP targets or high damage targets
-        targets.sort((a, b) {
-          // Prioritize targets we can kill
-          final canKillA = a.currentHealth <= card.damage ? 1 : 0;
-          final canKillB = b.currentHealth <= card.damage ? 1 : 0;
-          if (canKillA != canKillB) return canKillB - canKillA;
-
-          // Then prioritize high damage targets
-          return b.damage - a.damage;
-        });
-
-        final target = targets.first;
-        // Find target position
-        for (int tr = 0; tr < 3; tr++) {
-          for (int tc = 0; tc < 3; tc++) {
-            final targetTile = match.board.getTile(tr, tc);
-            if (targetTile.cards.contains(target)) {
-              final result = _matchManager.attackCardTYC3(
-                card,
-                target,
-                row,
-                col,
-                tr,
-                tc,
-              );
-              if (result != null) {
-                debugPrint('AI: ${result.message}');
-                if (mounted) {
-                  setState(() {});
-                  await _showAIBattleResultDialog(result, card, target, col);
-                }
-              }
-              break;
-            }
-          }
+      },
+      onBaseAttack: (attacker, damage, col) async {
+        if (mounted) {
+          setState(() {});
+          await _showAIBaseAttackDialog(attacker, damage, col);
         }
-      }
-
-      // Try to attack player base if in range (row 1 or 2 for AI attacking player base at row 2)
-      // AI cards attack player base (row 2), so they need to be within attack range
-      final distanceToPlayerBase = (2 - row).abs();
-      if (distanceToPlayerBase <= card.attackRange && card.canAttack()) {
-        final damage = _matchManager.attackBaseTYC3(card, row, col);
-        if (damage > 0) {
-          debugPrint('AI attacked player base for $damage damage!');
-          if (mounted) {
-            setState(() {});
-            await _showAIBaseAttackDialog(card, damage, col);
-          }
-        }
-      }
-    }
+      },
+    );
 
     // End AI turn
-    await Future.delayed(const Duration(milliseconds: 300));
     _matchManager.endTurnTYC3();
+    FlameAudio.play('turn_pass.mp3');
     _startTurnTimer();
     if (mounted) setState(() {});
   }
@@ -2715,7 +2536,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     } else {
       // VS AI mode
       if (mounted) {
-        _startNewMatch();
+        await _startNewMatch();
       }
     }
   }
@@ -4134,7 +3955,175 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     );
   }
 
-  void _startNewMatch() {
+  /// Show Mulligan dialog to replace initial cards
+  Future<void> _showMulliganDialog() async {
+    final player = _matchManager.currentMatch?.player;
+    if (player == null || player.hand.isEmpty) return;
+
+    // Mulligan is only for the local player
+    final hand = player.hand;
+    final selectedIndices = <int>{};
+    int secondsLeft = 10;
+    Timer? timer;
+
+    // Wait for the dialog to close
+    final result = await showDialog<List<int>>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            // Start timer once
+            timer ??= Timer.periodic(const Duration(seconds: 1), (t) {
+              if (secondsLeft > 0) {
+                if (mounted) {
+                  setStateDialog(() {
+                    secondsLeft--;
+                  });
+                }
+              } else {
+                t.cancel();
+                // Auto-confirm with selection if time runs out
+                Navigator.of(context).pop(selectedIndices.toList());
+              }
+            });
+
+            return AlertDialog(
+              backgroundColor: Colors.brown[50],
+              title: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Mulligan Phase'),
+                  Text(
+                    '$secondsLeft s',
+                    style: const TextStyle(
+                      color: Colors.red,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'Select up to 2 cards to replace:',
+                      style: TextStyle(fontStyle: FontStyle.italic),
+                    ),
+                    const SizedBox(height: 16),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: List.generate(hand.length, (index) {
+                          final card = hand[index];
+                          final isSelected = selectedIndices.contains(index);
+                          return GestureDetector(
+                            onTap: () {
+                              setStateDialog(() {
+                                if (isSelected) {
+                                  selectedIndices.remove(index);
+                                } else if (selectedIndices.length < 2) {
+                                  selectedIndices.add(index);
+                                }
+                              });
+                            },
+                            child: Container(
+                              margin: const EdgeInsets.symmetric(horizontal: 4),
+                              child: Transform.scale(
+                                scale: isSelected ? 1.05 : 1.0,
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    border: Border.all(
+                                      color: isSelected
+                                          ? Colors.red
+                                          : Colors.transparent,
+                                      width: 3,
+                                    ),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Opacity(
+                                    opacity: isSelected ? 0.7 : 1.0,
+                                    // Use visual only, no internal interaction
+                                    // Pass isSelected: false to avoid green border clash
+                                    child: _buildHandCardVisual(
+                                      card,
+                                      80,
+                                      120,
+                                      false,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        }),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    timer?.cancel();
+                    Navigator.of(context).pop(selectedIndices.toList());
+                  },
+                  child: Text(
+                    selectedIndices.isEmpty
+                        ? 'Keep Hand'
+                        : 'Confirm Replacement (${selectedIndices.length})',
+                    style: const TextStyle(fontSize: 16),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    timer?.cancel();
+
+    if (result != null && result.isNotEmpty) {
+      // Perform replacement
+      final cardsToReplace = result.map((i) => hand[i]).toList();
+
+      setState(() {
+        player.replaceCards(cardsToReplace);
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Replaced ${cardsToReplace.length} cards with new ones from deck',
+            ),
+            duration: const Duration(seconds: 2),
+            backgroundColor: Colors.green[700],
+          ),
+        );
+      }
+
+      // If online, force sync state to update opponent (though hand is private, it's good practice)
+      // Actually, opponent doesn't see our hand, so strictly speaking not required,
+      // but if we want to ensure deck counts are synced or if we trust client state fully...
+      // Current implementation syncs everything.
+      if (_isOnlineMode && _onlineGameManager != null) {
+        // Only sync if it's our turn, otherwise we might overwrite opponent's move?
+        // Wait, online sync is state-based.
+        // If it's my turn, I sync. If not, I don't.
+        // But Mulligan happens at start.
+        // Player 1 syncs first.
+        if (_matchManager.isPlayerTurn) {
+          _onlineGameManager!.syncState(_matchManager.currentMatch!);
+        }
+      }
+    }
+  }
+
+  Future<void> _startNewMatch() async {
     debugPrint('🚀 _startNewMatch called');
     debugPrint(
       '   _selectedOnlineDeck: ${_selectedOnlineDeck?.length} cards, first: ${_selectedOnlineDeck?.firstOrNull?.name}',
@@ -4428,6 +4417,11 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     _clearTYC3Selection();
     _lastProcessedActionIndex = 0; // Reset action tracking for new match
     setState(() {});
+
+    // Mulligan Phase
+    if (mounted) {
+      await _showMulliganDialog();
+    }
   }
 
   void _clearStaging() {
@@ -7757,6 +7751,20 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       );
     }
 
+    // Infer type icon
+    IconData typeIcon = Icons.person; // Default (Infantry)
+    if (card.abilities.contains('cavalry')) {
+      typeIcon = Icons.directions_run; // Horse/Speed
+    } else if (card.abilities.contains('pikeman')) {
+      typeIcon = Icons.change_history; // Pike tip
+    } else if (card.abilities.contains('shield_guard')) {
+      typeIcon = Icons.shield;
+    } else if (card.abilities.contains('archer') || card.isRanged) {
+      typeIcon = Icons.gps_fixed; // Target
+    } else if (card.abilities.contains('cannon') || card.isLongRange) {
+      typeIcon = Icons.circle; // Cannonball
+    }
+
     return Container(
       width: width,
       height: height,
@@ -7774,88 +7782,90 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         border: Border.all(color: borderColor, width: borderWidth),
         boxShadow: shadows,
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(3),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Card name
-            if (card.isDecoy && isPlayerCard)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+      child: Stack(
+        children: [
+          // 1. Element (Tile Affinity) - Top Right
+          if (card.element != null)
+            Positioned(
+              top: 2,
+              right: 2,
+              child: Container(
+                padding: const EdgeInsets.all(1),
                 decoration: BoxDecoration(
-                  color: Colors.black54,
-                  borderRadius: BorderRadius.circular(2),
+                  color: Colors.black12,
+                  shape: BoxShape.circle,
                 ),
-                child: const Text(
-                  'DECOY',
-                  style: TextStyle(
-                    fontSize: 6,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
+                child: Icon(
+                  _getTerrainIcon(card.element!),
+                  size: width * 0.15,
+                  color: _getTerrainColor(card.element!),
                 ),
               ),
-            Text(
-              card.name,
-              style: TextStyle(
-                fontSize: width * 0.11,
-                fontWeight: FontWeight.bold,
-                color: isOpponent ? Colors.red[900] : Colors.blue[900],
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
             ),
 
-            const Spacer(),
-
-            // Stats row
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          // 2. Name and Type - Top Left
+          Positioned(
+            top: 2,
+            left: 2,
+            right: width * 0.25,
+            child: Row(
               children: [
-                // Attack
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.local_fire_department,
-                      size: width * 0.13,
-                      color: Colors.orange[700],
+                Icon(typeIcon, size: width * 0.15, color: Colors.black87),
+                const SizedBox(width: 1),
+                Expanded(
+                  child: Text(
+                    card.name,
+                    style: TextStyle(
+                      fontSize: width * 0.10,
+                      fontWeight: FontWeight.bold,
+                      height: 1.0,
+                      color: isOpponent ? Colors.red[900] : Colors.blue[900],
                     ),
-                    Text(
-                      '${card.currentDamage}/${card.damage}',
-                      style: TextStyle(
-                        fontSize: width * 0.10,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-                // Health
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.favorite,
-                      size: width * 0.13,
-                      color: Colors.red[700],
-                    ),
-                    Text(
-                      '${card.currentHealth}/${card.health}',
-                      style: TextStyle(
-                        fontSize: width * 0.11,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
+                    maxLines: 1, // Single line
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ],
             ),
+          ),
 
-            // AP and attack style row
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          // 3. Stats Column - Left Side (Ability Icons -> AP -> Damage -> HP)
+          Positioned(
+            left: 1,
+            bottom: 2,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Ability Icons (Moved to left bar)
+                if (card.abilities.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 1),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: card.abilities
+                          .where(
+                            (a) => ![
+                              'cavalry',
+                              'pikeman',
+                              'shield_guard',
+                            ].contains(a),
+                          )
+                          .take(2) // Limit to 2 for mini cards
+                          .map(
+                            (a) => Padding(
+                              padding: const EdgeInsets.only(bottom: 0.5),
+                              child: Icon(
+                                _abilityIconData(a),
+                                size: width * 0.12,
+                                color: Colors.black87,
+                              ),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  ),
+
                 // AP
                 Row(
                   mainAxisSize: MainAxisSize.min,
@@ -7863,70 +7873,86 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                     Icon(
                       Icons.bolt,
                       size: width * 0.12,
-                      color: Colors.amber[700],
+                      color: Colors.blue[800],
                     ),
                     Text(
-                      '${card.currentAP}/${card.maxAP}',
+                      '${card.currentAP}', // Show current AP for board units
                       style: TextStyle(
                         fontSize: width * 0.10,
-                        color: Colors.grey[700],
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                   ],
                 ),
-                // Attack style icon
-                _buildAttackStyleIcon(card, size: width * 0.12),
-                // Element
-                if (card.element != null)
-                  Container(
-                    padding: const EdgeInsets.all(2),
-                    decoration: BoxDecoration(
-                      color: _getTerrainColor(card.element!),
-                      borderRadius: BorderRadius.circular(3),
+                // Damage
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.local_fire_department,
+                      size: width * 0.12,
+                      color: Colors.deepOrange,
                     ),
-                    child: Icon(
-                      _getTerrainIcon(card.element!),
-                      size: width * 0.10,
-                      color: Colors.white,
+                    Text(
+                      '${card.currentDamage}', // Show current damage
+                      style: TextStyle(
+                        fontSize: width * 0.10,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                  ),
+                  ],
+                ),
+                // HP
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.favorite,
+                      size: width * 0.12,
+                      color: Colors.red[700],
+                    ),
+                    Text(
+                      '${card.currentHealth}',
+                      style: TextStyle(
+                        fontSize: width * 0.10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
+          ),
 
-            // Status indicators
-            if (isSelected || isValidTarget || isStaged)
-              Container(
-                margin: const EdgeInsets.only(top: 2),
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? Colors.yellow[700]
-                      : isValidTarget
-                      ? Colors.orange[700]
-                      : Colors.amber[700],
-                  borderRadius: BorderRadius.circular(3),
-                ),
-                child: Text(
-                  isSelected
-                      ? '✓ SELECTED'
-                      : isValidTarget
-                      ? '🎯 TARGET'
-                      : '📦 STAGED',
+          // Decoy Indicator
+          if (card.isDecoy && isPlayerCard)
+            Positioned(
+              top: height * 0.4,
+              left: 0,
+              right: 0,
+              child: Container(
+                color: Colors.purple.withOpacity(0.8),
+                padding: const EdgeInsets.symmetric(vertical: 1),
+                child: const Text(
+                  'DECOY',
+                  textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontSize: width * 0.09,
-                    fontWeight: FontWeight.bold,
                     color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 8,
                   ),
                 ),
               ),
-          ],
-        ),
+            ),
+        ],
       ),
     );
   }
 
   Widget _buildBattleLogDrawer() {
-    final log = _matchManager.getCombatLog();
+    final log = _isReplayMode && _currentReplaySnapshot != null
+        ? _currentReplaySnapshot!.logs
+        : _matchManager.getCombatLog();
 
     return Container(
       width: 250,
@@ -8516,8 +8542,8 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     );
   }
 
-  /// Build a draggable hand card for the fanned hand
-  Widget _buildDraggableHandCard(
+  /// Build the visual representation of a hand card (no interaction)
+  Widget _buildHandCardVisual(
     GameCard card,
     double width,
     double height,
@@ -8526,7 +8552,21 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     final baseFill = _getRarityFillColor(card);
     final baseBorder = _getRarityBorderColor(card);
 
-    final cardWidget = Container(
+    // Infer type icon
+    IconData typeIcon = Icons.person; // Default (Infantry)
+    if (card.abilities.contains('cavalry')) {
+      typeIcon = Icons.directions_run; // Horse/Speed
+    } else if (card.abilities.contains('pikeman')) {
+      typeIcon = Icons.change_history; // Pike tip
+    } else if (card.abilities.contains('shield_guard')) {
+      typeIcon = Icons.shield;
+    } else if (card.abilities.contains('archer') || card.isRanged) {
+      typeIcon = Icons.gps_fixed; // Target
+    } else if (card.abilities.contains('cannon') || card.isLongRange) {
+      typeIcon = Icons.circle; // Cannonball
+    }
+
+    return Container(
       width: width,
       height: height,
       decoration: BoxDecoration(
@@ -8551,69 +8591,140 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
             ),
         ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(4),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Decoy indicator (always true for player hand cards)
-            if (card.isDecoy)
-              Container(
-                margin: const EdgeInsets.only(bottom: 4),
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+      child: Stack(
+        children: [
+          // 1. Element (Tile Affinity) - Top Right
+          if (card.element != null)
+            Positioned(
+              top: 2,
+              right: 2,
+              child: Container(
+                padding: const EdgeInsets.all(2),
                 decoration: BoxDecoration(
-                  color: Colors.purple,
-                  borderRadius: BorderRadius.circular(4),
+                  color: Colors.black12,
+                  shape: BoxShape.circle,
                 ),
-                child: const Text(
-                  '⚠️ DECOY UNIT',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
+                child: Icon(
+                  _getTerrainIcon(card.element!),
+                  size: width * 0.15,
+                  color: _getTerrainColor(card.element!),
+                ),
+              ),
+            ),
+
+          // 2. Name and Type - Top Left
+          Positioned(
+            top: 4,
+            left: 4,
+            right: width * 0.25, // Make room for element
+            child: Row(
+              children: [
+                Icon(typeIcon, size: width * 0.15, color: Colors.black87),
+                const SizedBox(width: 2),
+                Expanded(
+                  child: Text(
+                    card.name,
+                    style: TextStyle(
+                      fontSize: width * 0.11,
+                      fontWeight: FontWeight.bold,
+                      height: 1.0,
+                    ),
+                    maxLines: 1, // Single line
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-              ),
-            // Card name
-            Text(
-              card.name,
-              style: TextStyle(
-                fontSize: width * 0.11,
-                fontWeight: FontWeight.bold,
-              ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
+              ],
             ),
-            const Spacer(),
-            // Stats
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          ),
+
+          // 3. Stats Column - Left Side (Ability Icons -> AP -> Damage -> HP)
+          Positioned(
+            left: 2,
+            bottom: 4,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Ability Icons (Moved to left bar)
+                if (card.abilities.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 2),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: card.abilities
+                          .where(
+                            (a) => ![
+                              'cavalry',
+                              'pikeman',
+                              'shield_guard',
+                            ].contains(a),
+                          )
+                          .take(3)
+                          .map(
+                            (a) => Padding(
+                              padding: const EdgeInsets.only(bottom: 1),
+                              child: Icon(
+                                _abilityIconData(a),
+                                size: width * 0.14,
+                                color: Colors.black87,
+                              ),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  ),
+
+                // AP (Top of stack)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.bolt,
+                      size: width * 0.12,
+                      color: Colors.blue[800],
+                    ),
+                    Text(
+                      '${card.maxAP}',
+                      style: TextStyle(
+                        fontSize: width * 0.11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 1),
+                // Damage
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
                       Icons.local_fire_department,
                       size: width * 0.12,
-                      color: Colors.orange,
+                      color: Colors.deepOrange,
                     ),
                     Text(
                       '${card.damage}',
                       style: TextStyle(
-                        fontSize: width * 0.10,
+                        fontSize: width * 0.11,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                   ],
                 ),
+                const SizedBox(height: 1),
+                // HP (Bottom of stack)
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.favorite, size: width * 0.12, color: Colors.red),
+                    Icon(
+                      Icons.favorite,
+                      size: width * 0.12,
+                      color: Colors.red[700],
+                    ),
                     Text(
                       '${card.health}',
                       style: TextStyle(
-                        fontSize: width * 0.10,
+                        fontSize: width * 0.11,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -8621,42 +8732,41 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                 ),
               ],
             ),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.bolt, size: width * 0.11, color: Colors.amber),
-                    Text(
-                      '${card.maxAP}',
-                      style: TextStyle(
-                        fontSize: width * 0.09,
-                        color: Colors.grey[700],
-                      ),
-                    ),
-                  ],
-                ),
-                _buildAttackStyleIcon(card, size: width * 0.11),
-                if (card.element != null)
-                  Container(
-                    padding: const EdgeInsets.all(2),
-                    decoration: BoxDecoration(
-                      color: _getTerrainColor(card.element!),
-                      borderRadius: BorderRadius.circular(3),
-                    ),
-                    child: Icon(
-                      _getTerrainIcon(card.element!),
-                      size: width * 0.09,
-                      color: Colors.white,
-                    ),
+          ),
+
+          // Decoy Indicator (Overlay)
+          if (card.isDecoy)
+            Positioned(
+              top: height * 0.4,
+              left: 0,
+              right: 0,
+              child: Container(
+                color: Colors.purple.withOpacity(0.8),
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: const Text(
+                  'DECOY',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 10,
                   ),
-              ],
+                ),
+              ),
             ),
-          ],
-        ),
+        ],
       ),
     );
+  }
+
+  /// Build a draggable hand card wrapper
+  Widget _buildDraggableHandCard(
+    GameCard card,
+    double width,
+    double height,
+    bool isSelected,
+  ) {
+    final cardWidget = _buildHandCardVisual(card, width, height, isSelected);
 
     return Draggable<GameCard>(
       data: card,

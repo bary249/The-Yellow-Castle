@@ -940,12 +940,12 @@ class CombatResolver {
         laneDescription: 'TYC3',
         action: '⚔️ ${attacker.name} ATTACKS',
         details:
-            '${target.name} takes $damage damage | HP: $targetHpBefore → $targetHpAfter${targetDied ? " 💀" : ""}',
+            '${target.name}${target.isDecoy ? " (Decoy)" : ""} takes $damage damage | HP: $targetHpBefore → $targetHpAfter${targetDied ? " 💀" : ""}',
         isImportant: targetDied,
         level: targetDied ? LogLevel.important : LogLevel.normal,
         damageDealt: damage,
         attackerName: attacker.name,
-        targetName: target.name,
+        targetName: target.isDecoy ? '${target.name} (Decoy)' : target.name,
         targetHpBefore: targetHpBefore,
         targetHpAfter: targetHpAfter,
         targetDied: targetDied,
@@ -960,8 +960,9 @@ class CombatResolver {
 
     // Retaliation happens if attacker is melee (not ranged) and target has damage > 0
     // Note: We use target.damage (base stat) not currentHealth since target retaliates before dying
+    // Decoys do NOT retaliate (they are fake units)
     final List<String> retModifiers = [];
-    if (!attacker.isRanged && target.damage > 0) {
+    if (!attacker.isRanged && target.damage > 0 && !target.isDecoy) {
       // Target retaliates
       retaliationDamage = target.damage;
 

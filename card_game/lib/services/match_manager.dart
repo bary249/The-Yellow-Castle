@@ -632,6 +632,16 @@ class MatchManager {
     // Check for game over
     _currentMatch!.checkGameOver();
 
+    // Capture snapshot of the turn result (after combat, before next turn starts)
+    if (_currentMatch != null) {
+      _currentMatch!.history.add(
+        TurnSnapshot.fromState(
+          matchState: _currentMatch!,
+          currentLogs: _combatResolver.logEntries,
+        ),
+      );
+    }
+
     if (!_currentMatch!.isGameOver) {
       _startNextTurn();
     }

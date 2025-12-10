@@ -45,6 +45,11 @@ class Deck {
     _cards.addAll(newCards.map((c) => c.copy()));
   }
 
+  /// Return a card to the deck (bottom)
+  void returnCard(GameCard card) {
+    _cards.add(card);
+  }
+
   /// Draw a single card from the top
   GameCard? drawCard() {
     if (_cards.isEmpty) return null;

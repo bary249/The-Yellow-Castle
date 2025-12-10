@@ -1,7 +1,7 @@
 
 Shorten age battles to 3 battles before boss and age transition.
 Give a 1 out of 3 card selection after every win in campagin mode so palyers can enrich thier deck after every battle.
-Randomize the enemy decks for each battle in the campgin.
+Randomize the enemy decks for each battle in the campgin, and make sure that in harder battles, the enemy gets better cards.
 The Campaign level selection screen should show like 3 side by side cards with the selection description for each "card".
 Add an edit deck screen to Campaign mode.
 add the cards and items shop to the level selection, it should appear about every 3 encounters (randomized).

@@ -49,6 +49,20 @@ class BatchSimulationReport {
       'Draws: $draws (${(draws / games * 100).toStringAsFixed(1)}%)',
     );
     buffer.writeln('Average Turns: ${avgTurns.toStringAsFixed(1)}');
+
+    // Calculate average final HP
+    int totalP1Hp = 0;
+    int totalP2Hp = 0;
+    for (final outcome in outcomes) {
+      totalP1Hp += outcome.playerCrystalHp;
+      totalP2Hp += outcome.opponentCrystalHp;
+    }
+    final avgP1Hp = games > 0 ? totalP1Hp / games : 0;
+    final avgP2Hp = games > 0 ? totalP2Hp / games : 0;
+
+    buffer.writeln('Avg Final HP - P1 (Deck 1): ${avgP1Hp.toStringAsFixed(1)}');
+    buffer.writeln('Avg Final HP - P2 (Deck 2): ${avgP2Hp.toStringAsFixed(1)}');
+
     return buffer.toString();
   }
 }
