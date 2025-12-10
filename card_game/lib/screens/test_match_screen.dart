@@ -337,7 +337,12 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
           } else {
             // Visual decrement for opponent (actual value comes from sync)
             match.opponentTotalTimeRemaining--;
-            // We don't trigger victory here - wait for opponent to resign/sync
+
+            // Check for opponent timeout (with small grace period for lag)
+            if (match.opponentTotalTimeRemaining <= -2) {
+              timer.cancel();
+              _handleTimeOutVictory();
+            }
           }
         } else {
           // STANDARD TURN TIMER LOGIC
@@ -380,6 +385,32 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
               setState(() {});
             },
             child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Handle victory due to opponent time running out
+  void _handleTimeOutVictory() {
+    // End match locally immediately
+    _matchManager.currentMatch?.endMatch(_playerId ?? 'player');
+
+    // Show dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('⏰ Opponent Time Out!'),
+        content: const Text('Opponent ran out of time. Victory!'),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              // Refresh UI to show Game Over screen
+              setState(() {});
+            },
+            child: const Text('Claim Victory'),
           ),
         ],
       ),
@@ -2713,20 +2744,58 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       // Check if we already selected hero/deck (from DeckSelectionScreen)
       final myData = _amPlayer1 ? matchData['player1'] : matchData['player2'];
       final myHeroId = myData?['heroId'] as String?;
-      final myDeckNames = (myData?['deck'] as List<dynamic>?)?.cast<String>();
+      final rawDeck = myData?['deck'];
+      debugPrint(
+        '🔍 Raw deck from Firebase: ${rawDeck?.runtimeType} = $rawDeck',
+      );
+
+      List<String>? myDeckNames;
+      if (rawDeck is List) {
+        // Check if it's a list of strings or a list of maps
+        if (rawDeck.isNotEmpty && rawDeck.first is String) {
+          myDeckNames = rawDeck.cast<String>();
+        } else if (rawDeck.isNotEmpty && rawDeck.first is Map) {
+          // Firebase stored GameCard objects as maps - extract names
+          myDeckNames = rawDeck
+              .map((item) => (item as Map)['name'] as String)
+              .toList();
+          debugPrint(
+            '⚠️ Deck was stored as maps, extracted names: $myDeckNames',
+          );
+        }
+      }
 
       if (myHeroId != null && myDeckNames != null) {
         _selectedHero = HeroLibrary.getHeroById(myHeroId);
-        // Build deck from names
-        if (_playerId != null) {
+
+        // PRIORITY: Use widget.customDeck if provided (passed directly from matchmaking)
+        if (widget.customDeck != null && widget.customDeck!.isNotEmpty) {
+          _selectedOnlineDeck = widget.customDeck;
+          debugPrint(
+            '✅ Using customDeck from widget (${widget.customDeck!.length} cards). First: ${widget.customDeck!.first.name}',
+          );
+        } else if (_playerId != null) {
+          // Fallback: Build deck from Firebase names
           final deck = Deck.fromCardNames(
             playerId: _playerId!,
             cardNames: myDeckNames,
           );
           _selectedOnlineDeck = deck.cards;
+          debugPrint(
+            '📦 Built deck from Firebase names (${_selectedOnlineDeck?.length} cards). First: ${_selectedOnlineDeck?.first.name}',
+          );
         }
         debugPrint(
           'Loaded pre-selected hero: ${_selectedHero?.name}, deck: ${_selectedOnlineDeck?.length} cards',
+        );
+      } else if (widget.customDeck != null && widget.customDeck!.isNotEmpty) {
+        // We have a custom deck but no Firebase data - use it directly
+        _selectedOnlineDeck = widget.customDeck;
+        if (widget.selectedHero != null) {
+          _selectedHero = widget.selectedHero;
+        }
+        debugPrint(
+          '✅ Using customDeck (no Firebase data). Hero: ${_selectedHero?.name}, Deck: ${widget.customDeck!.length} cards',
         );
       } else {
         // Fallback: Show selection dialog if not selected
@@ -4048,6 +4117,17 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   }
 
   void _startNewMatch() {
+    debugPrint('🚀 _startNewMatch called');
+    debugPrint(
+      '   _selectedOnlineDeck: ${_selectedOnlineDeck?.length} cards, first: ${_selectedOnlineDeck?.firstOrNull?.name}',
+    );
+    debugPrint(
+      '   widget.customDeck: ${widget.customDeck?.length} cards, first: ${widget.customDeck?.firstOrNull?.name}',
+    );
+    debugPrint(
+      '   _savedDeck: ${_savedDeck?.length} cards, first: ${_savedDeck?.firstOrNull?.name}',
+    );
+
     final id = _playerId ?? 'player1';
     final name = _playerName ?? 'You';
 
@@ -4095,6 +4175,9 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       playerDeck = Deck.fromCards(playerId: id, cards: _selectedOnlineDeck!);
       debugPrint(
         'Using online selected deck (${_selectedOnlineDeck!.length} cards)',
+      );
+      debugPrint(
+        '🃏 Online deck cards: ${_selectedOnlineDeck!.take(5).map((c) => c.name).join(", ")}...',
       );
     } else if (widget.customDeck != null) {
       // Use custom deck passed in constructor
@@ -7356,8 +7439,8 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         final tileWidth = constraints.maxWidth;
         final tileHeight = constraints.maxHeight;
 
-        // Calculate card dimensions - side by side layout (25% smaller)
-        const scaleFactor = 0.75;
+        // Calculate card dimensions - side by side layout (maximize size)
+        const scaleFactor = 0.96;
         final cardCount = cardsToShow.length;
         final gap = 4.0;
         final totalGaps = (cardCount > 1) ? (cardCount - 1) * gap : 0;
@@ -8042,6 +8125,71 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                                 _handFanAngle * (availableCards.length - 1);
                             final startAngle = -totalAngle / 2;
 
+                            // 1. Generate all card widgets with their positions
+                            final cardWidgets = List<Widget>.generate(
+                              availableCards.length,
+                              (index) {
+                                final card = availableCards[index];
+                                final isSelected = _selectedCard == card;
+                                final centerIndex =
+                                    (availableCards.length - 1) / 2;
+                                final offsetFromCenter = index - centerIndex;
+                                final xOffset = offsetFromCenter * overlapWidth;
+
+                                // Reset angle if selected for better readability
+                                final angle =
+                                    (availableCards.length > 1 && !isSelected)
+                                    ? (startAngle + index * _handFanAngle) *
+                                          (pi / 180)
+                                    : 0.0;
+
+                                final distanceFromCenter = offsetFromCenter
+                                    .abs();
+                                final yOffset =
+                                    distanceFromCenter * distanceFromCenter * 3;
+
+                                return Positioned(
+                                  key: ValueKey(
+                                    '${card.id}_$index',
+                                  ), // Stable key
+                                  left:
+                                      (totalCardsWidth + 40) / 2 -
+                                      cardWidth / 2 +
+                                      xOffset,
+                                  // Pop up significantly if selected (-60 instead of -15)
+                                  top: yOffset + (isSelected ? -60 : 5),
+                                  child: Transform(
+                                    transform: Matrix4.identity()
+                                      ..rotateZ(angle)
+                                      ..scale(
+                                        isSelected ? 1.3 : 1.0,
+                                      ), // Scale up
+                                    alignment: Alignment.bottomCenter,
+                                    child: _buildDraggableHandCard(
+                                      card,
+                                      cardWidth,
+                                      cardHeight,
+                                      isSelected,
+                                    ),
+                                  ),
+                                );
+                              },
+                            );
+
+                            // 2. Reorder widgets so selected card is last (drawn on top)
+                            if (_selectedCard != null) {
+                              final selectedIndex = availableCards.indexOf(
+                                _selectedCard!,
+                              );
+                              if (selectedIndex != -1 &&
+                                  selectedIndex < cardWidgets.length) {
+                                final selectedWidget = cardWidgets.removeAt(
+                                  selectedIndex,
+                                );
+                                cardWidgets.add(selectedWidget);
+                              }
+                            }
+
                             return Center(
                               child: SizedBox(
                                 width: totalCardsWidth + 40,
@@ -8049,48 +8197,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                                 child: Stack(
                                   alignment: Alignment.center,
                                   clipBehavior: Clip.none,
-                                  children: List.generate(
-                                    availableCards.length,
-                                    (index) {
-                                      final card = availableCards[index];
-                                      final isSelected = _selectedCard == card;
-                                      final centerIndex =
-                                          (availableCards.length - 1) / 2;
-                                      final offsetFromCenter =
-                                          index - centerIndex;
-                                      final xOffset =
-                                          offsetFromCenter * overlapWidth;
-                                      final angle = availableCards.length > 1
-                                          ? (startAngle +
-                                                    index * _handFanAngle) *
-                                                (pi / 180)
-                                          : 0.0;
-                                      final distanceFromCenter =
-                                          offsetFromCenter.abs();
-                                      final yOffset =
-                                          distanceFromCenter *
-                                          distanceFromCenter *
-                                          3;
-
-                                      return Positioned(
-                                        left:
-                                            (totalCardsWidth + 40) / 2 -
-                                            cardWidth / 2 +
-                                            xOffset,
-                                        top: yOffset + (isSelected ? -15 : 5),
-                                        child: Transform.rotate(
-                                          angle: angle,
-                                          alignment: Alignment.bottomCenter,
-                                          child: _buildDraggableHandCard(
-                                            card,
-                                            cardWidth,
-                                            cardHeight,
-                                            isSelected,
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                  ),
+                                  children: cardWidgets,
                                 ),
                               ),
                             );

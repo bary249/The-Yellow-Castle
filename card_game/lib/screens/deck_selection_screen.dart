@@ -134,6 +134,7 @@ class _DeckSelectionScreenState extends State<DeckSelectionScreen> {
   }
 
   List<DeckTemplate> _getDeckTemplatesForHero(String heroId) {
+    debugPrint('DeckSelectionScreen: Loading decks for heroId=$heroId');
     switch (heroId) {
       case 'napoleon':
         return [
@@ -266,9 +267,16 @@ class _DeckSelectionScreenState extends State<DeckSelectionScreen> {
   Future<void> _confirmSelection() async {
     if (_selectedDeck == null || _isSubmitted) return;
 
+    debugPrint(
+      'DeckSelectionScreen: Confirming deck ${_selectedDeck!.id} for hero ${widget.heroId}',
+    );
+
     setState(() => _isSubmitted = true);
 
     final deckCards = _selectedDeck!.builder();
+    debugPrint(
+      'DeckSelectionScreen: Built ${deckCards.length} cards. First: ${deckCards.first.name}',
+    );
 
     if (widget.onlineMatchId != null) {
       // PvP Lobby Mode: Sync to Firebase

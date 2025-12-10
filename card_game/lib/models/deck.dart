@@ -39,6 +39,12 @@ class Deck {
     _cards.shuffle(Random());
   }
 
+  /// Replace all cards in the deck (for online sync)
+  void replaceCards(List<GameCard> newCards) {
+    _cards.clear();
+    _cards.addAll(newCards.map((c) => c.copy()));
+  }
+
   /// Draw a single card from the top
   GameCard? drawCard() {
     if (_cards.isEmpty) return null;
@@ -257,6 +263,58 @@ class Deck {
         return lakeMistWeaver(index);
       case 'Woods Shroud Walker':
         return woodsShroudWalker(index);
+      // Nelson cards
+      case 'Boarding Party':
+        return lakeQuickStrike(index).copyWith(name: 'Boarding Party');
+      case 'Royal Marine':
+        return lakeWarrior(index).copyWith(name: 'Royal Marine');
+      case 'Ironclad Hull':
+        return lakeTank(index).copyWith(name: 'Ironclad Hull');
+      case 'Naval Gunner':
+        return lakeArcher(index).copyWith(name: 'Naval Gunner');
+      case 'First Mate':
+        return lakeEliteStriker(index).copyWith(name: 'First Mate');
+      case 'Veteran Sailor':
+        return lakeVeteran(index).copyWith(name: 'Veteran Sailor');
+      case 'Ship Cannon':
+        return lakeCannon(index).copyWith(name: 'Ship Cannon');
+      case 'Line Marine':
+        return lakeWarrior(index).copyWith(name: 'Line Marine');
+      case 'Elite Guard':
+        return lakeVeteran(index).copyWith(name: 'Elite Guard');
+      case 'Supply Ship':
+        return lakeShieldTotem(index).copyWith(name: 'Supply Ship');
+      case 'Deck Gunner':
+        return lakeArcher(index).copyWith(name: 'Deck Gunner');
+      case 'Musketeer':
+        return lakeArcher(index).copyWith(name: 'Musketeer');
+      case 'Naval Cannon':
+        return lakeCannon(index).copyWith(name: 'Naval Cannon');
+
+      // Saladin cards
+      case 'Desert Raider':
+        return desertQuickStrike(index).copyWith(name: 'Desert Raider');
+      case 'Light Infantry':
+        return desertWarrior(index).copyWith(name: 'Light Infantry');
+      case 'Skirmisher':
+        return desertArcher(index).copyWith(name: 'Skirmisher');
+      case 'Swift Lancer':
+        return desertEliteStriker(index).copyWith(name: 'Swift Lancer');
+      case 'Siege Catapult':
+        return desertCannon(index).copyWith(name: 'Siege Catapult');
+
+      // Archduke cards
+      case 'Alpine Guard':
+        return woodsTank(index).copyWith(name: 'Alpine Guard');
+      case 'Forest Ranger':
+        return woodsWarrior(index).copyWith(name: 'Forest Ranger');
+      case 'Mountain Hunter':
+        return woodsVeteran(index).copyWith(name: 'Mountain Hunter');
+      case 'Field Hospital':
+        return woodsHealingTree(index).copyWith(name: 'Field Hospital');
+      case 'Mountain Gun':
+        return woodsCannon(index).copyWith(name: 'Mountain Gun');
+
       // Napoleon cards
       case 'Voltigeur':
         return napoleonVoltigeur(index);

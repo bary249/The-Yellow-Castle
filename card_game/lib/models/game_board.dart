@@ -255,6 +255,10 @@ class GameBoard {
         for (final card in sourceTile.cards) {
           newTile.cards.add(card);
         }
+        // Copy gravestones to new tile
+        for (final gs in sourceTile.gravestones) {
+          newTile.gravestones.add(gs);
+        }
         return newTile;
       });
     });

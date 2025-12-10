@@ -34,12 +34,24 @@ class _HeroSelectionScreenState extends State<HeroSelectionScreen> {
     if (_selectedHero == null) return;
 
     if (widget.isOnline) {
-      // Online: Go to Matchmaking with selected hero
+      // Online: Go to Deck Selection first (Pre-matchmaking)
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => MatchmakingScreen(
+          builder: (_) => DeckSelectionScreen(
             heroId: _selectedHero!.id,
-            isChessTimerMode: widget.isChessTimerMode,
+            isOnline: true, // Flag for pre-matchmaking UI
+            onDeckSelected: (deckCards) {
+              // Navigate to Matchmaking with selected hero and deck
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => MatchmakingScreen(
+                    heroId: _selectedHero!.id,
+                    deck: deckCards,
+                    isChessTimerMode: widget.isChessTimerMode,
+                  ),
+                ),
+              );
+            },
           ),
         ),
       );

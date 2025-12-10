@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/auth_service.dart';
 import '../models/card.dart';
+import '../models/deck.dart';
+import '../data/hero_library.dart';
 import 'deck_selection_screen.dart';
 import 'test_match_screen.dart';
 
@@ -30,13 +32,71 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> {
   StreamSubscription? _queueListener;
   StreamSubscription? _matchListener;
   bool _isSearching = false;
+  bool _navigated = false;
   String _status = 'Initializing...';
   int _searchSeconds = 0;
   Timer? _searchTimer;
+  List<GameCard>? _myDeck; // The actual deck to use (widget.deck or fallback)
 
   @override
   void initState() {
     super.initState();
+    debugPrint('MatchmakingScreen init: heroId=${widget.heroId}');
+
+    // Initialize deck with fallback
+    if (widget.deck != null && widget.deck!.isNotEmpty) {
+      _myDeck = widget.deck;
+
+      // SANITY CHECK: If we have a specific hero but the deck looks like the generic starter (has Pikeman),
+      // force regeneration.
+      final hasGenericCards = _myDeck!.any((c) => c.name == 'Pikeman');
+      if (hasGenericCards &&
+          widget.heroId != null &&
+          widget.heroId != 'napoleon') {
+        // Napoleon might have generic-ish cards? No, he has Fusiliers.
+        debugPrint(
+          '⚠️ Detected generic cards (Pikeman) for hero ${widget.heroId}! Forcing regeneration.',
+        );
+        _myDeck = null; // Trigger fallback below
+      } else {
+        debugPrint(
+          'MatchmakingScreen: Using provided deck (${_myDeck!.length} cards). First: ${_myDeck!.first.name}',
+        );
+      }
+    }
+
+    if (_myDeck == null) {
+      if (widget.heroId != null) {
+        debugPrint(
+          '⚠️ MatchmakingScreen: Deck is missing! Falling back to default for ${widget.heroId}',
+        );
+        switch (widget.heroId) {
+          case 'archduke_charles':
+            _myDeck = Deck.archduke().cards;
+            break;
+          case 'saladin':
+            _myDeck = Deck.saladin().cards;
+            break;
+          case 'admiral_nelson':
+            _myDeck = Deck.nelson().cards;
+            break;
+          case 'napoleon':
+            _myDeck = Deck.napoleon().cards;
+            break;
+          default:
+            _myDeck = Deck.starter().cards;
+        }
+        debugPrint(
+          'MatchmakingScreen: Created fallback deck (${_myDeck!.length} cards). First: ${_myDeck!.first.name}',
+        );
+      } else {
+        debugPrint(
+          '⚠️ MatchmakingScreen: No deck and no hero ID! Using starter.',
+        );
+        _myDeck = Deck.starter().cards;
+      }
+    }
+
     try {
       _firestore = FirebaseFirestore.instance;
     } catch (e) {
@@ -86,7 +146,9 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> {
         'timestamp': FieldValue.serverTimestamp(),
         'searching': true,
         'heroId': widget.heroId, // Store selected hero
-        'deck': widget.deck?.map((c) => c.name).toList(), // Store selected deck
+        'deck': _myDeck
+            ?.map((c) => c.name)
+            .toList(), // Store selected deck (use fallback if needed)
       });
 
       setState(() => _status = 'Searching for opponent...');
@@ -114,7 +176,7 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> {
                 oppData['displayName'] as String? ?? 'Opponent',
                 widget.heroId,
                 oppData['heroId'] as String?,
-                widget.deck?.map((c) => c.name).toList(),
+                _myDeck?.map((c) => c.name).toList(), // Use _myDeck here too
                 (oppData['deck'] as List<dynamic>?)?.cast<String>(),
               );
             }
@@ -180,6 +242,12 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> {
 
     if (_firestore == null) return;
 
+    debugPrint(
+      'Creating match: MyDeck=${myDeck?.length}, OppDeck=${opponentDeck?.length}',
+    );
+    if (myDeck != null && myDeck.isNotEmpty)
+      debugPrint('MyDeck[0]=${myDeck.first}');
+
     try {
       final matchRef = _firestore!.collection('matches').doc();
 
@@ -244,14 +312,25 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> {
   }
 
   void _navigateToMatch(String matchId) {
+    if (_navigated) return;
+    _navigated = true;
     _cancelSearch();
 
     if (mounted) {
-      if (widget.deck != null) {
+      if (_myDeck != null) {
+        // Resolve hero
+        final hero = widget.heroId != null
+            ? HeroLibrary.getHeroById(widget.heroId!)
+            : null;
+
         // Deck already selected: Go straight to game
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
-            builder: (_) => TestMatchScreen(onlineMatchId: matchId),
+            builder: (_) => TestMatchScreen(
+              onlineMatchId: matchId,
+              selectedHero: hero,
+              customDeck: _myDeck,
+            ),
           ),
         );
       } else {

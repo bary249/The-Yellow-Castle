@@ -32,7 +32,22 @@ class MatchManager {
 
   /// Replace the current match state (for online sync)
   /// This completely replaces the local state with the received state
+  /// IMPORTANT: Preserves local player's deck and hand since opponent doesn't know them
   void replaceMatchState(MatchState newState) {
+    // Preserve local player's deck and hand - opponent doesn't know our correct deck
+    if (_currentMatch != null) {
+      // Keep our local deck cards (the opponent's view of our deck is wrong/empty)
+      newState.player.deck.replaceCards(_currentMatch!.player.deck.cards);
+
+      // Keep our local hand (opponent doesn't see our hand)
+      newState.player.hand.clear();
+      newState.player.hand.addAll(_currentMatch!.player.hand);
+
+      _log(
+        '🔒 Preserved local deck (${newState.player.deck.cards.length} cards) and hand (${newState.player.hand.length} cards)',
+      );
+    }
+
     // Preserve local history if available
     if (_currentMatch != null && _currentMatch!.history.isNotEmpty) {
       newState.history.addAll(_currentMatch!.history);
@@ -81,6 +96,14 @@ class MatchManager {
     String? relicDescription, // Custom relic description
     bool isChessTimerMode = false, // Whether to use chess timer
   }) {
+    // Debug: Log the deck being used
+    _log(
+      '🎴 Creating player with deck: ${playerDeck.name} (${playerDeck.cards.length} cards)',
+    );
+    _log(
+      '🎴 First 5 cards: ${playerDeck.cards.take(5).map((c) => c.name).join(", ")}',
+    );
+
     // Create players with heroes (copy heroes to reset ability state)
     final player = Player(
       id: playerId,
@@ -102,6 +125,9 @@ class MatchManager {
 
     // Shuffle decks (skip opponent shuffle if deck is pre-ordered from online sync)
     player.deck.shuffle();
+    _log(
+      '🔀 After shuffle, first 6 cards (will be hand): ${player.deck.cards.take(6).map((c) => c.name).join(", ")}',
+    );
     if (!skipOpponentShuffle) {
       opponent.deck.shuffle();
     } else {
