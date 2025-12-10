@@ -508,10 +508,28 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     debugPrint('📥 Turn state: wasMyTurn=$wasMyTurn, isMyTurnNow=$isMyTurnNow');
 
     if (isMyTurnNow && !wasMyTurn) {
-      // Turn just switched to us - start timer
+      // Turn just switched to us - start timer and draw a card
       debugPrint('🔄 Turn switched to us!');
       _showTurnChangeOverlay(true);
       _startTurnTimer();
+
+      // Draw a card at the start of our turn (online mode)
+      // Skip on turns 1-2 since players already have their initial 6-card hands
+      final currentTurn = _matchManager.currentMatch?.turnNumber ?? 1;
+      final player = _matchManager.currentMatch?.player;
+      if (player != null && !player.deck.isEmpty && currentTurn > 2) {
+        player.drawCards(count: 1);
+        debugPrint(
+          '📥 Drew 1 card. Hand size: ${player.hand.length}, Turn: $currentTurn',
+        );
+      } else {
+        debugPrint(
+          '📥 Skipping card draw (Turn $currentTurn, initial hands already dealt)',
+        );
+      }
+
+      // Regenerate AP for our units
+      _matchManager.regenerateAPForPlayer(_playerId ?? 'player');
     } else if (!isMyTurnNow && wasMyTurn) {
       // Turn just switched away from us - stop timer
       debugPrint('🔄 Turn switched to opponent');

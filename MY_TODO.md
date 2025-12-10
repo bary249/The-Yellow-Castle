@@ -10,7 +10,7 @@ The battle simulation and battle result dialog of a decoy should mention it's a 
 Make sure the decoy mechanism works! i just tested and my decoy retaliated and killed an enemy card.
 
 
-
+Make battle log sidepane follow the turn by turn progression for watch replay mode.
 
 
 
