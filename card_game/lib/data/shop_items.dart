@@ -32,7 +32,7 @@ class ShopInventory {
     final items = <ShopItem>[];
 
     // Add 3 random cards
-    final availableCards = _getCardsForAct(act);
+    final availableCards = getCardsForAct(act);
     availableCards.shuffle();
     for (int i = 0; i < 3 && i < availableCards.length; i++) {
       final card = availableCards[i];
@@ -58,7 +58,7 @@ class ShopInventory {
     return items;
   }
 
-  static List<GameCard> _getCardsForAct(int act) {
+  static List<GameCard> getCardsForAct(int act) {
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     switch (act) {
       case 1:

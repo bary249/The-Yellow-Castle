@@ -1,3 +1,4 @@
+import 'dart:math';
 import '../models/card.dart';
 
 /// Central place to define all base card types (archetypes).
@@ -1445,14 +1446,26 @@ List<GameCard> buildArchdukeCoalitionDeck() {
   cards.add(scoutUnit(0));
 
   // 8 Woods, 8 Lake Commons
-  for (int i = 0; i < 4; i++) cards.add(woodsWarrior(i));
-  for (int i = 0; i < 4; i++) cards.add(lakeWarrior(i));
-  for (int i = 0; i < 4; i++) cards.add(woodsArcher(i));
-  for (int i = 0; i < 4; i++) cards.add(lakeArcher(i));
+  for (int i = 0; i < 4; i++) {
+    cards.add(woodsWarrior(i));
+  }
+  for (int i = 0; i < 4; i++) {
+    cards.add(lakeWarrior(i));
+  }
+  for (int i = 0; i < 4; i++) {
+    cards.add(woodsArcher(i));
+  }
+  for (int i = 0; i < 4; i++) {
+    cards.add(lakeArcher(i));
+  }
 
   // 8 Rares
-  for (int i = 0; i < 4; i++) cards.add(woodsEliteStriker(i));
-  for (int i = 0; i < 4; i++) cards.add(lakeCannon(i));
+  for (int i = 0; i < 4; i++) {
+    cards.add(woodsEliteStriker(i));
+  }
+  for (int i = 0; i < 4; i++) {
+    cards.add(lakeCannon(i));
+  }
 
   return cards;
 }
@@ -1697,5 +1710,458 @@ List<GameCard> buildAct1EnemyDeck() {
   }
 
   assert(cards.length == 25, 'Act 1 enemy deck must have 25 cards');
+  return cards;
+}
+
+/// Build a randomized Act 1 enemy deck based on difficulty
+/// difficulty: 1=Easy, 2=Normal, 3=Hard, 4=Elite, 5=Boss
+List<GameCard> buildRandomizedAct1Deck(int difficulty) {
+  final cards = <GameCard>[];
+  final random = Random();
+
+  // 1 Scout - always present
+  cards.add(scoutUnit(0));
+
+  // Weights for unit types based on difficulty
+  // Format: [Common, Rare, Artillery, Officer]
+  // These are probabilities/counts used to fill the deck
+
+  int rareCount;
+  int artilleryCount;
+  int officerCount;
+
+  switch (difficulty) {
+    case 1: // Easy - mostly militia/line
+      rareCount = 4;
+      artilleryCount = 1;
+      officerCount = 1;
+      break;
+    case 2: // Normal - balanced
+      rareCount = 7;
+      artilleryCount = 2;
+      officerCount = 1;
+      break;
+    case 3: // Hard - more veterans
+      rareCount = 10;
+      artilleryCount = 3;
+      officerCount = 2;
+      break;
+    case 4: // Elite - tough guard units
+      rareCount = 14;
+      artilleryCount = 3;
+      officerCount = 2;
+      break;
+    case 5: // Boss - best units
+      rareCount = 15;
+      artilleryCount = 4;
+      officerCount = 2;
+      break;
+    default:
+      rareCount = 7;
+      artilleryCount = 2;
+      officerCount = 1;
+  }
+
+  // Common Pools
+  final commonPool = [(i) => austrianJager(i), (i) => austrianLineInfantry(i)];
+
+  // Rare Pools (Elite infantry/cavalry)
+  final rarePool = [
+    (i) => austrianGrenadier(i),
+    (i) => austrianHussar(i),
+    (i) => austrianCuirassier(i),
+  ];
+
+  int cardIndex = 1; // Start at 1 since 0 is Scout
+
+  // Add Artillery
+  for (int i = 0; i < artilleryCount; i++) {
+    cards.add(austrianArtillery(cardIndex++));
+  }
+
+  // Add Officers
+  for (int i = 0; i < officerCount; i++) {
+    cards.add(austrianOfficer(cardIndex++));
+  }
+
+  // Add Rares
+  for (int i = 0; i < rareCount; i++) {
+    final builder = rarePool[random.nextInt(rarePool.length)];
+    cards.add(builder(cardIndex++));
+  }
+
+  // Fill rest with Commons
+  // Calculate remaining slots needed to reach 25
+  int currentSize = cards.length;
+  int needed = 25 - currentSize;
+
+  // Add at least one Decoy if we're adding commons
+  if (needed > 0) {
+    cards.add(austrianLineInfantry(99).copyWith(isDecoy: true));
+    needed--;
+  }
+
+  for (int i = 0; i < needed; i++) {
+    final builder = commonPool[random.nextInt(commonPool.length)];
+    cards.add(builder(cardIndex++));
+  }
+
+  // If we somehow went over or under due to logic, fix size
+  while (cards.length > 25) {
+    cards.removeLast();
+  }
+  while (cards.length < 25) {
+    cards.add(austrianLineInfantry(cardIndex++));
+  }
+
+  // Shuffle to mix the composition
+  cards.shuffle(random);
+
+  // Ensure Scout is at start or accessible (doesn't matter for deck list but good practice)
+  // Actually Deck class shuffles usually, but here we return a list.
+
+  return cards;
+}
+
+// ------------------ ACT 2: EGYPTIAN EXPEDITION (Mamluk & Ottoman Forces) ------------------
+
+/// Mamluk Light Cavalry - Fast desert warriors
+GameCard mamlukLightCavalry(int index) => GameCard(
+  id: 'mamluk_light_$index',
+  name: 'Mamluk Scout',
+  damage: 4,
+  health: 6,
+  tick: 2,
+  moveSpeed: 2,
+  maxAP: 2,
+  apPerTurn: 2,
+  attackAPCost: 1,
+  element: 'Desert',
+  abilities: const [],
+  cost: 1,
+  rarity: 1,
+);
+
+/// Bedouin Raider - Ambush specialist
+GameCard bedouinRaider(int index) => GameCard(
+  id: 'bedouin_raider_$index',
+  name: 'Bedouin Raider',
+  damage: 5,
+  health: 5,
+  tick: 2,
+  moveSpeed: 2,
+  maxAP: 2,
+  apPerTurn: 2,
+  attackAPCost: 1,
+  element: 'Desert',
+  abilities: const ['first_strike'],
+  cost: 2,
+  rarity: 1,
+);
+
+/// Janissary Infantry - Elite Ottoman infantry
+GameCard janissaryInfantry(int index) => GameCard(
+  id: 'janissary_$index',
+  name: 'Janissary',
+  damage: 6,
+  health: 10,
+  tick: 3,
+  moveSpeed: 1,
+  maxAP: 1,
+  apPerTurn: 1,
+  attackAPCost: 1,
+  element: 'Desert',
+  abilities: const ['guard'],
+  cost: 2,
+  rarity: 2,
+);
+
+/// Mamluk Heavy Cavalry - The pride of the Beys
+GameCard mamlukHeavyCavalry(int index) => GameCard(
+  id: 'mamluk_heavy_$index',
+  name: 'Mamluk Bey',
+  damage: 7,
+  health: 12,
+  tick: 3,
+  moveSpeed: 2,
+  maxAP: 2,
+  apPerTurn: 2,
+  attackAPCost: 1,
+  element: 'Desert',
+  abilities: const ['fury_1'],
+  cost: 3,
+  rarity: 2,
+);
+
+/// Desert Camel Gun - Mobile light artillery
+GameCard camelGun(int index) => GameCard(
+  id: 'camel_gun_$index',
+  name: 'Camel Gun',
+  damage: 4,
+  health: 7,
+  tick: 3,
+  moveSpeed: 2,
+  maxAP: 2,
+  apPerTurn: 1,
+  attackAPCost: 1,
+  attackRange: 2,
+  element: 'Desert',
+  abilities: const ['ranged'],
+  cost: 2,
+  rarity: 1,
+);
+
+/// Build a randomized Act 2 enemy deck based on difficulty
+List<GameCard> buildRandomizedAct2Deck(int difficulty) {
+  final cards = <GameCard>[];
+  final random = Random();
+
+  cards.add(scoutUnit(0));
+
+  int rareCount;
+  int artilleryCount; // Camel guns
+  int heavyCount; // Heavy Mamluks
+
+  switch (difficulty) {
+    case 1:
+      rareCount = 4;
+      artilleryCount = 1;
+      heavyCount = 1;
+      break;
+    case 2:
+      rareCount = 7;
+      artilleryCount = 2;
+      heavyCount = 2;
+      break;
+    case 3:
+      rareCount = 10;
+      artilleryCount = 3;
+      heavyCount = 3;
+      break;
+    case 4:
+      rareCount = 14;
+      artilleryCount = 3;
+      heavyCount = 4;
+      break;
+    case 5:
+      rareCount = 15;
+      artilleryCount = 4;
+      heavyCount = 5;
+      break;
+    default:
+      rareCount = 7;
+      artilleryCount = 2;
+      heavyCount = 2;
+  }
+
+  // Common Pool: Mamluk Scouts, Bedouin Raiders
+  final commonPool = [(i) => mamlukLightCavalry(i), (i) => bedouinRaider(i)];
+
+  // Rare Pool: Janissaries
+  final rarePool = [(i) => janissaryInfantry(i)];
+
+  int cardIndex = 1;
+
+  // Add Artillery
+  for (int i = 0; i < artilleryCount; i++) {
+    cards.add(camelGun(cardIndex++));
+  }
+
+  // Add Heavy Mamluks (Elite)
+  for (int i = 0; i < heavyCount; i++) {
+    cards.add(mamlukHeavyCavalry(cardIndex++));
+  }
+
+  // Add Rares
+  for (int i = 0; i < rareCount; i++) {
+    final builder = rarePool[random.nextInt(rarePool.length)];
+    cards.add(builder(cardIndex++));
+  }
+
+  // Fill with Commons
+  int currentSize = cards.length;
+  int needed = 25 - currentSize;
+
+  if (needed > 0) {
+    cards.add(bedouinRaider(99).copyWith(isDecoy: true)); // Bedouin Decoy
+    needed--;
+  }
+
+  for (int i = 0; i < needed; i++) {
+    final builder = commonPool[random.nextInt(commonPool.length)];
+    cards.add(builder(cardIndex++));
+  }
+
+  while (cards.length > 25) cards.removeLast();
+  while (cards.length < 25) cards.add(mamlukLightCavalry(cardIndex++));
+
+  cards.shuffle(random);
+  return cards;
+}
+
+// ------------------ ACT 3: WAR OF THE THIRD COALITION (Russian & Austrian Forces) ------------------
+
+/// Russian Line Infantry - Stubborn defenders
+GameCard russianLineInfantry(int index) => GameCard(
+  id: 'russian_line_$index',
+  name: 'Russian Infantry',
+  damage: 5,
+  health: 12, // High HP
+  tick: 3,
+  moveSpeed: 1,
+  maxAP: 1,
+  apPerTurn: 1,
+  attackAPCost: 1,
+  element: 'Lake', // Snow/Winter theme -> Lake/Ice
+  abilities: const [],
+  cost: 2,
+  rarity: 1,
+);
+
+/// Cossack Cavalry - Harassing light cavalry
+GameCard cossackCavalry(int index) => GameCard(
+  id: 'cossack_$index',
+  name: 'Cossack',
+  damage: 6,
+  health: 7,
+  tick: 2,
+  moveSpeed: 2,
+  maxAP: 2,
+  apPerTurn: 2,
+  attackAPCost: 1,
+  element: 'Lake',
+  abilities: const ['first_strike'],
+  cost: 2,
+  rarity: 1,
+);
+
+/// Russian Imperial Guard - Elite heavy infantry
+GameCard russianImperialGuard(int index) => GameCard(
+  id: 'russian_guard_$index',
+  name: 'Pavlovsky Guard',
+  damage: 7,
+  health: 14,
+  tick: 3,
+  moveSpeed: 1,
+  maxAP: 1,
+  apPerTurn: 1,
+  attackAPCost: 1,
+  element: 'Lake',
+  abilities: const ['shield_1', 'fury_1'],
+  cost: 3,
+  rarity: 2,
+);
+
+/// Russian Unicorn Gun - Heavy artillery
+GameCard russianArtillery(int index) => GameCard(
+  id: 'russian_cannon_$index',
+  name: 'Licorne Cannon',
+  damage: 6,
+  health: 8,
+  tick: 4,
+  moveSpeed: 0,
+  maxAP: 1,
+  apPerTurn: 1,
+  attackAPCost: 1,
+  attackRange: 2,
+  element: 'Lake',
+  abilities: const ['ranged', 'cleave'], // Splash damage
+  cost: 3,
+  rarity: 2,
+);
+
+/// Build a randomized Act 3 enemy deck based on difficulty
+List<GameCard> buildRandomizedAct3Deck(int difficulty) {
+  final cards = <GameCard>[];
+  final random = Random();
+
+  cards.add(scoutUnit(0));
+
+  int eliteCount;
+  int artilleryCount;
+  int cossackCount;
+
+  switch (difficulty) {
+    case 1:
+      eliteCount = 2;
+      artilleryCount = 1;
+      cossackCount = 3;
+      break;
+    case 2:
+      eliteCount = 4;
+      artilleryCount = 2;
+      cossackCount = 5;
+      break;
+    case 3:
+      eliteCount = 6;
+      artilleryCount = 3;
+      cossackCount = 7;
+      break;
+    case 4:
+      eliteCount = 8;
+      artilleryCount = 4;
+      cossackCount = 8;
+      break;
+    case 5:
+      eliteCount = 10;
+      artilleryCount = 5;
+      cossackCount = 8;
+      break;
+    default:
+      eliteCount = 4;
+      artilleryCount = 2;
+      cossackCount = 5;
+  }
+
+  // Common Pool: Russian Line (High HP)
+  final commonPool = [(i) => russianLineInfantry(i)];
+
+  // Also mix in some Austrian units from Act 1 for variety since it's a Coalition
+  final coalitionPool = [
+    (i) => austrianGrenadier(i),
+    (i) => austrianCuirassier(i),
+  ];
+
+  int cardIndex = 1;
+
+  // Add Artillery
+  for (int i = 0; i < artilleryCount; i++) {
+    cards.add(russianArtillery(cardIndex++));
+  }
+
+  // Add Elites (Guard)
+  for (int i = 0; i < eliteCount; i++) {
+    if (random.nextBool()) {
+      cards.add(russianImperialGuard(cardIndex++));
+    } else {
+      // 50% chance for Coalition elite instead
+      final builder = coalitionPool[random.nextInt(coalitionPool.length)];
+      cards.add(builder(cardIndex++));
+    }
+  }
+
+  // Add Cossacks
+  for (int i = 0; i < cossackCount; i++) {
+    cards.add(cossackCavalry(cardIndex++));
+  }
+
+  // Fill with Commons
+  int currentSize = cards.length;
+  int needed = 25 - currentSize;
+
+  if (needed > 0) {
+    cards.add(russianLineInfantry(99).copyWith(isDecoy: true));
+    needed--;
+  }
+
+  for (int i = 0; i < needed; i++) {
+    final builder = commonPool[random.nextInt(commonPool.length)];
+    cards.add(builder(cardIndex++));
+  }
+
+  while (cards.length > 25) cards.removeLast();
+  while (cards.length < 25) cards.add(russianLineInfantry(cardIndex++));
+
+  cards.shuffle(random);
   return cards;
 }

@@ -4,6 +4,7 @@ import 'hero_selection_screen.dart';
 import 'deck_editor_screen.dart';
 import 'campaign_select_screen.dart';
 import 'ui_test_screen.dart';
+import 'rendering_test_screen.dart';
 
 /// Main menu screen with Play vs AI and Play Online options
 class MainMenuScreen extends StatefulWidget {
@@ -70,6 +71,12 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
     Navigator.of(
       context,
     ).push(MaterialPageRoute(builder: (_) => const UITestScreen()));
+  }
+
+  void _openRenderingTest() {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const RenderingTestScreen()));
   }
 
   void _playCampaign() {
@@ -200,6 +207,17 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                         sublabel: 'Test stacked cards & drag/drop',
                         color: Colors.purple,
                         onTap: _openUITest,
+                      ),
+
+                      const SizedBox(height: 20),
+
+                      // Rendering Test button (visual asset testing)
+                      _buildMenuButton(
+                        icon: Icons.image,
+                        label: 'RENDERING TEST',
+                        sublabel: 'Test visual assets & UX',
+                        color: Colors.teal,
+                        onTap: _openRenderingTest,
                       ),
 
                       const SizedBox(height: 40),

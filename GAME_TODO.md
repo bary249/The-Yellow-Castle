@@ -480,6 +480,50 @@
 
 ---
 
+## 🎨 Rendering Test Mode (UPDATED)
+
+### Rendering Test Screen Created: `lib/screens/rendering_test_screen.dart`
+A visual asset testing mode that copies PvE gameplay but adds rich visuals to EVERYTHING.
+Used to test look and feel and UX of a fully rendered game page.
+
+**Features:**
+- [x] Full battlefield background with gradient
+- [x] Ornate top bar with turn indicator
+- [x] Player/opponent info bars with avatar frames
+- [x] Crystal HP display with visual styling
+- [x] Board with row labels (ENEMY BASE / BATTLEFIELD / YOUR BASE)
+- [x] Terrain-based tile backgrounds with pattern overlays (CustomPainter)
+- [x] Terrain badges on tiles
+- [x] Fully rendered card widgets with:
+  - Card art placeholder (gradient + unit icon)
+  - Card frame overlay (rarity-based)
+  - Name banner
+  - Stats overlay (damage, AP)
+  - HP bar
+  - Rarity glow effects
+- [x] **Poker-style fanned hand** (like UI Test screen)
+- [x] Victory/defeat screens with visual styling
+
+**Full Drag-and-Drop Functionality:**
+- [x] Drag cards from hand to board tiles
+- [x] Drag cards on board to move them
+- [x] Drag player cards onto enemy cards to attack
+- [x] Tap to select cards (alternative to drag)
+- [x] Visual feedback for valid drop targets (PLACE/MOVE/ATTACK BASE)
+- [x] Card highlighting when selected or targeted
+
+**Assets Needed (for future replacement):**
+- [ ] `battlefield_bg.png` - Main battlefield background
+- [ ] `hero_portrait_[name].png` - Hero portraits
+- [ ] `terrain_*.png` - Terrain textures
+- [ ] `card_frame_*.png` - Card frames by rarity
+- [ ] `card_art_[unit_name].png` - Card art for each unit
+
+### Access
+- Main Menu → "RENDERING TEST" button (teal)
+
+---
+
 ## 🎨 4. Visual Assets & UI Components
 
 ### 4.1 Card Visuals

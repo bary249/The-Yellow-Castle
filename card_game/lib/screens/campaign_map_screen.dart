@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import '../models/campaign_state.dart';
+import '../models/deck.dart';
 import '../data/card_library.dart';
 import '../data/shop_items.dart';
 import 'test_match_screen.dart';
 import '../data/hero_library.dart';
+import 'campaign_deck_screen.dart';
 
 /// Campaign screen - Book chapter selection style
 class CampaignMapScreen extends StatefulWidget {
@@ -82,16 +84,167 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
       case EncounterType.event:
         _triggerEvent(encounter);
         break;
+      case EncounterType.mystery:
+        _openMystery(encounter);
+        break;
+      case EncounterType.treasure:
+        _openTreasure(encounter);
+        break;
     }
   }
 
+  void _openMystery(Encounter encounter) {
+    // Mystery can be anything - for now let's make it a 50/50 between battle and treasure
+    // In a real implementation, this would likely reveal the true type and then delegate
+    final isBattle = DateTime.now().millisecondsSinceEpoch % 2 == 0;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.help_outline, color: Colors.purple),
+            const SizedBox(width: 8),
+            Text(encounter.title),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(encounter.description),
+            const SizedBox(height: 16),
+            const Text(
+              'You approach the unknown location...',
+              style: TextStyle(fontStyle: FontStyle.italic),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              if (isBattle) {
+                // Reveal as battle
+                final battleEncounter = Encounter(
+                  id: encounter.id,
+                  type: EncounterType.battle,
+                  title: 'Ambush!',
+                  description: 'It was a trap! Prepare for battle.',
+                  difficulty: encounter.difficulty ?? BattleDifficulty.normal,
+                  goldReward: encounter.goldReward,
+                );
+                _startBattle(battleEncounter);
+              } else {
+                // Reveal as treasure
+                final treasureEncounter = Encounter(
+                  id: encounter.id,
+                  type: EncounterType.treasure,
+                  title: 'Hidden Supplies',
+                  description: 'You found a stash of supplies!',
+                  goldReward: 50,
+                );
+                _openTreasure(treasureEncounter);
+              }
+            },
+            child: const Text('Proceed'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openTreasure(Encounter encounter) {
+    final goldReward = encounter.goldReward ?? 50;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.auto_awesome, color: Colors.amber),
+            const SizedBox(width: 8),
+            Text(encounter.title),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(encounter.description),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.amber.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.amber),
+              ),
+              child: Column(
+                children: [
+                  const Text('You found:'),
+                  const SizedBox(height: 8),
+                  Text(
+                    '+$goldReward Gold',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.amber,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              setState(() {
+                _campaign.addGold(goldReward);
+                _campaign.completeEncounter();
+                _generateNewChoices();
+              });
+            },
+            child: const Text('Claim'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _startBattle(Encounter encounter) async {
+    // Generate randomized enemy deck based on difficulty
+    final difficultyLevel = switch (encounter.difficulty) {
+      BattleDifficulty.easy => 1,
+      BattleDifficulty.normal => 2,
+      BattleDifficulty.hard => 3,
+      BattleDifficulty.elite => 4,
+      BattleDifficulty.boss => 5,
+      null => 2, // Default to normal
+    };
+
+    final enemyCards = switch (_campaign.act) {
+      2 => buildRandomizedAct2Deck(difficultyLevel),
+      3 => buildRandomizedAct3Deck(difficultyLevel),
+      _ => buildRandomizedAct1Deck(difficultyLevel),
+    };
+
+    final enemyDeck = Deck(
+      id: 'enemy_${encounter.id}',
+      name: encounter.title,
+      cards: enemyCards,
+    );
+
     final result = await Navigator.of(context).push<Map<String, dynamic>>(
       MaterialPageRoute(
         builder: (_) => TestMatchScreen(
           selectedHero: HeroLibrary.napoleon(),
           forceCampaignDeck: true,
-          campaignAct: widget.act,
+          campaignAct: _campaign.act,
+          enemyDeck: enemyDeck,
+          playerCurrentHealth: _campaign.health,
         ),
       ),
     );
@@ -101,23 +254,111 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
       final won = result['won'] as bool? ?? false;
       final crystalDamage = result['crystalDamage'] as int? ?? 0;
 
+      // Apply damage taken during battle regardless of outcome
       setState(() {
-        if (won) {
-          _campaign.addGold(encounter.goldReward ?? 15);
-          _campaign.completeEncounter();
-          _generateNewChoices();
-        } else {
-          _campaign.takeDamage(crystalDamage);
-        }
+        _campaign.takeDamage(crystalDamage);
       });
 
-      if (_campaign.health <= 0) {
-        _showGameOver();
+      if (won) {
+        setState(() {
+          _campaign.addGold(encounter.goldReward ?? 15);
+        });
+
+        // Show card reward selection
+        if (mounted) {
+          await _showCardRewardDialog();
+        }
+
+        setState(() {
+          _campaign.completeEncounter();
+          _generateNewChoices();
+        });
+      } else {
+        setState(() {
+          _campaign.takeDamage(crystalDamage);
+        });
+        if (_campaign.health <= 0) {
+          _showGameOver();
+        }
       }
     } else {
       // Battle was exited - show retreat dialog
       _showRetreatDialog(encounter);
     }
+  }
+
+  Future<void> _showCardRewardDialog() async {
+    final availableCards = ShopInventory.getCardsForAct(_campaign.act);
+    availableCards.shuffle();
+    final rewards = availableCards.take(3).toList();
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF2D2D2D),
+        title: const Text(
+          'Victory! Choose a Reward',
+          style: TextStyle(color: Colors.white),
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          height: 340,
+          child: ListView.builder(
+            itemCount: rewards.length,
+            itemBuilder: (context, index) {
+              final card = rewards[index];
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                decoration: BoxDecoration(
+                  color: Colors.grey[800],
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey[700]!),
+                ),
+                child: ListTile(
+                  leading: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: _getElementColor(card.element ?? 'woods'),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Icon(Icons.style, color: Colors.white),
+                  ),
+                  title: Text(
+                    card.name,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  subtitle: Text(
+                    '${card.element ?? "Neutral"} - ${card.damage} ATK / ${card.health} HP\n${card.abilities.isEmpty ? "No abilities" : card.abilities.join(", ")}',
+                    style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                  ),
+                  trailing: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.amber,
+                      foregroundColor: Colors.black,
+                    ),
+                    onPressed: () {
+                      _campaign.addCard(card);
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Added ${card.name} to your deck!'),
+                        ),
+                      );
+                    },
+                    child: const Text('Pick'),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
   }
 
   void _showRetreatDialog(Encounter encounter) {
@@ -160,7 +401,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                     Navigator.pop(context);
                     setState(() {
                       _campaign.spendGold(20);
-                      // Battle NOT completed - same choices remain
+                      _generateNewChoices(); // Refresh encounters
                     });
                   }
                 : null,
@@ -182,7 +423,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
         builder: (_) => TestMatchScreen(
           selectedHero: HeroLibrary.napoleon(),
           forceCampaignDeck: true,
-          campaignAct: widget.act,
+          campaignAct: _campaign.act,
         ),
       ),
     );
@@ -193,10 +434,22 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
       if (won) {
         setState(() {
           _campaign.addGold(encounter.goldReward ?? 50);
-          _campaign.isVictory = true;
-          _campaign.completedAt = DateTime.now();
         });
-        _showVictory();
+
+        if (_campaign.act < 3) {
+          // Act Complete
+          if (mounted) {
+            await _showActCompleteDialog();
+            _startNextAct();
+          }
+        } else {
+          // Campaign Complete
+          setState(() {
+            _campaign.isVictory = true;
+            _campaign.completedAt = DateTime.now();
+          });
+          _showVictory();
+        }
       } else {
         setState(() {
           _campaign.takeDamage(50); // Boss deals massive damage on loss
@@ -210,8 +463,206 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     }
   }
 
+  void _startNextAct() {
+    setState(() {
+      _campaign.nextAct();
+      // Re-initialize generator for the new act
+      _generator = EncounterGenerator(act: _campaign.act);
+      _generateNewChoices();
+    });
+    _showActIntroDialog();
+  }
+
+  Future<void> _showActCompleteDialog() async {
+    String rewardText = '';
+    switch (_campaign.act) {
+      case 1:
+        rewardText =
+            'Your artillery tactics have proven superior. The Austrians retreat.';
+        break;
+      case 2:
+        rewardText =
+            'The mysteries of the desert are yours. Ancient power grows.';
+        break;
+    }
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF2D2D2D),
+        title: Text(
+          'Act ${_campaign.act} Complete!',
+          style: const TextStyle(color: Colors.amber),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Victory in ${_getActTitle(_campaign.act)}!',
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              rewardText,
+              style: TextStyle(color: Colors.grey[300]),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Your army rests and recovers full health.',
+              style: TextStyle(color: Colors.green),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('March Onwards'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showActIntroDialog() {
+    final title = _getActTitle(_campaign.act);
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF2D2D2D),
+        title: Text(
+          'Act ${_campaign.act}: $title',
+          style: const TextStyle(color: Colors.white),
+        ),
+        content: const Text(
+          'New enemies and challenges await. Spend your gold wisely and lead your troops to victory.',
+          style: TextStyle(color: Colors.grey),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Begin'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showVictory() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF2D2D2D),
+        title: const Center(
+          child: Text(
+            '🏆 CAMPAIGN VICTORY! 🏆',
+            style: TextStyle(
+              color: Colors.amber,
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'You have conquered Europe!',
+              style: TextStyle(color: Colors.white, fontSize: 18),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            _buildStatRow(
+              Icons.monetization_on,
+              'Final Gold',
+              '${_campaign.gold}',
+            ),
+            _buildStatRow(
+              Icons.favorite,
+              'Final Health',
+              '${_campaign.health}/${_campaign.maxHealth}',
+            ),
+            _buildStatRow(
+              Icons.style,
+              'Deck Size',
+              '${_campaign.deck.length} cards',
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'Legacy Points Earned: 200',
+              style: TextStyle(
+                color: Colors.amber,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          Center(
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.amber,
+                foregroundColor: Colors.black,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 32,
+                  vertical: 12,
+                ),
+              ),
+              onPressed: () {
+                Navigator.pop(context);
+                Navigator.pop(context);
+              },
+              child: const Text('RETURN TO MENU'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _getActTitle(int act) {
+    switch (act) {
+      case 1:
+        return 'Italian Campaign';
+      case 2:
+        return 'Egyptian Expedition';
+      case 3:
+        return 'War of the Third Coalition';
+      default:
+        return 'Campaign';
+    }
+  }
+
+  Widget _buildStatRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, color: Colors.grey[400], size: 20),
+          const SizedBox(width: 8),
+          Text('$label: ', style: TextStyle(color: Colors.grey[400])),
+          Text(
+            value,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _openShop(Encounter encounter) {
-    final shopItems = ShopInventory.generateForAct(widget.act);
+    final shopItems = ShopInventory.generateForAct(_campaign.act);
 
     showModalBottomSheet(
       context: context,
@@ -644,34 +1095,6 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     );
   }
 
-  void _showVictory() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Text('🏆 Victory!'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('Act ${widget.act} Complete!'),
-            const SizedBox(height: 12),
-            Text('Final gold: ${_campaign.gold}'),
-            Text('Final health: ${_campaign.health}/${_campaign.maxHealth}'),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              Navigator.pop(context);
-            },
-            child: const Text('Continue'),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -706,7 +1129,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
   Widget _buildHeader() {
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.3)),
+      decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.7)),
       child: Row(
         children: [
           IconButton(
@@ -717,7 +1140,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
             child: Column(
               children: [
                 Text(
-                  'Act ${widget.act}: Italian Campaign',
+                  'Act ${_campaign.act}: ${_getActTitle(_campaign.act)}',
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 18,
@@ -781,9 +1204,53 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                   ),
                 ],
               ),
+              const SizedBox(height: 4),
+              InkWell(
+                onTap: _showDeckView,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.brown[600],
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.brown[400]!),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.style, color: Colors.white, size: 14),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Deck (${_campaign.deck.length})',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  void _showDeckView() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => CampaignDeckScreen(
+          campaign: _campaign,
+          onRemoveCard: (card) {
+            setState(() {
+              _campaign.removeCard(card.id);
+            });
+          },
+        ),
       ),
     );
   }
@@ -809,14 +1276,19 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
 
           // Chapter cards
           Expanded(
-            child: ListView.builder(
-              itemCount: _campaign.currentChoices.length,
-              itemBuilder: (context, index) {
-                return _buildChapterCard(
-                  _campaign.currentChoices[index],
-                  index,
-                );
-              },
+            child: Center(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: _campaign.currentChoices.asMap().entries.map((entry) {
+                  return Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: _buildChapterCard(entry.value, entry.key),
+                    ),
+                  );
+                }).toList(),
+              ),
             ),
           ),
         ],
@@ -830,16 +1302,16 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     return GestureDetector(
       onTap: () => _onEncounterSelected(encounter),
       child: Container(
-        margin: const EdgeInsets.only(bottom: 16),
+        height: 180, // Further reduced for compact layout
         decoration: BoxDecoration(
           color: Colors.brown[100],
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(12), // Reduced radius
           border: Border.all(color: Colors.brown[800]!, width: 2),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.3),
-              blurRadius: 8,
-              offset: const Offset(2, 4),
+              color: Colors.black.withValues(alpha: 0.4),
+              blurRadius: 8, // Reduced blur
+              offset: const Offset(2, 4), // Reduced offset
             ),
           ],
         ),
@@ -848,95 +1320,127 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
           children: [
             // Header with type icon
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
                 color: colors.background,
                 borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(6),
+                  top: Radius.circular(10),
                 ),
               ),
               child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(colors.icon, color: colors.iconColor, size: 28),
-                  const SizedBox(width: 12),
-                  Expanded(
+                  Icon(colors.icon, color: colors.iconColor, size: 20),
+                  const SizedBox(width: 6),
+                  Flexible(
                     child: Text(
                       encounter.title,
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontSize: 18,
+                        fontSize: 12,
                         fontWeight: FontWeight.bold,
                         color: colors.textColor,
-                        fontFamily: 'serif',
                       ),
                     ),
                   ),
-                  if (encounter.goldReward != null)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.amber.withValues(alpha: 0.3),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons.monetization_on,
-                            color: Colors.amber,
-                            size: 16,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '+${encounter.goldReward}',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.amber,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
                 ],
               ),
             ),
 
             // Description
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text(
-                encounter.description,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.brown[800],
-                  fontStyle: FontStyle.italic,
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      encounter.description,
+                      textAlign: TextAlign.center,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Colors.brown[900],
+                        fontStyle: FontStyle.italic,
+                        height: 1.1,
+                      ),
+                    ),
+                    if (encounter.goldReward != null) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.amber[700]!.withValues(alpha: 0.5),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.monetization_on,
+                              color: Colors.amber,
+                              size: 14,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '+${encounter.goldReward} Gold',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.amber[900],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
             ),
 
-            // Difficulty indicator for battles
+            // Footer / Difficulty
             if (encounter.difficulty != null)
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   color: Colors.brown[200],
                   borderRadius: const BorderRadius.vertical(
-                    bottom: Radius.circular(6),
+                    bottom: Radius.circular(10),
                   ),
                 ),
                 child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
                       'Difficulty: ',
-                      style: TextStyle(color: Colors.brown[600]),
+                      style: TextStyle(
+                        color: Colors.brown[800],
+                        fontWeight: FontWeight.bold,
+                        fontSize: 10,
+                      ),
                     ),
                     ..._buildDifficultyStars(encounter.difficulty!),
                   ],
+                ),
+              )
+            else
+              Container(
+                height: 8,
+                decoration: BoxDecoration(
+                  color: Colors.brown[200],
+                  borderRadius: const BorderRadius.vertical(
+                    bottom: Radius.circular(10),
+                  ),
                 ),
               ),
           ],
@@ -1006,6 +1510,20 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
           icon: Icons.help_outline,
           iconColor: Colors.blue[700]!,
           textColor: Colors.blue[900]!,
+        );
+      case EncounterType.mystery:
+        return _EncounterColors(
+          background: Colors.purple[50]!,
+          icon: Icons.question_mark,
+          iconColor: Colors.purple[400]!,
+          textColor: Colors.purple[900]!,
+        );
+      case EncounterType.treasure:
+        return _EncounterColors(
+          background: Colors.amber[50]!,
+          icon: Icons.auto_awesome,
+          iconColor: Colors.amber[600]!,
+          textColor: Colors.amber[900]!,
         );
     }
   }

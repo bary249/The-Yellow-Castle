@@ -17,3 +17,9 @@
 - [x] Put the card type from left to the card name (pikeman cavalry etc)
 
 - [x] put all card parameters in a column on the left side of each card: from bottom to top - HP, Damage, AP. Put the tile affinity of the card on top right. Add an icon to each special ability and put it on the center bottom of the card
+
+
+
+
+Rendering test  - Create a new mode called rendering test , this mode copies everything from pve, but, i want us to added assests to EVERYTHING.
+So backroud images to cards, map, tiles base everything shld have assests. this is mainly to test the look and feel and UX of a rendered page like in real games.

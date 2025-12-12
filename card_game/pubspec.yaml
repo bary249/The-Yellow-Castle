@@ -71,6 +71,9 @@ flutter:
   assets:
     - assets/audio/ticking_clock.mp3
     - assets/audio/turn_pass.mp3
+    - assets/image/card1.png
+    - assets/image/stone tile.webp
+    - assets/image/mapBoard.webp
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

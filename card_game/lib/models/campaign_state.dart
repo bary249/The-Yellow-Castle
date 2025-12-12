@@ -1,7 +1,7 @@
 import 'dart:math';
 import 'card.dart';
 
-enum EncounterType { battle, elite, shop, rest, event, boss }
+enum EncounterType { battle, elite, shop, rest, event, boss, mystery, treasure }
 
 enum BattleDifficulty { easy, normal, hard, elite, boss }
 
@@ -50,12 +50,13 @@ class Encounter {
 class CampaignState {
   final String id;
   final String leaderId;
-  final int act;
+  int act;
   int encounterNumber;
   int gold;
   int health;
   final int maxHealth;
   List<GameCard> deck;
+  List<GameCard> inventory; // Cards removed from deck, can be added back
   final DateTime startedAt;
   DateTime? completedAt;
   bool isVictory;
@@ -70,17 +71,25 @@ class CampaignState {
     this.health = 50,
     this.maxHealth = 50,
     required this.deck,
+    List<GameCard>? inventory,
     required this.startedAt,
     this.completedAt,
     this.isVictory = false,
     this.currentChoices = const [],
-  });
+  }) : inventory = inventory ?? [];
 
-  static const int bossEncounterThreshold = 7;
+  static const int bossEncounterThreshold = 3;
   bool get isBossTime => encounterNumber >= bossEncounterThreshold;
   bool get isOver => isVictory || health <= 0;
   int get encountersUntilBoss => (bossEncounterThreshold - encounterNumber)
       .clamp(0, bossEncounterThreshold);
+
+  void nextAct() {
+    act++;
+    encounterNumber = 0;
+    // Reset health between acts
+    health = maxHealth;
+  }
 
   void addGold(int amount) {
     gold += amount;
@@ -105,7 +114,22 @@ class CampaignState {
   }
 
   void removeCard(String cardId) {
+    final card = deck.firstWhere(
+      (c) => c.id == cardId,
+      orElse: () => deck.first,
+    );
     deck = deck.where((c) => c.id != cardId).toList();
+    // Add to inventory so it can be added back later
+    inventory = [...inventory, card];
+  }
+
+  void addCardFromInventory(String cardId) {
+    final card = inventory.firstWhere(
+      (c) => c.id == cardId,
+      orElse: () => inventory.first,
+    );
+    inventory = inventory.where((c) => c.id != cardId).toList();
+    deck = [...deck, card];
   }
 
   void completeEncounter() {
@@ -184,8 +208,17 @@ class EncounterGenerator {
       final otherTypes = _getAvailableTypes(encounterNumber);
       otherTypes.shuffle(_random);
 
-      // Add 1-2 non-battle options
-      final numNonBattle = _random.nextBool() ? 1 : 2;
+      // FORCE SHOP if it's a multiple of 3 and shop is available
+      if (encounterNumber > 0 && encounterNumber % 3 == 0) {
+        if (otherTypes.contains(EncounterType.shop)) {
+          // Move shop to front to ensure it's picked
+          otherTypes.remove(EncounterType.shop);
+          otherTypes.insert(0, EncounterType.shop);
+        }
+      }
+
+      // Add 1 non-battle option (Total 3 choices: 2 battles + 1 non-battle)
+      final numNonBattle = 1;
       for (int i = 0; i < numNonBattle && i < otherTypes.length; i++) {
         choices.add(_generateEncounter(otherTypes[i], encounterNumber, i));
       }
@@ -196,11 +229,31 @@ class EncounterGenerator {
   }
 
   Encounter _generateElite(int encounterNumber, [int index = 0]) {
-    final eliteTitles = [
-      ('Austrian Grenadiers', 'Elite heavy infantry guards the pass.'),
-      ('Cavalry Ambush', 'Enemy hussars have set a trap.'),
-      ('Fortified Position', 'A well-defended enemy stronghold.'),
-    ];
+    final List<(String, String)> eliteTitles;
+
+    switch (act) {
+      case 2: // Egypt
+        eliteTitles = [
+          ('Mamluk Heavy Cavalry', 'Elite Mamluk warriors charge your lines.'),
+          ('Janissary Guard', 'The Sultan\'s elite infantry blocks the way.'),
+          ('Desert Ambush', 'Bedouin raiders strike from the dunes.'),
+        ];
+        break;
+      case 3: // Coalition
+        eliteTitles = [
+          ('Russian Imperial Guard', ' The Tzar\'s finest troops stand firm.'),
+          ('Combined Elite Force', 'Austrian and Russian elites join forces.'),
+          ('Cossack Raiders', 'Fearless horsemen harass your flanks.'),
+        ];
+        break;
+      default: // Act 1 (Italy)
+        eliteTitles = [
+          ('Austrian Grenadiers', 'Elite heavy infantry guards the pass.'),
+          ('Cavalry Ambush', 'Enemy hussars have set a trap.'),
+          ('Fortified Position', 'A well-defended enemy stronghold.'),
+        ];
+    }
+
     final elite = eliteTitles[_random.nextInt(eliteTitles.length)];
     return Encounter(
       id: 'elite_${encounterNumber}_$index',
@@ -241,6 +294,10 @@ class EncounterGenerator {
     final types = <EncounterType>[EncounterType.event, EncounterType.event];
     if (encounterNumber >= 1) types.add(EncounterType.shop);
     if (encounterNumber >= 2) types.add(EncounterType.rest);
+    if (encounterNumber >= 3) types.add(EncounterType.mystery);
+    if (encounterNumber >= 4 && _random.nextDouble() < 0.15) {
+      types.add(EncounterType.treasure);
+    }
     if (encounterNumber >= 3 && encounterNumber < 6) {
       types.add(EncounterType.elite);
     }
@@ -253,12 +310,41 @@ class EncounterGenerator {
         : (encounterNumber < 5
               ? BattleDifficulty.normal
               : BattleDifficulty.hard);
-    final battleTitles = [
-      ('Skirmish at the Bridge', 'Austrian scouts block the river crossing.'),
-      ('Village Defense', 'Enemy forces occupy a strategic village.'),
-      ('Supply Convoy', 'Capture the enemy supply train.'),
-      ('Hill Assault', 'Take the high ground from entrenched defenders.'),
-    ];
+
+    final List<(String, String)> battleTitles;
+
+    switch (act) {
+      case 2: // Egypt
+        battleTitles = [
+          ('Skirmish at the Nile', 'Mamluk scouts block the river bank.'),
+          ('Village Raid', 'Local militia defends a supply cache.'),
+          ('Desert Crossing', 'Enemy forces ambush the weary column.'),
+          (
+            'Battle of the Pyramids (Outskirts)',
+            'Advanced guard action near the monuments.',
+          ),
+        ];
+        break;
+      case 3: // Coalition
+        battleTitles = [
+          ('Snowy Plains', 'Russian infantry digs in for defense.'),
+          ('Bridge Defense', 'Hold the bridge against Austrian advance.'),
+          ('Forest Skirmish', 'Enemy jägers hide in the dense woods.'),
+          ('Rearguard Action', 'Protect the baggage train from Cossacks.'),
+        ];
+        break;
+      default: // Act 1 (Italy)
+        battleTitles = [
+          (
+            'Skirmish at the Bridge',
+            'Austrian scouts block the river crossing.',
+          ),
+          ('Village Defense', 'Enemy forces occupy a strategic village.'),
+          ('Supply Convoy', 'Capture the enemy supply train.'),
+          ('Hill Assault', 'Take the high ground from entrenched defenders.'),
+        ];
+    }
+
     final battle = battleTitles[_random.nextInt(battleTitles.length)];
     return Encounter(
       id: 'battle_${encounterNumber}_$index',
@@ -284,6 +370,10 @@ class EncounterGenerator {
         return _generateRest(index);
       case EncounterType.event:
         return _generateEvent(index);
+      case EncounterType.mystery:
+        return _generateMystery(index);
+      case EncounterType.treasure:
+        return _generateTreasure(index);
       default:
         return _generateBattle(encounterNumber, index);
     }
@@ -323,6 +413,29 @@ class EncounterGenerator {
       type: EncounterType.event,
       title: event.$1,
       description: event.$2,
+    );
+  }
+
+  Encounter _generateMystery(int index) {
+    return Encounter(
+      id: 'mystery_$index',
+      type: EncounterType.mystery,
+      title: 'Unknown Location',
+      description: 'A strange aura surrounds this place. Proceed with caution.',
+      difficulty:
+          BattleDifficulty.values[_random.nextInt(
+            BattleDifficulty.values.length,
+          )], // Hidden difficulty
+    );
+  }
+
+  Encounter _generateTreasure(int index) {
+    return Encounter(
+      id: 'treasure_$index',
+      type: EncounterType.treasure,
+      title: 'Hidden Cache',
+      description: 'A hidden stash of supplies left by a previous army.',
+      goldReward: 50 + (act * 20),
     );
   }
 }

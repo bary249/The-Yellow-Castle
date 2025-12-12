@@ -3,7 +3,6 @@ import 'dart:math';
 import 'package:flame_audio/flame_audio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'main_menu_screen.dart';
 import '../models/deck.dart';
@@ -34,6 +33,7 @@ class TestMatchScreen extends StatefulWidget {
   final int campaignAct; // Current campaign act (1, 2, or 3)
   final List<GameCard>?
   customDeck; // Custom player deck (overrides default/saved)
+  final int? playerCurrentHealth; // Starting HP for campaign mode
 
   const TestMatchScreen({
     super.key,
@@ -43,6 +43,7 @@ class TestMatchScreen extends StatefulWidget {
     this.enemyDeck,
     this.campaignAct = 1,
     this.customDeck,
+    this.playerCurrentHealth,
   });
 
   @override
@@ -58,7 +59,6 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
 
   String? _playerId;
   String? _playerName;
-  int? _playerElo;
   List<GameCard>? _savedDeck;
 
   // Staging area: cards placed on tiles before submitting
@@ -104,13 +104,13 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   String? _lastSeenHeroAbilityId;
 
   // ===== TYC3: Turn-based AP system state =====
-  bool _useTYC3Mode = true; // Enable TYC3 by default for testing
-  bool _useChessTimer = true; // Enable Chess Timer mode by default
+  final bool _useTYC3Mode = true; // Enable TYC3 by default for testing
+  final bool _useChessTimer = true; // Enable Chess Timer mode by default
   Timer? _turnTimer;
   int _turnSecondsRemaining = 100;
 
   // ===== UI Mode Toggle =====
-  bool _useStackedCardUI =
+  final bool _useStackedCardUI =
       true; // Toggle between old ListView and new stacked card UI
   double _handFanAngle = 5.0; // Degrees of fan spread for hand
   double _handCardOverlap = 0.4; // How much hand cards overlap
@@ -124,7 +124,6 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   GameCard? _selectedCardForAction; // Card selected for move/attack
   int? _selectedCardRow;
   int? _selectedCardCol;
-  String? _currentAction; // 'move', 'attack', or null
   List<GameCard> _validTargets = [];
   bool _isAttackPreviewOpen = false; // Track if preview dialog is open
 
@@ -619,7 +618,6 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     _selectedCardForAction = null;
     _selectedCardRow = null;
     _selectedCardCol = null;
-    _currentAction = null;
     _validTargets = [];
   }
 
@@ -749,7 +747,6 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         _selectedCardForAction = card;
         _selectedCardRow = row;
         _selectedCardCol = col;
-        _currentAction = null;
 
         // Get all reachable attack targets (including move+attack combinations)
         // This shows all enemies the card can attack using its full AP
@@ -786,11 +783,6 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   /// Get lane name from column index
   String _getLaneName(int col) {
     return ['West', 'Center', 'East'][col];
-  }
-
-  /// Get row name
-  String _getRowName(int row) {
-    return ['Enemy Base', 'Middle', 'Your Base'][row];
   }
 
   /// Show attack preview dialog with predicted outcome
@@ -2515,11 +2507,9 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       _playerId = user.uid;
       final profile = await _authService.getUserProfile(user.uid);
       _playerName = profile?['displayName'] as String? ?? 'Player';
-      _playerElo = profile?['elo'] as int? ?? 1000;
     } else {
       _playerId = 'local_player';
       _playerName = 'Player';
-      _playerElo = 1000;
     }
 
     // Load saved deck from Firebase
@@ -4337,11 +4327,12 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         opponentHero: opponentHero,
         firstPlayerIdOverride: firstPlayerOverride,
         predefinedTerrains: terrainsToUse,
-        predefinedRelicColumn: _isOnlineMode ? _predefinedRelicColumn : null,
+        predefinedRelicColumn: _predefinedRelicColumn,
         skipOpponentShuffle: skipOppShuffle,
         relicName: relicName,
         relicDescription: relicDescription,
-        isChessTimerMode: _useChessTimer, // Add this line
+        isChessTimerMode: _useChessTimer,
+        playerBaseHP: widget.playerCurrentHealth,
       );
 
       // Set up relic discovery callback
@@ -5378,9 +5369,15 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
           ElevatedButton.icon(
             onPressed: () {
               if (isCampaignMode) {
+                // Calculate actual damage taken based on starting HP
+                // Default to 25 if not provided (matches Player.maxBaseHP)
+                final startHP = widget.playerCurrentHealth ?? 25;
+                final endHP = match.player.baseHP;
+                final damageTaken = (startHP - endHP).clamp(0, startHP);
+
                 Navigator.pop(context, {
                   'won': playerWon,
-                  'crystalDamage': 50 - match.player.crystalHP,
+                  'crystalDamage': damageTaken,
                   'turnsPlayed': match.turnNumber,
                 });
               } else {

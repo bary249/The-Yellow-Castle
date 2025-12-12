@@ -95,6 +95,7 @@ class MatchManager {
     String? relicName, // Custom relic name (e.g. for campaign)
     String? relicDescription, // Custom relic description
     bool isChessTimerMode = false, // Whether to use chess timer
+    int? playerBaseHP, // Optional starting HP for player
   }) {
     // Debug: Log the deck being used
     _log(
@@ -112,6 +113,7 @@ class MatchManager {
       isHuman: true,
       attunedElement: playerAttunedElement,
       hero: playerHero?.copy(),
+      baseHP: playerBaseHP,
     );
 
     final opponent = Player(
@@ -1366,6 +1368,7 @@ class MatchManager {
     String? relicName, // Custom relic name (e.g. for campaign)
     String? relicDescription, // Custom relic description
     bool isChessTimerMode = false, // Whether to use chess timer
+    int? playerBaseHP, // Optional starting HP for player
   }) {
     // Use the existing startMatch logic
     startMatch(
@@ -1386,6 +1389,7 @@ class MatchManager {
       relicName: relicName,
       relicDescription: relicDescription,
       isChessTimerMode: isChessTimerMode,
+      playerBaseHP: playerBaseHP,
     );
 
     if (_currentMatch == null) return;
