@@ -62,6 +62,35 @@ class ShopInventory {
     return items;
   }
 
+  static List<ShopItem> getAllConsumables() {
+    return [
+      ShopItem(
+        id: 'heal_potion',
+        name: 'Field Medic',
+        description: 'Restore 15 HP',
+        cost: 20,
+        type: ShopItemType.consumable,
+        effect: 'heal_15',
+      ),
+      ShopItem(
+        id: 'large_heal_potion',
+        name: 'Military Hospital',
+        description: 'Restore 30 HP',
+        cost: 35,
+        type: ShopItemType.consumable,
+        effect: 'heal_30',
+      ),
+      ShopItem(
+        id: 'remove_card',
+        name: 'Discharge Papers',
+        description: 'Remove a card from your deck',
+        cost: 50,
+        type: ShopItemType.consumable,
+        effect: 'remove_card',
+      ),
+    ];
+  }
+
   static List<ShopItem> getAllRelics() {
     return [
       const ShopItem(
@@ -124,31 +153,6 @@ class ShopInventory {
   }
 
   static List<ShopItem> _getConsumables(int act) {
-    return [
-      ShopItem(
-        id: 'heal_potion',
-        name: 'Field Medic',
-        description: 'Restore 15 HP',
-        cost: 20,
-        type: ShopItemType.consumable,
-        effect: 'heal_15',
-      ),
-      ShopItem(
-        id: 'large_heal_potion',
-        name: 'Military Hospital',
-        description: 'Restore 30 HP',
-        cost: 35,
-        type: ShopItemType.consumable,
-        effect: 'heal_30',
-      ),
-      ShopItem(
-        id: 'remove_card',
-        name: 'Discharge Papers',
-        description: 'Remove a card from your deck',
-        cost: 50,
-        type: ShopItemType.consumable,
-        effect: 'remove_card',
-      ),
-    ];
+    return getAllConsumables();
   }
 }

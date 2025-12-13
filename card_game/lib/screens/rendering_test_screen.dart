@@ -451,7 +451,7 @@ class _RenderingTestScreenState extends State<RenderingTestScreen> {
               border: Border.all(color: Colors.amber, width: 1),
             ),
             child: Text(
-              isMyTurn ? '⚔️ YOUR TURN' : '🛡️ ENEMY TURN',
+              isMyTurn ? 'YOUR TURN' : 'ENEMY TURN',
               style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.bold,

@@ -6,6 +6,8 @@ import '../data/shop_items.dart';
 import 'test_match_screen.dart';
 import '../data/hero_library.dart';
 import 'campaign_deck_screen.dart';
+import 'campaign_inventory_screen.dart';
+import 'progression_screen.dart';
 import '../services/campaign_persistence_service.dart';
 import '../data/napoleon_progression.dart';
 
@@ -42,7 +44,6 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     if (widget.savedState != null) {
       _campaign = widget.savedState!;
       _generator = EncounterGenerator(act: _campaign.act);
-      // Ensure generator matches current act if loaded state differs from widget.act (though widget.act is mostly for init)
     } else {
       _generator = EncounterGenerator(act: widget.act);
 
@@ -176,6 +177,14 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     );
   }
 
+  void _openProgressionView() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const ProgressionScreen(viewOnly: true),
+      ),
+    );
+  }
+
   void _openTreasure(Encounter encounter) {
     final goldReward = encounter.goldReward ?? 50;
 
@@ -260,6 +269,18 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
       cards: enemyCards,
     );
 
+    final progressionData = await _persistence.loadProgression();
+    final progressionState = progressionData != null
+        ? NapoleonProgressionState.fromJson(progressionData)
+        : NapoleonProgressionState();
+
+    int extraStartingDraw = progressionState.getEffectValue('extra_draw');
+    if (progressionState.hasEffect('grand_armee')) {
+      extraStartingDraw += 2;
+    }
+    final int artilleryDamageBonus =
+        progressionState.hasEffect('artillery_damage_1') ? 1 : 0;
+
     final result = await Navigator.of(context).push<Map<String, dynamic>>(
       MaterialPageRoute(
         builder: (_) => TestMatchScreen(
@@ -267,6 +288,10 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
           forceCampaignDeck: true,
           campaignAct: _campaign.act,
           enemyDeck: enemyDeck,
+          customDeck: _campaign.deck,
+          playerDamageBonus: _campaign.globalDamageBonus,
+          extraStartingDraw: extraStartingDraw,
+          artilleryDamageBonus: artilleryDamageBonus,
           playerCurrentHealth: _campaign.health,
         ),
       ),
@@ -284,8 +309,11 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
       _saveCampaign();
 
       if (won) {
+        await _awardBattleLegacyPoints(encounter);
+        final int reward =
+            (encounter.goldReward ?? 15) + _campaign.goldPerBattleBonus;
         setState(() {
-          _campaign.addGold(encounter.goldReward ?? 15);
+          _campaign.addGold(reward);
         });
 
         // Show card reward selection
@@ -299,12 +327,8 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
         });
         _saveCampaign();
       } else {
-        setState(() {
-          _campaign.takeDamage(crystalDamage);
-        });
-        _saveCampaign();
         if (_campaign.health <= 0) {
-          _showGameOver();
+          await _showGameOver();
         }
       }
     } else {
@@ -393,7 +417,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
-        title: const Text('⚔️ Retreat?'),
+        title: const Text('Retreat?'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -446,12 +470,31 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
   }
 
   void _startBossBattle(Encounter encounter) async {
+    final progressionData = await _persistence.loadProgression();
+    final progressionState = progressionData != null
+        ? NapoleonProgressionState.fromJson(progressionData)
+        : NapoleonProgressionState();
+
+    int extraStartingDraw = progressionState.getEffectValue('extra_draw');
+    if (progressionState.hasEffect('grand_armee')) {
+      extraStartingDraw += 2;
+    }
+    final int artilleryDamageBonus =
+        progressionState.hasEffect('artillery_damage_1') ? 1 : 0;
+
+    final int bossOpponentBaseHP = 25 + (25 * _campaign.act);
+
     final result = await Navigator.of(context).push<Map<String, dynamic>>(
       MaterialPageRoute(
         builder: (_) => TestMatchScreen(
           selectedHero: HeroLibrary.napoleon(),
           forceCampaignDeck: true,
           campaignAct: _campaign.act,
+          customDeck: _campaign.deck,
+          playerDamageBonus: _campaign.globalDamageBonus,
+          extraStartingDraw: extraStartingDraw,
+          artilleryDamageBonus: artilleryDamageBonus,
+          opponentBaseHP: bossOpponentBaseHP,
         ),
       ),
     );
@@ -460,19 +503,16 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
       final won = result['won'] as bool? ?? false;
 
       if (won) {
-        setState(() {
-          _campaign.addGold(encounter.goldReward ?? 50);
-        });
-
+        await _awardBossLegacyPoints(_campaign.act);
         // Calculate gold reward with relic bonus
-        int reward = encounter.goldReward ?? 15;
-        reward += _campaign.goldPerBattleBonus;
-
+        final int reward =
+            (encounter.goldReward ?? 50) + _campaign.goldPerBattleBonus;
         setState(() {
           _campaign.addGold(reward);
         });
 
         if (_campaign.act < 3) {
+          await _awardActCompleteLegacyPoints(_campaign.act);
           // Act Complete
           if (mounted) {
             await _showActCompleteDialog();
@@ -485,7 +525,8 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
             _campaign.completedAt = DateTime.now();
           });
           _saveCampaign();
-          _showVictory();
+          final earned = await _awardCampaignVictoryLegacyPoints();
+          _showVictory(earned);
         }
       } else {
         setState(() {
@@ -493,7 +534,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
         });
         _saveCampaign();
         if (_campaign.health <= 0) {
-          _showGameOver();
+          await _showGameOver();
         }
       }
     } else {
@@ -639,16 +680,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     );
   }
 
-  void _showVictory() {
-    // Calculate final score
-    const baseScore = 200;
-    final goldScore = (_campaign.gold / 10).floor();
-    final healthScore = _campaign.health;
-    final totalPoints = baseScore + goldScore + healthScore;
-
-    // Save progression
-    _saveProgression(totalPoints);
-
+  void _showVictory(int earnedLegacyPoints) {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -656,7 +688,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
         backgroundColor: const Color(0xFF2D2D2D),
         title: const Center(
           child: Text(
-            '🏆 CAMPAIGN VICTORY! 🏆',
+            'CAMPAIGN VICTORY!',
             style: TextStyle(
               color: Colors.amber,
               fontSize: 24,
@@ -689,7 +721,11 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
               '${_campaign.deck.length} cards',
             ),
             const Divider(color: Colors.grey),
-            _buildStatRow(Icons.stars, 'Legacy Points Earned', '$totalPoints'),
+            _buildStatRow(
+              Icons.stars,
+              'Legacy Points Earned',
+              '$earnedLegacyPoints',
+            ),
             const SizedBox(height: 8),
             const Text(
               'Points added to Napoleon\'s Legacy',
@@ -724,29 +760,88 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     );
   }
 
-  Future<void> _saveProgression(int points) async {
+  Future<int> _awardLegacyPointsOnce(String milestoneId, int points) async {
+    if (_campaign.hasAwardedMilestone(milestoneId)) {
+      return 0;
+    }
+
+    _campaign.markMilestoneAwarded(milestoneId);
+    await _saveCampaign();
+
     try {
-      // Load existing progression
       final progressionData = await _persistence.loadProgression();
-      NapoleonProgressionState progressionState;
+      final progressionState = progressionData != null
+          ? NapoleonProgressionState.fromJson(progressionData)
+          : NapoleonProgressionState();
 
-      if (progressionData != null) {
-        progressionState = NapoleonProgressionState.fromJson(progressionData);
-      } else {
-        progressionState = NapoleonProgressionState();
-      }
-
-      // Add points
       progressionState.addPoints(points);
-
-      // Save updated progression
       await _persistence.saveProgression(progressionState.toJson());
-
-      // Also clear the completed campaign save
-      await _persistence.clearCampaign();
+      return points;
     } catch (e) {
       debugPrint('Error saving progression: $e');
+      return 0;
     }
+  }
+
+  Future<int> _awardBattleLegacyPoints(Encounter encounter) async {
+    final isElite =
+        encounter.type == EncounterType.elite ||
+        encounter.difficulty == BattleDifficulty.elite;
+    final points = isElite ? 10 : 5;
+    return _awardLegacyPointsOnce('battle_win_${encounter.id}', points);
+  }
+
+  Future<int> _awardBossLegacyPoints(int act) async {
+    return _awardLegacyPointsOnce('boss_defeated_act_$act', 25);
+  }
+
+  Future<int> _awardActCompleteLegacyPoints(int act) async {
+    final points = switch (act) {
+      1 => 50,
+      2 => 100,
+      _ => 0,
+    };
+    if (points == 0) return 0;
+    return _awardLegacyPointsOnce('act_complete_$act', points);
+  }
+
+  Future<int> _awardCampaignVictoryLegacyPoints() async {
+    const milestoneId = 'campaign_complete_act_3';
+    if (_campaign.hasAwardedMilestone(milestoneId)) {
+      return 0;
+    }
+
+    _campaign.markMilestoneAwarded(milestoneId);
+    await _saveCampaign();
+
+    try {
+      final progressionData = await _persistence.loadProgression();
+      final progressionState = progressionData != null
+          ? NapoleonProgressionState.fromJson(progressionData)
+          : NapoleonProgressionState();
+
+      int total = 200;
+      if (progressionState.completedCampaigns == 0) {
+        total += 100;
+      }
+      progressionState.addPoints(total);
+      progressionState.markCampaignCompleted();
+      await _persistence.saveProgression(progressionState.toJson());
+      await _persistence.clearCampaign();
+      return total;
+    } catch (e) {
+      debugPrint('Error saving progression: $e');
+      return 0;
+    }
+  }
+
+  Future<int> _awardCampaignLossLegacyPoints() async {
+    final points = switch (_campaign.act) {
+      1 => 10,
+      2 => 20,
+      _ => 30,
+    };
+    return _awardLegacyPointsOnce('campaign_lost_${_campaign.id}', points);
   }
 
   String _getActTitle(int act) {
@@ -1014,7 +1109,10 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
         }
         break;
       case ShopItemType.consumable:
-        _applyConsumable(item);
+        _campaign.addConsumable(item.id);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Added ${item.name} to your inventory!')),
+        );
         break;
       case ShopItemType.relic:
         _applyRelic(item);
@@ -1026,26 +1124,6 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     _saveCampaign();
   }
 
-  void _applyConsumable(ShopItem item) {
-    switch (item.effect) {
-      case 'heal_15':
-        _campaign.heal(15);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Healed 15 HP!')));
-        break;
-      case 'heal_30':
-        _campaign.heal(30);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Healed 30 HP!')));
-        break;
-      case 'remove_card':
-        _showRemoveCardDialog();
-        break;
-    }
-  }
-
   void _applyRelic(ShopItem item) {
     _campaign.addRelic(item.id);
     ScaffoldMessenger.of(
@@ -1053,8 +1131,8 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     ).showSnackBar(SnackBar(content: Text('Acquired ${item.name}!')));
   }
 
-  void _showRemoveCardDialog() {
-    showDialog(
+  Future<bool> _showRemoveCardDialog() async {
+    final result = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Remove a Card'),
@@ -1072,7 +1150,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                 ),
                 onTap: () {
                   _campaign.removeCard(card.id);
-                  Navigator.pop(context);
+                  Navigator.pop(context, true);
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text('Removed ${card.name} from deck')),
                   );
@@ -1085,10 +1163,26 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(context, false),
             child: const Text('Cancel'),
           ),
         ],
+      ),
+    );
+    return result ?? false;
+  }
+
+  void _openInventory() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => CampaignInventoryScreen(
+          campaign: _campaign,
+          onChanged: () {
+            setState(() {});
+            _saveCampaign();
+          },
+          onRequestRemoveCard: _showRemoveCardDialog,
+        ),
       ),
     );
   }
@@ -1194,7 +1288,8 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     );
   }
 
-  void _showGameOver() {
+  Future<void> _showGameOver() async {
+    await _awardCampaignLossLegacyPoints();
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -1329,33 +1424,102 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                 ],
               ),
               const SizedBox(height: 4),
-              InkWell(
-                onTap: _showDeckView,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.brown[600],
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.brown[400]!),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.style, color: Colors.white, size: 14),
-                      const SizedBox(width: 4),
-                      Text(
-                        'Deck (${_campaign.deck.length})',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                        ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  InkWell(
+                    onTap: _openProgressionView,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
                       ),
-                    ],
+                      decoration: BoxDecoration(
+                        color: Colors.brown[600],
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.brown[400]!),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.account_tree,
+                            color: Colors.white,
+                            size: 14,
+                          ),
+                          SizedBox(width: 4),
+                          Text(
+                            'Legacy',
+                            style: TextStyle(color: Colors.white, fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 8),
+                  InkWell(
+                    onTap: _openInventory,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.brown[600],
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.brown[400]!),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.inventory_2,
+                            color: Colors.white,
+                            size: 14,
+                          ),
+                          SizedBox(width: 4),
+                          Text(
+                            'Inventory',
+                            style: TextStyle(color: Colors.white, fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  InkWell(
+                    onTap: _showDeckView,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.brown[600],
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.brown[400]!),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.style,
+                            color: Colors.white,
+                            size: 14,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Deck (${_campaign.deck.length})',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -1395,7 +1559,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
           Container(
             padding: const EdgeInsets.symmetric(vertical: 20),
             child: Text(
-              _campaign.isBossTime ? '⚔️ Final Battle ⚔️' : 'Choose Your Path',
+              _campaign.isBossTime ? 'Final Battle' : 'Choose Your Path',
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 24,

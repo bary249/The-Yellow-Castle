@@ -102,6 +102,25 @@ This document captures the **implemented and intended logic** of the game, mappe
 
 ---
 
+### 1.4.1 Campaign Modifiers (Campaign Mode)
+
+- Campaign mode can apply **persistent bonuses** (e.g. from relics) into a battle.
+- These bonuses are passed into the battle screen (`TestMatchScreen`) as parameters and applied at match initialization.
+
+**Implemented campaign bonuses:**
+- **Gold per battle bonus**: `CampaignState.goldPerBattleBonus` (e.g. `relic_gold_purse` => +10 gold per battle reward).
+- **Global damage bonus**: `CampaignState.globalDamageBonus` (e.g. `relic_morale` => +1 damage).
+  - This is passed into `TestMatchScreen` as `playerDamageBonus`.
+  - `playerDamageBonus` is applied by increasing `GameCard.damage` for every card in the player's deck for that match.
+  - This does **not** change the core combat rules; it is a pre-match deck stat modifier used by campaign mode.
+
+**Campaign inventory & activation:**
+- Campaign tracks owned relics and an `activeRelics` subset. Only **active** relics apply their bonuses.
+- Campaign also tracks consumables as counts (inventory vs equipped/active).
+- Consumables are applied when used from the campaign inventory UI (not automatically on purchase).
+
+---
+
 ### 1.5 Lanes & Tiles (`Lane`, `Tile`, `GameBoard`)
 
 **GameBoard**

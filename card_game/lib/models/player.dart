@@ -112,7 +112,7 @@ class Player {
   }
 
   /// Get base HP percentage for UI
-  double get baseHPPercent => baseHP / maxBaseHP;
+  double get baseHPPercent => (baseHP / maxBaseHP).clamp(0.0, 1.0);
 
   /// LEGACY: Alias for backward compatibility
   @Deprecated('Use baseHPPercent instead')

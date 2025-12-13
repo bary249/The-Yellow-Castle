@@ -9,7 +9,7 @@ service cloud.firestore {
     }
     
     function isOwner(userId) {
-      return request.auth.uid == userId;
+      return isSignedIn() && request.auth.uid == userId;
     }
     
     // User profiles - users can read any profile, but only write their own
@@ -18,6 +18,22 @@ service cloud.firestore {
       allow create: if isSignedIn() && isOwner(userId);
       allow update: if isOwner(userId);
       allow delete: if false; // Never allow deletion
+
+      // Campaign saves - only owner can read/write
+      match /campaigns/{campaignId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId);
+        allow update: if isOwner(userId);
+        allow delete: if isOwner(userId);
+      }
+
+      // Progression saves - only owner can read/write
+      match /progression/{progressionId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId);
+        allow update: if isOwner(userId);
+        allow delete: if isOwner(userId);
+      }
       
       // User's saved decks - only owner can read/write their decks
       match /user_decks/{deckId} {

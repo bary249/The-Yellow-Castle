@@ -216,10 +216,12 @@ class NapoleonProgression {
 class NapoleonProgressionState {
   Set<String> unlockedNodes;
   int progressionPoints;
+  int completedCampaigns;
 
   NapoleonProgressionState({
     Set<String>? unlockedNodes,
     this.progressionPoints = 0,
+    this.completedCampaigns = 0,
   }) : unlockedNodes = unlockedNodes ?? {'start'};
 
   /// Unlock a node if possible
@@ -237,6 +239,10 @@ class NapoleonProgressionState {
   /// Add progression points (earned from victories)
   void addPoints(int points) {
     progressionPoints += points;
+  }
+
+  void markCampaignCompleted() {
+    completedCampaigns += 1;
   }
 
   /// Check if a specific effect is active
@@ -266,6 +272,7 @@ class NapoleonProgressionState {
   Map<String, dynamic> toJson() => {
     'unlockedNodes': unlockedNodes.toList(),
     'progressionPoints': progressionPoints,
+    'completedCampaigns': completedCampaigns,
   };
 
   /// Deserialize from JSON
@@ -273,6 +280,7 @@ class NapoleonProgressionState {
     return NapoleonProgressionState(
       unlockedNodes: Set<String>.from(json['unlockedNodes'] ?? ['start']),
       progressionPoints: json['progressionPoints'] ?? 0,
+      completedCampaigns: json['completedCampaigns'] ?? 0,
     );
   }
 }

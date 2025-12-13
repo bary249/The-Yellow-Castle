@@ -34,6 +34,11 @@ class TestMatchScreen extends StatefulWidget {
   final List<GameCard>?
   customDeck; // Custom player deck (overrides default/saved)
   final int? playerCurrentHealth; // Starting HP for campaign mode
+  final int
+  playerDamageBonus; // Flat damage bonus applied to all player deck cards
+  final int extraStartingDraw;
+  final int artilleryDamageBonus;
+  final int? opponentBaseHP;
 
   const TestMatchScreen({
     super.key,
@@ -44,6 +49,10 @@ class TestMatchScreen extends StatefulWidget {
     this.campaignAct = 1,
     this.customDeck,
     this.playerCurrentHealth,
+    this.playerDamageBonus = 0,
+    this.extraStartingDraw = 0,
+    this.artilleryDamageBonus = 0,
+    this.opponentBaseHP,
   });
 
   @override
@@ -826,7 +835,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       builder: (context) => AlertDialog(
         title: Column(
           children: [
-            const Text('⚔️ Attack Preview', textAlign: TextAlign.center),
+            const Text('Attack Preview', textAlign: TextAlign.center),
             Text(
               '$laneName Lane',
               style: TextStyle(fontSize: 12, color: Colors.grey[600]),
@@ -988,7 +997,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                 children: [
                   if (preview.targetDied)
                     const Text(
-                      '💀 Target will be KILLED!',
+                      'Target will be killed!',
                       style: TextStyle(
                         color: Colors.red,
                         fontWeight: FontWeight.bold,
@@ -996,7 +1005,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                     ),
                   if (preview.attackerDied)
                     const Text(
-                      '⚠️ Attacker will DIE from retaliation!',
+                      'Attacker will die from retaliation!',
                       style: TextStyle(
                         color: Colors.orange,
                         fontWeight: FontWeight.bold,
@@ -1009,7 +1018,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                     ),
                   if (attacker.isRanged && !preview.targetDied)
                     const Text(
-                      '🏹 Ranged - No retaliation',
+                      'Ranged - No retaliation',
                       style: TextStyle(color: Colors.blue, fontSize: 12),
                     ),
                 ],
@@ -1035,10 +1044,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
               );
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text(
-              '⚔️ ATTACK',
-              style: TextStyle(color: Colors.white),
-            ),
+            child: const Text('ATTACK', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -1115,7 +1121,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                   ),
                 ],
               ),
-              if (willDie) const Text('💀', style: TextStyle(fontSize: 16)),
+              if (willDie) const Text('DEAD', style: TextStyle(fontSize: 10)),
             ],
           ),
         ),
@@ -1331,7 +1337,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         return AlertDialog(
           title: Column(
             children: [
-              const Text('⚔️ Battle Result'),
+              const Text('Battle Result'),
               Text(
                 '$laneName Lane',
                 style: TextStyle(fontSize: 12, color: Colors.grey[600]),
@@ -1366,7 +1372,10 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                     ),
                     const Text(' damage'),
                     if (result.targetDied)
-                      const Text(' 💀', style: TextStyle(fontSize: 20)),
+                      const Text(
+                        ' (Destroyed)',
+                        style: TextStyle(fontSize: 14),
+                      ),
                   ],
                 ),
               ),
@@ -1397,7 +1406,10 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                         ),
                       ),
                       if (result.attackerDied)
-                        const Text(' 💀', style: TextStyle(fontSize: 20)),
+                        const Text(
+                          ' (Destroyed)',
+                          style: TextStyle(fontSize: 14),
+                        ),
                     ],
                   ),
                 ),
@@ -1407,7 +1419,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
               const SizedBox(height: 12),
               if (result.targetDied && result.attackerDied)
                 const Text(
-                  '💀 Both units destroyed!',
+                  'Both units destroyed!',
                   style: TextStyle(
                     color: Colors.purple,
                     fontWeight: FontWeight.bold,
@@ -1415,7 +1427,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                 )
               else if (result.targetDied)
                 Text(
-                  '💀 ${target.name} destroyed!',
+                  '${target.name} destroyed!',
                   style: const TextStyle(
                     color: Colors.red,
                     fontWeight: FontWeight.bold,
@@ -1423,7 +1435,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                 )
               else if (result.attackerDied)
                 Text(
-                  '💀 ${attacker.name} destroyed!',
+                  '${attacker.name} destroyed!',
                   style: const TextStyle(
                     color: Colors.orange,
                     fontWeight: FontWeight.bold,
@@ -1460,7 +1472,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       builder: (context) => AlertDialog(
         title: Column(
           children: [
-            const Text('🤖 Enemy Attack!', textAlign: TextAlign.center),
+            const Text('Enemy Attack!', textAlign: TextAlign.center),
             Text(
               '$laneName Lane',
               style: TextStyle(fontSize: 12, color: Colors.grey[600]),
@@ -1514,7 +1526,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                   ),
                   if (result.targetDied)
                     const Text(
-                      '💀 DESTROYED!',
+                      'DESTROYED!',
                       style: TextStyle(
                         color: Colors.red,
                         fontWeight: FontWeight.bold,
@@ -1573,7 +1585,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                     ),
                     if (result.attackerDied)
                       const Text(
-                        '💀 ATTACKER DESTROYED!',
+                        'ATTACKER DESTROYED!',
                         style: TextStyle(
                           color: Colors.green,
                           fontWeight: FontWeight.bold,
@@ -1614,7 +1626,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       builder: (context) => AlertDialog(
         title: Column(
           children: [
-            const Text('⚠️ BASE UNDER ATTACK!', textAlign: TextAlign.center),
+            const Text('BASE UNDER ATTACK!', textAlign: TextAlign.center),
             Text(
               '$laneName Lane',
               style: TextStyle(fontSize: 12, color: Colors.grey[600]),
@@ -1699,7 +1711,6 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     SyncedHeroAbility ability, {
     required bool isOpponent,
   }) async {
-    final titleEmoji = isOpponent ? '🤖' : '🦸';
     final titleText = isOpponent
         ? 'Enemy Hero Ability!'
         : 'Hero Ability Activated!';
@@ -1712,7 +1723,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       builder: (dialogContext) {
         // Auto-close after 3 seconds using the DIALOG'S context
         Timer(const Duration(seconds: 3), () {
-          if (dialogContext.mounted && Navigator.canPop(dialogContext)) {
+          if (!dialogContext.mounted && Navigator.canPop(dialogContext)) {
             Navigator.pop(dialogContext);
           }
         });
@@ -1722,8 +1733,6 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
           title: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text(titleEmoji, style: const TextStyle(fontSize: 28)),
-              const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   titleText,
@@ -1778,7 +1787,6 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     final isOpponentAttacking = result.attackerOwnerId != _playerId;
 
     // Determine dialog style based on who is attacking
-    final titleEmoji = isOpponentAttacking ? '🤖' : '⚔️';
     final titleText = isOpponentAttacking ? 'Enemy Attack!' : 'Your Attack';
     final bgColor = isOpponentAttacking ? Colors.red[50] : Colors.blue[50];
     final accentColor = isOpponentAttacking ? Colors.red : Colors.blue;
@@ -1789,7 +1797,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       builder: (context) => AlertDialog(
         title: Column(
           children: [
-            Text('$titleEmoji $titleText', textAlign: TextAlign.center),
+            Text(titleText, textAlign: TextAlign.center),
             Text(
               '$laneName Lane',
               style: TextStyle(fontSize: 12, color: Colors.grey[600]),
@@ -1858,7 +1866,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                   ],
                   if (result.targetDied)
                     Text(
-                      result.isBaseAttack ? '🏆 VICTORY!' : '💀 DESTROYED!',
+                      result.isBaseAttack ? 'VICTORY!' : 'DESTROYED!',
                       style: TextStyle(
                         color: accentColor,
                         fontWeight: FontWeight.bold,
@@ -1917,7 +1925,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                     ),
                     if (result.attackerDied)
                       const Text(
-                        '💀 ATTACKER DESTROYED!',
+                        'ATTACKER DESTROYED!',
                         style: TextStyle(
                           color: Colors.green,
                           fontWeight: FontWeight.bold,
@@ -2232,7 +2240,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                     const Padding(
                       padding: EdgeInsets.only(top: 8),
                       child: Text(
-                        '🏆 VICTORY!',
+                        'VICTORY!',
                         style: TextStyle(
                           color: Colors.green,
                           fontWeight: FontWeight.bold,
@@ -2257,7 +2265,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             child: const Text(
-              '🏰 ATTACK BASE',
+              'ATTACK BASE',
               style: TextStyle(color: Colors.white),
             ),
           ),
@@ -2347,7 +2355,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
           return AlertDialog(
             title: Column(
               children: [
-                const Text('🏰 Base Attacked!'),
+                const Text('Base Attacked!'),
                 Text(
                   '$laneName Lane',
                   style: TextStyle(fontSize: 12, color: Colors.grey[600]),
@@ -2389,7 +2397,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                         const Padding(
                           padding: EdgeInsets.only(top: 8),
                           child: Text(
-                            '🏆 VICTORY!',
+                            'VICTORY!',
                             style: TextStyle(
                               color: Colors.green,
                               fontWeight: FontWeight.bold,
@@ -3458,8 +3466,6 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         ),
         title: Column(
           children: [
-            const Text('🏺', style: TextStyle(fontSize: 48)),
-            const SizedBox(height: 8),
             Text(
               isHumanPlayer
                   ? 'Ancient Artifact Found!'
@@ -3502,9 +3508,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
               child: Column(
                 children: [
                   Text(
-                    isHumanPlayer
-                        ? '✨ Card Added to Hand! ✨'
-                        : '⚠️ Enemy Gained:',
+                    isHumanPlayer ? 'Card Added to Hand!' : 'Enemy Gained:',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
@@ -3525,15 +3529,19 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      _buildStatBadge('⚔️', '${rewardCard.damage}', Colors.red),
+                      _buildStatBadge(
+                        'ATK',
+                        '${rewardCard.damage}',
+                        Colors.red,
+                      ),
                       const SizedBox(width: 12),
                       _buildStatBadge(
-                        '❤️',
+                        'HP',
                         '${rewardCard.health}',
                         Colors.green,
                       ),
                       const SizedBox(width: 12),
-                      _buildStatBadge('⏱️', '${rewardCard.tick}', Colors.blue),
+                      _buildStatBadge('SPD', '${rewardCard.tick}', Colors.blue),
                     ],
                   ),
                   if (rewardCard.element != null) ...[
@@ -4165,8 +4173,17 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
 
     // Check for specific hero decks
     if (widget.forceCampaignDeck) {
-      // Campaign mode: always use hero's campaign deck
-      if (playerHero.id == 'napoleon') {
+      // Campaign mode: prefer the campaign deck passed in from the campaign state.
+      if (widget.customDeck != null) {
+        playerDeck = Deck.fromCards(
+          playerId: id,
+          cards: widget.customDeck!.map((c) => c.clone()).toList(),
+          name: "${playerHero.name} Campaign Deck",
+        );
+        debugPrint(
+          '🎖️ CAMPAIGN MODE: Using provided campaign deck (${widget.customDeck!.length} cards)',
+        );
+      } else if (playerHero.id == 'napoleon') {
         playerDeck = Deck.napoleon(playerId: id);
         debugPrint('🎖️ CAMPAIGN MODE: Using Napoleon starter deck (25 cards)');
       } else {
@@ -4221,6 +4238,21 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       }
     }
 
+    // Apply a flat player damage bonus to the selected deck (campaign relics, etc.)
+    // This is applied only for the current match; it does not mutate saved/campaign deck state.
+    final Deck effectivePlayerDeck = widget.playerDamageBonus != 0
+        ? Deck.fromCards(
+            playerId: id,
+            name: playerDeck.name,
+            cards: playerDeck.cards
+                .map(
+                  (c) =>
+                      c.copyWith(damage: c.damage + widget.playerDamageBonus),
+                )
+                .toList(),
+          )
+        : playerDeck;
+
     // Determine opponent name and deck
     final opponentNameFinal = _isOnlineMode
         ? (_opponentName ?? 'Opponent')
@@ -4232,9 +4264,9 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       'Player hero: ${playerHero.name} (${playerHero.abilityDescription})',
     );
     debugPrint('Opponent hero: ${opponentHero.name}');
-    debugPrint('Deck name: ${playerDeck.name}');
-    debugPrint('Deck cards (${playerDeck.cards.length}):');
-    for (final card in playerDeck.cards) {
+    debugPrint('Deck name: ${effectivePlayerDeck.name}');
+    debugPrint('Deck cards (${effectivePlayerDeck.cards.length}):');
+    for (final card in effectivePlayerDeck.cards) {
       debugPrint(
         '  - ${card.name} (${card.element}, DMG:${card.damage}, HP:${card.health})',
       );
@@ -4325,7 +4357,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       _matchManager.startMatchTYC3(
         playerId: id,
         playerName: name,
-        playerDeck: playerDeck,
+        playerDeck: effectivePlayerDeck,
         opponentId: opponentIdFinal,
         opponentName: opponentNameFinal,
         opponentDeck: opponentDeck,
@@ -4342,7 +4374,14 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         relicDescription: relicDescription,
         isChessTimerMode: _useChessTimer,
         playerBaseHP: widget.playerCurrentHealth,
+        opponentBaseHP: widget.opponentBaseHP,
       );
+
+      if (widget.extraStartingDraw > 0) {
+        _matchManager.currentMatch?.player.drawCards(
+          count: widget.extraStartingDraw,
+        );
+      }
 
       // Set up relic discovery callback
       _matchManager.onRelicDiscovered =
@@ -4402,7 +4441,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       _matchManager.startMatch(
         playerId: id,
         playerName: name,
-        playerDeck: playerDeck,
+        playerDeck: effectivePlayerDeck,
         opponentId: opponentIdFinal,
         opponentName: opponentNameFinal,
         opponentDeck: opponentDeck,
@@ -4411,7 +4450,14 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         opponentAttunedElement: opponentHero.terrainAffinities.first,
         playerHero: playerHero,
         opponentHero: opponentHero,
+        opponentBaseHP: widget.opponentBaseHP,
       );
+
+      if (widget.extraStartingDraw > 0) {
+        _matchManager.currentMatch?.player.drawCards(
+          count: widget.extraStartingDraw,
+        );
+      }
     }
     _clearStaging();
     _clearTYC3Selection();
@@ -5585,8 +5631,8 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                 children: [
                   Text(
                     currentLane != null
-                        ? '⚔️ ${currentLane.name.toUpperCase()} LANE ⚔️'
-                        : '⚔️ COMBAT IN PROGRESS ⚔️',
+                        ? '${currentLane.name.toUpperCase()} LANE'
+                        : 'COMBAT IN PROGRESS',
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 16,
@@ -5865,7 +5911,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                   const Icon(Icons.flash_on, color: Colors.yellow, size: 28),
                   const SizedBox(width: 8),
                   Text(
-                    '⚔️ ${activeLane.name.toUpperCase()} LANE ⚔️',
+                    '${activeLane.name.toUpperCase()} LANE',
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 22,
@@ -5897,7 +5943,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    'Combat at: ${zone == Zone.playerBase ? '🛡️ YOUR BASE' : (zone == Zone.enemyBase ? '🏰 ENEMY BASE' : '⚔️ MIDDLE')}',
+                    'Combat at: ${zone == Zone.playerBase ? 'YOUR BASE' : (zone == Zone.enemyBase ? 'ENEMY BASE' : 'MIDDLE')}',
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 14,
@@ -5996,7 +6042,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                             ),
                             child: const Center(
                               child: Text(
-                                '🛡️ YOUR CARDS',
+                                'YOUR CARDS',
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontSize: 16,
@@ -6076,7 +6122,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                             ),
                             child: const Center(
                               child: Text(
-                                '⚔️ ENEMY CARDS',
+                                'ENEMY CARDS',
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontSize: 16,
@@ -6342,8 +6388,8 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                _buildZoomStat('⚔️', '${card.damage}'),
-                _buildZoomStat('⏱️', 'T${card.tick}'),
+                _buildZoomStat('ATK', '${card.damage}'),
+                _buildZoomStat('TICK', 'T${card.tick}'),
               ],
             ),
 
@@ -6352,7 +6398,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
               Padding(
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(
-                  '🏔️ ${card.element}',
+                  '${card.element}',
                   style: TextStyle(
                     color: Colors.white.withAlpha(180),
                     fontSize: 9,
@@ -6365,7 +6411,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
               const Padding(
                 padding: EdgeInsets.only(top: 4),
                 child: Text(
-                  '💀 DESTROYED',
+                  'DESTROYED',
                   style: TextStyle(
                     color: Colors.red,
                     fontSize: 10,
@@ -7108,7 +7154,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                             } else if (isOpponent) {
                               // Show if this is a valid target
                               if (_validTargets.contains(card)) {
-                                positionLabel = '🎯 TARGET';
+                                positionLabel = 'TARGET';
                               }
                             }
                           } else {

@@ -56,8 +56,12 @@ class CampaignState {
   int health;
   int maxHealth;
   List<GameCard> deck;
-  List<GameCard> inventory; // Cards removed from deck, can be added back
-  List<String> relics; // IDs of acquired relics (e.g., 'relic_armor')
+  List<GameCard> inventory;
+  List<String> relics;
+  List<String> activeRelics;
+  Map<String, int> consumables;
+  Map<String, int> activeConsumables;
+  Set<String> awardedLegacyMilestones;
   final DateTime startedAt;
   DateTime? completedAt;
   bool isVictory;
@@ -75,6 +79,10 @@ class CampaignState {
     required this.deck,
     List<GameCard>? inventory,
     List<String>? relics,
+    List<String>? activeRelics,
+    Map<String, int>? consumables,
+    Map<String, int>? activeConsumables,
+    Set<String>? awardedLegacyMilestones,
     required this.startedAt,
     this.completedAt,
     this.isVictory = false,
@@ -82,9 +90,22 @@ class CampaignState {
     DateTime? lastUpdated,
   }) : inventory = inventory ?? [],
        relics = relics ?? [],
+       activeRelics =
+           activeRelics ?? (relics != null ? [...relics] : <String>[]),
+       consumables = consumables ?? <String, int>{},
+       activeConsumables = activeConsumables ?? <String, int>{},
+       awardedLegacyMilestones = awardedLegacyMilestones ?? <String>{},
        lastUpdated = lastUpdated ?? DateTime.now();
 
-  static const int bossEncounterThreshold = 3;
+  bool hasAwardedMilestone(String milestoneId) {
+    return awardedLegacyMilestones.contains(milestoneId);
+  }
+
+  void markMilestoneAwarded(String milestoneId) {
+    awardedLegacyMilestones.add(milestoneId);
+  }
+
+  static const int bossEncounterThreshold = 5;
   bool get isBossTime => encounterNumber >= bossEncounterThreshold;
   bool get isOver => isVictory || health <= 0;
   int get encountersUntilBoss => (bossEncounterThreshold - encounterNumber)
@@ -93,15 +114,17 @@ class CampaignState {
   // Relic Effects Helpers
   bool hasRelic(String relicId) => relics.contains(relicId);
 
+  bool isRelicActive(String relicId) => activeRelics.contains(relicId);
+
   int get goldPerBattleBonus {
     int bonus = 0;
-    if (relics.contains('relic_gold_purse')) bonus += 10;
+    if (activeRelics.contains('relic_gold_purse')) bonus += 10;
     return bonus;
   }
 
   int get globalDamageBonus {
     int bonus = 0;
-    if (relics.contains('relic_morale')) bonus += 1;
+    if (activeRelics.contains('relic_morale')) bonus += 1;
     return bonus;
   }
 
@@ -133,6 +156,9 @@ class CampaignState {
   void addRelic(String relicId) {
     if (!relics.contains(relicId)) {
       relics.add(relicId);
+      if (!activeRelics.contains(relicId)) {
+        activeRelics.add(relicId);
+      }
 
       // Immediate effects
       if (relicId == 'relic_armor') {
@@ -140,6 +166,54 @@ class CampaignState {
         health += 10; // Heal the amount increased
       }
     }
+  }
+
+  void activateRelic(String relicId) {
+    if (relics.contains(relicId) && !activeRelics.contains(relicId)) {
+      activeRelics.add(relicId);
+    }
+  }
+
+  void deactivateRelic(String relicId) {
+    if (relicId == 'relic_armor') return;
+    activeRelics.remove(relicId);
+  }
+
+  void addConsumable(String consumableId, {int count = 1}) {
+    consumables[consumableId] = (consumables[consumableId] ?? 0) + count;
+  }
+
+  bool equipConsumable(String consumableId, {int count = 1}) {
+    final available = consumables[consumableId] ?? 0;
+    if (available < count) return false;
+    consumables[consumableId] = available - count;
+    if (consumables[consumableId] == 0) {
+      consumables.remove(consumableId);
+    }
+    activeConsumables[consumableId] =
+        (activeConsumables[consumableId] ?? 0) + count;
+    return true;
+  }
+
+  bool unequipConsumable(String consumableId, {int count = 1}) {
+    final active = activeConsumables[consumableId] ?? 0;
+    if (active < count) return false;
+    activeConsumables[consumableId] = active - count;
+    if (activeConsumables[consumableId] == 0) {
+      activeConsumables.remove(consumableId);
+    }
+    consumables[consumableId] = (consumables[consumableId] ?? 0) + count;
+    return true;
+  }
+
+  bool consumeActiveConsumable(String consumableId, {int count = 1}) {
+    final active = activeConsumables[consumableId] ?? 0;
+    if (active < count) return false;
+    activeConsumables[consumableId] = active - count;
+    if (activeConsumables[consumableId] == 0) {
+      activeConsumables.remove(consumableId);
+    }
+    return true;
   }
 
   void addCard(GameCard card) {
@@ -180,6 +254,10 @@ class CampaignState {
     'deck': deck.map((c) => c.toJson()).toList(),
     'inventory': inventory.map((c) => c.toJson()).toList(),
     'relics': relics,
+    'activeRelics': activeRelics,
+    'consumables': consumables,
+    'activeConsumables': activeConsumables,
+    'awardedLegacyMilestones': awardedLegacyMilestones.toList(),
     'startedAt': startedAt.toIso8601String(),
     'completedAt': completedAt?.toIso8601String(),
     'isVictory': isVictory,
@@ -202,6 +280,18 @@ class CampaignState {
         ?.map((c) => GameCard.fromJson(c as Map<String, dynamic>))
         .toList(),
     relics: (json['relics'] as List?)?.map((e) => e as String).toList(),
+    activeRelics: (json['activeRelics'] as List?)
+        ?.map((e) => e as String)
+        .toList(),
+    consumables: (json['consumables'] as Map?)?.map(
+      (key, value) => MapEntry(key as String, (value as num).toInt()),
+    ),
+    activeConsumables: (json['activeConsumables'] as Map?)?.map(
+      (key, value) => MapEntry(key as String, (value as num).toInt()),
+    ),
+    awardedLegacyMilestones: Set<String>.from(
+      json['awardedLegacyMilestones'] as List? ?? const [],
+    ),
     startedAt: DateTime.parse(json['startedAt'] as String),
     completedAt: json['completedAt'] != null
         ? DateTime.parse(json['completedAt'] as String)
@@ -252,7 +342,9 @@ class EncounterGenerator {
       otherTypes.shuffle(_random);
 
       // FORCE SHOP if it's a multiple of 3 and shop is available
-      if (encounterNumber > 0 && encounterNumber % 3 == 0) {
+      // ALSO force Shop on the first encounter of Acts 2 and 3.
+      if ((encounterNumber == 0 && (act == 2 || act == 3)) ||
+          (encounterNumber > 0 && encounterNumber % 3 == 0)) {
         if (otherTypes.contains(EncounterType.shop)) {
           // Move shop to front to ensure it's picked
           otherTypes.remove(EncounterType.shop);
@@ -335,7 +427,10 @@ class EncounterGenerator {
 
   List<EncounterType> _getAvailableTypes(int encounterNumber) {
     final types = <EncounterType>[EncounterType.event, EncounterType.event];
-    if (encounterNumber >= 1) types.add(EncounterType.shop);
+    if (encounterNumber >= 1 ||
+        ((act == 2 || act == 3) && encounterNumber == 0)) {
+      types.add(EncounterType.shop);
+    }
     if (encounterNumber >= 2) types.add(EncounterType.rest);
     if (encounterNumber >= 3) types.add(EncounterType.mystery);
     if (encounterNumber >= 4 && _random.nextDouble() < 0.15) {

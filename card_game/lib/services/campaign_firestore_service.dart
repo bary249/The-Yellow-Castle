@@ -9,6 +9,7 @@ class CampaignFirestoreService {
 
   final FirebaseFirestore _firestore;
   final FirebaseAuth _auth;
+  bool _disableCloudOps = false;
 
   CampaignFirestoreService({FirebaseFirestore? firestore, FirebaseAuth? auth})
     : _firestore = firestore ?? FirebaseFirestore.instance,
@@ -38,6 +39,7 @@ class CampaignFirestoreService {
 
   /// Save campaign to Firestore
   Future<bool> saveCampaign(CampaignState campaign) async {
+    if (_disableCloudOps) return false;
     final ref = _campaignRef;
     if (ref == null) {
       debugPrint('Cannot save to Firestore: No user logged in');
@@ -49,6 +51,13 @@ class CampaignFirestoreService {
       debugPrint('Campaign saved to Firestore');
       return true;
     } catch (e) {
+      if (e is FirebaseException && e.code == 'permission-denied') {
+        _disableCloudOps = true;
+        debugPrint(
+          'Error saving campaign to Firestore: permission-denied (cloud sync disabled for this session). Update Firestore rules to allow users/{uid}/campaigns/current writes.',
+        );
+        return false;
+      }
       debugPrint('Error saving campaign to Firestore: $e');
       return false;
     }
@@ -56,6 +65,7 @@ class CampaignFirestoreService {
 
   /// Load campaign from Firestore
   Future<CampaignState?> loadCampaign() async {
+    if (_disableCloudOps) return null;
     final ref = _campaignRef;
     if (ref == null) return null;
 
@@ -68,6 +78,13 @@ class CampaignFirestoreService {
 
       return CampaignState.fromJson(doc.data()!);
     } catch (e) {
+      if (e is FirebaseException && e.code == 'permission-denied') {
+        _disableCloudOps = true;
+        debugPrint(
+          'Error loading campaign from Firestore: permission-denied (cloud sync disabled for this session). Update Firestore rules to allow users/{uid}/campaigns/current reads.',
+        );
+        return null;
+      }
       debugPrint('Error loading campaign from Firestore: $e');
       return null;
     }
@@ -75,6 +92,7 @@ class CampaignFirestoreService {
 
   /// Save progression to Firestore
   Future<bool> saveProgression(Map<String, dynamic> progressionJson) async {
+    if (_disableCloudOps) return false;
     final ref = _progressionRef;
     if (ref == null) return false;
 
@@ -83,6 +101,13 @@ class CampaignFirestoreService {
       debugPrint('Progression saved to Firestore');
       return true;
     } catch (e) {
+      if (e is FirebaseException && e.code == 'permission-denied') {
+        _disableCloudOps = true;
+        debugPrint(
+          'Error saving progression to Firestore: permission-denied (cloud sync disabled for this session). Update Firestore rules to allow users/{uid}/progression/napoleon writes.',
+        );
+        return false;
+      }
       debugPrint('Error saving progression to Firestore: $e');
       return false;
     }
@@ -90,6 +115,7 @@ class CampaignFirestoreService {
 
   /// Load progression from Firestore
   Future<Map<String, dynamic>?> loadProgression() async {
+    if (_disableCloudOps) return null;
     final ref = _progressionRef;
     if (ref == null) return null;
 
@@ -100,6 +126,13 @@ class CampaignFirestoreService {
       }
       return doc.data();
     } catch (e) {
+      if (e is FirebaseException && e.code == 'permission-denied') {
+        _disableCloudOps = true;
+        debugPrint(
+          'Error loading progression from Firestore: permission-denied (cloud sync disabled for this session). Update Firestore rules to allow users/{uid}/progression/napoleon reads.',
+        );
+        return null;
+      }
       debugPrint('Error loading progression from Firestore: $e');
       return null;
     }
@@ -107,6 +140,7 @@ class CampaignFirestoreService {
 
   /// Delete campaign from Firestore
   Future<bool> deleteCampaign() async {
+    if (_disableCloudOps) return false;
     final ref = _campaignRef;
     if (ref == null) return false;
 
@@ -115,6 +149,13 @@ class CampaignFirestoreService {
       debugPrint('Campaign deleted from Firestore');
       return true;
     } catch (e) {
+      if (e is FirebaseException && e.code == 'permission-denied') {
+        _disableCloudOps = true;
+        debugPrint(
+          'Error deleting campaign from Firestore: permission-denied (cloud sync disabled for this session). Update Firestore rules to allow users/{uid}/campaigns/current deletes.',
+        );
+        return false;
+      }
       debugPrint('Error deleting campaign from Firestore: $e');
       return false;
     }
@@ -122,6 +163,7 @@ class CampaignFirestoreService {
 
   /// Check if a campaign exists in Firestore
   Future<bool> hasSavedCampaign() async {
+    if (_disableCloudOps) return false;
     final ref = _campaignRef;
     if (ref == null) return false;
 
@@ -129,6 +171,12 @@ class CampaignFirestoreService {
       final doc = await ref.get();
       return doc.exists;
     } catch (e) {
+      if (e is FirebaseException && e.code == 'permission-denied') {
+        _disableCloudOps = true;
+        debugPrint(
+          'Error checking campaign in Firestore: permission-denied (cloud sync disabled for this session). Update Firestore rules to allow users/{uid}/campaigns/current reads.',
+        );
+      }
       return false;
     }
   }

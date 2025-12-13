@@ -377,14 +377,14 @@ class _DeckEditorScreenState extends State<DeckEditorScreen> {
                       if (card.rarity > 1)
                         Text(
                           card.rarity == 4
-                              ? '★'
-                              : (card.rarity == 3 ? '◆' : '●'),
+                              ? 'R4'
+                              : (card.rarity == 3 ? 'R3' : 'R2'),
                           style: TextStyle(color: rarityColor, fontSize: 10),
                         ),
                     ],
                   ),
                   Text(
-                    '⚔️${card.damage} ❤️${card.health} 🎯${card.attackRange} ⚡${card.maxAP}  (max $maxCopies)',
+                    'ATK ${card.damage}  HP ${card.health}  RNG ${card.attackRange}  AP ${card.maxAP}  (max $maxCopies)',
                     style: TextStyle(color: Colors.grey[400], fontSize: 11),
                   ),
                 ],
@@ -583,14 +583,14 @@ class _DeckEditorScreenState extends State<DeckEditorScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _buildStatBadge('⚔️', card.damage.toString(), Colors.red),
-                _buildStatBadge('❤️', card.health.toString(), Colors.pink),
+                _buildStatBadge('ATK', card.damage.toString(), Colors.red),
+                _buildStatBadge('HP', card.health.toString(), Colors.pink),
                 _buildStatBadge(
-                  '🎯',
+                  'RNG',
                   card.attackRange.toString(),
                   Colors.orange,
                 ),
-                _buildStatBadge('⚡', card.maxAP.toString(), Colors.cyan),
+                _buildStatBadge('AP', card.maxAP.toString(), Colors.cyan),
               ],
             ),
 

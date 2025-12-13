@@ -155,7 +155,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                     children: [
                       // Game title
                       const Text(
-                        '⚔️ Land of Clans',
+                        'Land of Clans',
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 32,

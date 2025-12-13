@@ -96,6 +96,7 @@ class MatchManager {
     String? relicDescription, // Custom relic description
     bool isChessTimerMode = false, // Whether to use chess timer
     int? playerBaseHP, // Optional starting HP for player
+    int? opponentBaseHP, // Optional starting HP for opponent
   }) {
     // Debug: Log the deck being used
     _log(
@@ -123,6 +124,7 @@ class MatchManager {
       isHuman: !opponentIsAI,
       attunedElement: opponentAttunedElement,
       hero: opponentHero?.copy(),
+      baseHP: opponentBaseHP,
     );
 
     // Shuffle decks (skip opponent shuffle if deck is pre-ordered from online sync)
@@ -1369,6 +1371,7 @@ class MatchManager {
     String? relicDescription, // Custom relic description
     bool isChessTimerMode = false, // Whether to use chess timer
     int? playerBaseHP, // Optional starting HP for player
+    int? opponentBaseHP, // Optional starting HP for opponent
   }) {
     // Use the existing startMatch logic
     startMatch(
@@ -1390,6 +1393,7 @@ class MatchManager {
       relicDescription: relicDescription,
       isChessTimerMode: isChessTimerMode,
       playerBaseHP: playerBaseHP,
+      opponentBaseHP: opponentBaseHP,
     );
 
     if (_currentMatch == null) return;

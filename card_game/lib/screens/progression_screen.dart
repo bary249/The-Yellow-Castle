@@ -6,11 +6,13 @@ import '../services/campaign_persistence_service.dart';
 class ProgressionScreen extends StatefulWidget {
   final NapoleonProgressionState? progressionState;
   final VoidCallback? onStateChanged;
+  final bool viewOnly;
 
   const ProgressionScreen({
     super.key,
     this.progressionState,
     this.onStateChanged,
+    this.viewOnly = false,
   });
 
   @override
@@ -95,7 +97,7 @@ class _ProgressionScreenState extends State<ProgressionScreen> {
                 child: Column(
                   children: [
                     const Text(
-                      '🎖️ Progression Tree',
+                      'Progression Tree',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 20,
@@ -334,25 +336,21 @@ class _ProgressionScreenState extends State<ProgressionScreen> {
             onPressed: () => Navigator.pop(context),
             child: const Text('Close'),
           ),
-          if (!isUnlocked && canUnlock && canAfford)
+          if (!widget.viewOnly && !isUnlocked && canUnlock && canAfford)
             ElevatedButton(
               onPressed: () async {
                 if (_state.unlock(node.id)) {
                   await _saveProgression();
                   setState(() {});
                   if (mounted) {
-                    Navigator.pop(context);
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Unlocked ${node.name}!'),
-                        backgroundColor: Colors.green,
-                      ),
+                      SnackBar(content: Text('Unlocked: ${node.name}!')),
                     );
                   }
                 }
               },
               style: ElevatedButton.styleFrom(backgroundColor: Colors.amber),
-              child: Text('Unlock (${node.cost})'),
+              child: Text('Unlock (${node.cost} pts)'),
             ),
         ],
       ),

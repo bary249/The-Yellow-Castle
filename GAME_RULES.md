@@ -59,6 +59,13 @@
   - Extra card draws
   - Temporary buffs
 
+**Campaign note:**
+- Campaign mode can also grant **persistent relics** as progression rewards (e.g. act completion).
+- These campaign relics can modify battle rewards (gold) or apply a flat stat bonus (e.g. +1 damage) at match start.
+- These are separate from the in-match relic tile described above.
+
+- Campaign mode also has **consumables** (e.g. healing, remove-card) that are stored in the campaign inventory and can be equipped/used between encounters.
+
 ---
 
 ## 2.3 Heroes

@@ -114,6 +114,7 @@ Each leader starts with **1 base ability**. Meta progression unlocks **2 alterna
 
 ---
 
-
-IMplement act 2 and 3 for nepoloan, add the meta progression for him and add the campaign mode to the main menu.
-Make sure the user gets the epic relic to thier inventory when sucsessfully completing rach act.
+- [x] Implement act 2 and 3 for Napoleon in campaign mode.
+- [x] Add the meta progression screen for Napoleon and link it from the campaign menu.
+- [x] Add campaign mode entry points to the main menu (start/continue).
+- [x] Grant a relic reward when successfully completing each act.
