@@ -3,8 +3,10 @@ import '../services/auth_service.dart';
 import 'hero_selection_screen.dart';
 import 'deck_editor_screen.dart';
 import 'campaign_select_screen.dart';
+import 'campaign_map_screen.dart';
 import 'ui_test_screen.dart';
 import 'rendering_test_screen.dart';
+import '../services/campaign_persistence_service.dart';
 
 /// Main menu screen with Play vs AI and Play Online options
 class MainMenuScreen extends StatefulWidget {
@@ -20,11 +22,23 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
   String? _playerName;
   int? _playerElo;
   bool _isLoading = true;
+  bool _hasSavedCampaign = false;
+  final CampaignPersistenceService _persistence = CampaignPersistenceService();
 
   @override
   void initState() {
     super.initState();
     _loadPlayerProfile();
+    _checkSavedCampaign();
+  }
+
+  Future<void> _checkSavedCampaign() async {
+    final hasSave = await _persistence.hasSavedCampaign();
+    if (mounted) {
+      setState(() {
+        _hasSavedCampaign = hasSave;
+      });
+    }
   }
 
   Future<void> _loadPlayerProfile() async {
@@ -80,9 +94,36 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
   }
 
   void _playCampaign() {
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => const CampaignSelectScreen()));
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const CampaignSelectScreen()))
+        .then((_) => _checkSavedCampaign()); // Refresh on return
+  }
+
+  Future<void> _continueCampaign() async {
+    setState(() => _isLoading = true);
+    final campaign = await _persistence.loadCampaign();
+    setState(() => _isLoading = false);
+
+    if (campaign != null && mounted) {
+      Navigator.of(context)
+          .push(
+            MaterialPageRoute(
+              builder: (_) => CampaignMapScreen(
+                leaderId: campaign.leaderId,
+                act: campaign.act,
+                savedState: campaign,
+              ),
+            ),
+          )
+          .then((_) => _checkSavedCampaign()); // Refresh on return
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to load campaign save')),
+        );
+        _checkSavedCampaign();
+      }
+    }
   }
 
   @override
@@ -133,10 +174,22 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                       ),
                       const SizedBox(height: 60),
 
+                      // Continue Campaign button
+                      if (_hasSavedCampaign) ...[
+                        _buildMenuButton(
+                          icon: Icons.play_arrow,
+                          label: 'CONTINUE CAMPAIGN',
+                          sublabel: 'Resume your conquest',
+                          color: Colors.green,
+                          onTap: _continueCampaign,
+                        ),
+                        const SizedBox(height: 20),
+                      ],
+
                       // Campaign button
                       _buildMenuButton(
                         icon: Icons.military_tech,
-                        label: 'CAMPAIGN',
+                        label: 'NEW CAMPAIGN',
                         sublabel: 'Lead your army to glory!',
                         color: Colors.orange,
                         onTap: _playCampaign,

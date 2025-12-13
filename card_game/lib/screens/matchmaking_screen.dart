@@ -429,7 +429,7 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> {
                   icon: const Icon(Icons.close),
                   label: const Text('Cancel'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red[700],
+                    backgroundColor: const Color(0xFF16213E),
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(
                       horizontal: 32,

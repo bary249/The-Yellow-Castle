@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'campaign_map_screen.dart';
 import 'deck_selection_screen.dart';
+import 'progression_screen.dart';
 
 /// Campaign selection screen - choose which leader's campaign to play
 class CampaignSelectScreen extends StatelessWidget {
@@ -45,7 +46,12 @@ class CampaignSelectScreen extends StatelessWidget {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 48), // Balance the back button
+                    // Legacy/Progression Button
+                    IconButton(
+                      icon: const Icon(Icons.stars, color: Colors.amber),
+                      tooltip: 'Legacy & Progression',
+                      onPressed: () => _openProgression(context),
+                    ),
                   ],
                 ),
               ),
@@ -124,6 +130,12 @@ class CampaignSelectScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  void _openProgression(BuildContext context) {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const ProgressionScreen()));
   }
 }
 

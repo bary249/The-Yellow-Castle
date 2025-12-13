@@ -54,13 +54,15 @@ class CampaignState {
   int encounterNumber;
   int gold;
   int health;
-  final int maxHealth;
+  int maxHealth;
   List<GameCard> deck;
   List<GameCard> inventory; // Cards removed from deck, can be added back
+  List<String> relics; // IDs of acquired relics (e.g., 'relic_armor')
   final DateTime startedAt;
   DateTime? completedAt;
   bool isVictory;
   List<Encounter> currentChoices;
+  DateTime lastUpdated;
 
   CampaignState({
     required this.id,
@@ -72,17 +74,36 @@ class CampaignState {
     this.maxHealth = 50,
     required this.deck,
     List<GameCard>? inventory,
+    List<String>? relics,
     required this.startedAt,
     this.completedAt,
     this.isVictory = false,
     this.currentChoices = const [],
-  }) : inventory = inventory ?? [];
+    DateTime? lastUpdated,
+  }) : inventory = inventory ?? [],
+       relics = relics ?? [],
+       lastUpdated = lastUpdated ?? DateTime.now();
 
   static const int bossEncounterThreshold = 3;
   bool get isBossTime => encounterNumber >= bossEncounterThreshold;
   bool get isOver => isVictory || health <= 0;
   int get encountersUntilBoss => (bossEncounterThreshold - encounterNumber)
       .clamp(0, bossEncounterThreshold);
+
+  // Relic Effects Helpers
+  bool hasRelic(String relicId) => relics.contains(relicId);
+
+  int get goldPerBattleBonus {
+    int bonus = 0;
+    if (relics.contains('relic_gold_purse')) bonus += 10;
+    return bonus;
+  }
+
+  int get globalDamageBonus {
+    int bonus = 0;
+    if (relics.contains('relic_morale')) bonus += 1;
+    return bonus;
+  }
 
   void nextAct() {
     act++;
@@ -107,6 +128,18 @@ class CampaignState {
 
   void heal(int amount) {
     health = (health + amount).clamp(0, maxHealth);
+  }
+
+  void addRelic(String relicId) {
+    if (!relics.contains(relicId)) {
+      relics.add(relicId);
+
+      // Immediate effects
+      if (relicId == 'relic_armor') {
+        maxHealth += 10;
+        health += 10; // Heal the amount increased
+      }
+    }
   }
 
   void addCard(GameCard card) {
@@ -145,10 +178,13 @@ class CampaignState {
     'health': health,
     'maxHealth': maxHealth,
     'deck': deck.map((c) => c.toJson()).toList(),
+    'inventory': inventory.map((c) => c.toJson()).toList(),
+    'relics': relics,
     'startedAt': startedAt.toIso8601String(),
     'completedAt': completedAt?.toIso8601String(),
     'isVictory': isVictory,
     'currentChoices': currentChoices.map((e) => e.toJson()).toList(),
+    'lastUpdated': lastUpdated.toIso8601String(),
   };
 
   factory CampaignState.fromJson(Map<String, dynamic> json) => CampaignState(
@@ -162,6 +198,10 @@ class CampaignState {
     deck: (json['deck'] as List)
         .map((c) => GameCard.fromJson(c as Map<String, dynamic>))
         .toList(),
+    inventory: (json['inventory'] as List?)
+        ?.map((c) => GameCard.fromJson(c as Map<String, dynamic>))
+        .toList(),
+    relics: (json['relics'] as List?)?.map((e) => e as String).toList(),
     startedAt: DateTime.parse(json['startedAt'] as String),
     completedAt: json['completedAt'] != null
         ? DateTime.parse(json['completedAt'] as String)
@@ -172,6 +212,9 @@ class CampaignState {
             ?.map((e) => Encounter.fromJson(e as Map<String, dynamic>))
             .toList() ??
         [],
+    lastUpdated: json['lastUpdated'] != null
+        ? DateTime.parse(json['lastUpdated'] as String)
+        : null,
   );
 }
 

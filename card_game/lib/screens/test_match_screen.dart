@@ -4141,8 +4141,17 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       playerHero = widget.selectedHero ?? HeroLibrary.napoleon();
 
       // Select opponent hero based on campaign act
-      if (widget.forceCampaignDeck && widget.campaignAct == 1) {
-        opponentHero = HeroLibrary.archdukeCharles();
+      if (widget.forceCampaignDeck) {
+        switch (widget.campaignAct) {
+          case 2: // Egypt
+            opponentHero = HeroLibrary.saladin();
+            break;
+          case 3: // Coalition (Austria/Russia)
+            opponentHero = HeroLibrary.archdukeCharles();
+            break;
+          default: // Act 1 (Italy/Austria)
+            opponentHero = HeroLibrary.archdukeCharles();
+        }
       } else {
         opponentHero = HeroLibrary.saladin();
       }
@@ -4984,7 +4993,11 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     if (match == null) {
       if (_isOnlineMode && _selectedHero != null && !_heroSelectionComplete) {
         return Scaffold(
-          appBar: AppBar(title: const Text('Online Match')),
+          appBar: AppBar(
+            title: const Text('Online Match'),
+            backgroundColor: const Color(0xFF16213E),
+            foregroundColor: Colors.white,
+          ),
           body: Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -5009,7 +5022,11 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         );
       }
       return Scaffold(
-        appBar: AppBar(title: const Text('Test Match')),
+        appBar: AppBar(
+          title: const Text('Test Match'),
+          backgroundColor: const Color(0xFF16213E),
+          foregroundColor: Colors.white,
+        ),
         body: const Center(child: Text('No match in progress')),
       );
     }
@@ -5031,6 +5048,8 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
           title: _useTYC3Mode
               ? _buildTYC3Title(match)
               : Text('Turn ${match.turnNumber} - ${match.currentPhase.name}'),
+          backgroundColor: const Color(0xFF16213E),
+          foregroundColor: Colors.white,
           actions: [
             // DEBUG: Win Battle button (Campaign only)
             if ((widget.enemyDeck != null || widget.forceCampaignDeck) &&
@@ -5120,6 +5139,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       appBar: AppBar(
         title: Text('Replay - Turn ${snapshot.turnNumber}'),
         backgroundColor: Colors.blueGrey[900],
+        foregroundColor: Colors.white,
         actions: [
           IconButton(
             icon: const Icon(Icons.close),

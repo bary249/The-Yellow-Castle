@@ -6,13 +6,21 @@ import '../data/shop_items.dart';
 import 'test_match_screen.dart';
 import '../data/hero_library.dart';
 import 'campaign_deck_screen.dart';
+import '../services/campaign_persistence_service.dart';
+import '../data/napoleon_progression.dart';
 
 /// Campaign screen - Book chapter selection style
 class CampaignMapScreen extends StatefulWidget {
   final String leaderId;
   final int act;
+  final CampaignState? savedState;
 
-  const CampaignMapScreen({super.key, required this.leaderId, this.act = 1});
+  const CampaignMapScreen({
+    super.key,
+    required this.leaderId,
+    this.act = 1,
+    this.savedState,
+  });
 
   @override
   State<CampaignMapScreen> createState() => _CampaignMapScreenState();
@@ -22,6 +30,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
   late CampaignState _campaign;
   late EncounterGenerator _generator;
   bool _isLoading = true;
+  final CampaignPersistenceService _persistence = CampaignPersistenceService();
 
   @override
   void initState() {
@@ -30,29 +39,42 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
   }
 
   void _initCampaign() {
-    _generator = EncounterGenerator(act: widget.act);
+    if (widget.savedState != null) {
+      _campaign = widget.savedState!;
+      _generator = EncounterGenerator(act: _campaign.act);
+      // Ensure generator matches current act if loaded state differs from widget.act (though widget.act is mostly for init)
+    } else {
+      _generator = EncounterGenerator(act: widget.act);
 
-    // Get starter deck for leader
-    final deck = widget.leaderId == 'napoleon'
-        ? buildNapoleonStarterDeck()
-        : buildStarterCardPool();
+      // Get starter deck for leader
+      final deck = widget.leaderId == 'napoleon'
+          ? buildNapoleonStarterDeck()
+          : buildStarterCardPool();
 
-    _campaign = CampaignState(
-      id: 'campaign_${DateTime.now().millisecondsSinceEpoch}',
-      leaderId: widget.leaderId,
-      act: widget.act,
-      gold: 50,
-      health: 50,
-      deck: deck,
-      startedAt: DateTime.now(),
-    );
+      _campaign = CampaignState(
+        id: 'campaign_${DateTime.now().millisecondsSinceEpoch}',
+        leaderId: widget.leaderId,
+        act: widget.act,
+        gold: 50,
+        health: 50,
+        deck: deck,
+        startedAt: DateTime.now(),
+      );
 
-    // Generate initial choices
-    _generateNewChoices();
+      // Generate initial choices
+      _generateNewChoices();
+    }
 
     setState(() {
       _isLoading = false;
     });
+
+    // Save initial state
+    _saveCampaign();
+  }
+
+  Future<void> _saveCampaign() async {
+    await _persistence.saveCampaign(_campaign);
   }
 
   void _generateNewChoices() {
@@ -206,6 +228,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                 _campaign.completeEncounter();
                 _generateNewChoices();
               });
+              _saveCampaign();
             },
             child: const Text('Claim'),
           ),
@@ -258,6 +281,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
       setState(() {
         _campaign.takeDamage(crystalDamage);
       });
+      _saveCampaign();
 
       if (won) {
         setState(() {
@@ -273,10 +297,12 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
           _campaign.completeEncounter();
           _generateNewChoices();
         });
+        _saveCampaign();
       } else {
         setState(() {
           _campaign.takeDamage(crystalDamage);
         });
+        _saveCampaign();
         if (_campaign.health <= 0) {
           _showGameOver();
         }
@@ -349,6 +375,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                           content: Text('Added ${card.name} to your deck!'),
                         ),
                       );
+                      _saveCampaign();
                     },
                     child: const Text('Pick'),
                   ),
@@ -403,6 +430,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                       _campaign.spendGold(20);
                       _generateNewChoices(); // Refresh encounters
                     });
+                    _saveCampaign();
                   }
                 : null,
             child: Text(
@@ -436,6 +464,14 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
           _campaign.addGold(encounter.goldReward ?? 50);
         });
 
+        // Calculate gold reward with relic bonus
+        int reward = encounter.goldReward ?? 15;
+        reward += _campaign.goldPerBattleBonus;
+
+        setState(() {
+          _campaign.addGold(reward);
+        });
+
         if (_campaign.act < 3) {
           // Act Complete
           if (mounted) {
@@ -448,12 +484,14 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
             _campaign.isVictory = true;
             _campaign.completedAt = DateTime.now();
           });
+          _saveCampaign();
           _showVictory();
         }
       } else {
         setState(() {
           _campaign.takeDamage(50); // Boss deals massive damage on loss
         });
+        _saveCampaign();
         if (_campaign.health <= 0) {
           _showGameOver();
         }
@@ -470,6 +508,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
       _generator = EncounterGenerator(act: _campaign.act);
       _generateNewChoices();
     });
+    _saveCampaign();
     _showActIntroDialog();
   }
 
@@ -485,6 +524,17 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
             'The mysteries of the desert are yours. Ancient power grows.';
         break;
     }
+
+    // Get a random relic as reward
+    final allRelics = ShopInventory.getAllRelics();
+    // Filter out already owned relics
+    final availableRelics = allRelics
+        .where((r) => !_campaign.hasRelic(r.id))
+        .toList();
+    availableRelics.shuffle();
+    final relicReward = availableRelics.isNotEmpty
+        ? availableRelics.first
+        : null;
 
     await showDialog(
       context: context,
@@ -516,12 +566,47 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
               'Your army rests and recovers full health.',
               style: TextStyle(color: Colors.green),
             ),
+            if (relicReward != null) ...[
+              const SizedBox(height: 24),
+              const Text(
+                'Relic Discovered!',
+                style: TextStyle(
+                  color: Colors.purple,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.purple.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.auto_awesome, color: Colors.purple),
+                ),
+                title: Text(
+                  relicReward.name,
+                  style: const TextStyle(color: Colors.white),
+                ),
+                subtitle: Text(
+                  relicReward.description,
+                  style: TextStyle(color: Colors.grey[400]),
+                ),
+              ),
+            ],
           ],
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('March Onwards'),
+            onPressed: () {
+              if (relicReward != null) {
+                _campaign.addRelic(relicReward.id);
+                // Note: immediate effects handled in addRelic
+              }
+              Navigator.pop(context);
+            },
+            child: const Text('Claim & March Onwards'),
           ),
         ],
       ),
@@ -555,6 +640,15 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
   }
 
   void _showVictory() {
+    // Calculate final score
+    const baseScore = 200;
+    final goldScore = (_campaign.gold / 10).floor();
+    final healthScore = _campaign.health;
+    final totalPoints = baseScore + goldScore + healthScore;
+
+    // Save progression
+    _saveProgression(totalPoints);
+
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -594,12 +688,15 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
               'Deck Size',
               '${_campaign.deck.length} cards',
             ),
-            const SizedBox(height: 24),
+            const Divider(color: Colors.grey),
+            _buildStatRow(Icons.stars, 'Legacy Points Earned', '$totalPoints'),
+            const SizedBox(height: 8),
             const Text(
-              'Legacy Points Earned: 200',
+              'Points added to Napoleon\'s Legacy',
               style: TextStyle(
                 color: Colors.amber,
-                fontWeight: FontWeight.bold,
+                fontSize: 12,
+                fontStyle: FontStyle.italic,
               ),
             ),
           ],
@@ -625,6 +722,31 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _saveProgression(int points) async {
+    try {
+      // Load existing progression
+      final progressionData = await _persistence.loadProgression();
+      NapoleonProgressionState progressionState;
+
+      if (progressionData != null) {
+        progressionState = NapoleonProgressionState.fromJson(progressionData);
+      } else {
+        progressionState = NapoleonProgressionState();
+      }
+
+      // Add points
+      progressionState.addPoints(points);
+
+      // Save updated progression
+      await _persistence.saveProgression(progressionState.toJson());
+
+      // Also clear the completed campaign save
+      await _persistence.clearCampaign();
+    } catch (e) {
+      debugPrint('Error saving progression: $e');
+    }
   }
 
   String _getActTitle(int act) {
@@ -751,6 +873,10 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                   itemBuilder: (context, index) {
                     final item = shopItems[index];
                     final canAfford = _campaign.gold >= item.cost;
+                    // Check if already owned relic
+                    final isOwned =
+                        item.type == ShopItemType.relic &&
+                        _campaign.hasRelic(item.id);
 
                     return Card(
                       color: Colors.grey[850],
@@ -768,24 +894,29 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                           item.description,
                           style: TextStyle(color: Colors.grey[400]),
                         ),
-                        trailing: ElevatedButton(
-                          onPressed: canAfford
-                              ? () => _buyItem(item, setShopState)
-                              : null,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: canAfford
-                                ? Colors.amber
-                                : Colors.grey,
-                          ),
-                          child: Text(
-                            '${item.cost} 🪙',
-                            style: TextStyle(
-                              color: canAfford
-                                  ? Colors.black
-                                  : Colors.grey[600],
-                            ),
-                          ),
-                        ),
+                        trailing: isOwned
+                            ? const Icon(
+                                Icons.check_circle,
+                                color: Colors.green,
+                              )
+                            : ElevatedButton(
+                                onPressed: canAfford
+                                    ? () => _buyItem(item, setShopState)
+                                    : null,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: canAfford
+                                      ? Colors.amber
+                                      : Colors.grey,
+                                ),
+                                child: Text(
+                                  '${item.cost} 🪙',
+                                  style: TextStyle(
+                                    color: canAfford
+                                        ? Colors.black
+                                        : Colors.grey[600],
+                                  ),
+                                ),
+                              ),
                       ),
                     );
                   },
@@ -892,6 +1023,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
 
     setShopState(() {});
     setState(() {});
+    _saveCampaign();
   }
 
   void _applyConsumable(ShopItem item) {
@@ -915,10 +1047,10 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
   }
 
   void _applyRelic(ShopItem item) {
-    // TODO: Implement relic effects (requires campaign state changes)
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Acquired ${item.name}! (Effect coming soon)')),
-    );
+    _campaign.addRelic(item.id);
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Acquired ${item.name}!')));
   }
 
   void _showRemoveCardDialog() {
@@ -945,6 +1077,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                     SnackBar(content: Text('Removed ${card.name} from deck')),
                   );
                   setState(() {});
+                  _saveCampaign();
                 },
               );
             },
@@ -978,57 +1111,43 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
           children: [
             Text(encounter.description),
             const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.red.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.favorite, color: Colors.red),
-                  const SizedBox(width: 8),
-                  Text(
-                    '${_campaign.health}/${_campaign.maxHealth} HP',
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            ListTile(
-              leading: const Icon(Icons.favorite, color: Colors.red),
-              title: const Text('Rest'),
-              subtitle: Text('Heal $healAmount HP'),
-              onTap: () {
-                Navigator.pop(context);
-                setState(() {
-                  _campaign.heal(healAmount);
-                  _campaign.completeEncounter();
-                  _generateNewChoices();
-                });
-              },
+            const Text(
+              'Your army is tired. Rest to recover health.',
+              style: TextStyle(fontStyle: FontStyle.italic),
             ),
           ],
         ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              setState(() {
+                _campaign.heal(healAmount);
+                _campaign.completeEncounter();
+                _generateNewChoices();
+              });
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Recovered $healAmount HP!')),
+              );
+              _saveCampaign();
+            },
+            child: Text('Rest (+${healAmount} HP)'),
+          ),
+        ],
       ),
     );
   }
 
   void _triggerEvent(Encounter encounter) {
-    // Simple random event
-    final goldGain = 15 + (_campaign.encounterNumber * 5);
+    // Simple event: Find random item or gold
+    final isGold = DateTime.now().millisecondsSinceEpoch % 2 == 0;
 
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: Row(
           children: [
-            const Icon(Icons.help_outline, color: Colors.blue),
+            const Icon(Icons.event, color: Colors.blue),
             const SizedBox(width: 8),
             Text(encounter.title),
           ],
@@ -1038,31 +1157,39 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
           children: [
             Text(encounter.description),
             const SizedBox(height: 16),
-            ListTile(
-              title: const Text('Accept their offer'),
-              subtitle: Text('Gain $goldGain gold'),
-              onTap: () {
-                Navigator.pop(context);
-                setState(() {
-                  _campaign.addGold(goldGain);
-                  _campaign.completeEncounter();
-                  _generateNewChoices();
-                });
-              },
-            ),
-            ListTile(
-              title: const Text('Decline politely'),
-              subtitle: const Text('Continue on your way'),
-              onTap: () {
-                Navigator.pop(context);
-                setState(() {
-                  _campaign.completeEncounter();
-                  _generateNewChoices();
-                });
-              },
+            Text(
+              isGold
+                  ? 'You found a lost purse!'
+                  : 'A local merchant gives you a gift.',
+              style: const TextStyle(fontStyle: FontStyle.italic),
             ),
           ],
         ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              setState(() {
+                if (isGold) {
+                  _campaign.addGold(30);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Gained 30 Gold!')),
+                  );
+                } else {
+                  // Give a consumable
+                  _campaign.heal(10);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Healed 10 HP!')),
+                  );
+                }
+                _campaign.completeEncounter();
+                _generateNewChoices();
+              });
+              _saveCampaign();
+            },
+            child: const Text('Continue'),
+          ),
+        ],
       ),
     );
   }
@@ -1072,21 +1199,18 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
-        title: const Text('💀 Campaign Failed'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('Your army has been defeated.'),
-            const SizedBox(height: 12),
-            Text('Encounters completed: ${_campaign.encounterNumber}'),
-            Text('Gold earned: ${_campaign.gold}'),
-          ],
+        title: const Text('Defeat!', style: TextStyle(color: Colors.red)),
+        content: const Text(
+          'Your army has been defeated. The campaign is over.',
         ),
         actions: [
           TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              Navigator.pop(context);
+            onPressed: () async {
+              // Clear save
+              await _persistence.clearCampaign();
+              if (mounted) {
+                Navigator.of(context).popUntil((route) => route.isFirst);
+              }
             },
             child: const Text('Return to Menu'),
           ),
@@ -1249,6 +1373,13 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
             setState(() {
               _campaign.removeCard(card.id);
             });
+            _saveCampaign();
+          },
+          onAddCard: (card) {
+            setState(() {
+              _campaign.addCardFromInventory(card.id);
+            });
+            _saveCampaign();
           },
         ),
       ),

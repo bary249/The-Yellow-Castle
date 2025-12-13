@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
 import '../data/napoleon_progression.dart';
+import '../services/campaign_persistence_service.dart';
 
 /// Screen to view and manage Napoleon's progression tree
 class ProgressionScreen extends StatefulWidget {
-  final NapoleonProgressionState progressionState;
+  final NapoleonProgressionState? progressionState;
   final VoidCallback? onStateChanged;
 
   const ProgressionScreen({
     super.key,
-    required this.progressionState,
+    this.progressionState,
     this.onStateChanged,
   });
 
@@ -17,13 +18,55 @@ class ProgressionScreen extends StatefulWidget {
 }
 
 class _ProgressionScreenState extends State<ProgressionScreen> {
+  late NapoleonProgressionState _state;
+  bool _isLoading = true;
+  final CampaignPersistenceService _persistence = CampaignPersistenceService();
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.progressionState != null) {
+      _state = widget.progressionState!;
+      _isLoading = false;
+    } else {
+      _loadProgression();
+    }
+  }
+
+  Future<void> _loadProgression() async {
+    final data = await _persistence.loadProgression();
+    if (mounted) {
+      setState(() {
+        if (data != null) {
+          _state = NapoleonProgressionState.fromJson(data);
+        } else {
+          _state = NapoleonProgressionState(); // Default start state
+        }
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _saveProgression() async {
+    await _persistence.saveProgression(_state.toJson());
+    widget.onStateChanged?.call();
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        backgroundColor: Color(0xFF1A1A2E),
+        body: Center(child: CircularProgressIndicator(color: Colors.amber)),
+      );
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFF1A1A2E),
       appBar: AppBar(
         title: const Text('Napoleon\'s Legacy'),
         backgroundColor: const Color(0xFF16213E),
+        foregroundColor: Colors.white,
         actions: [
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -32,7 +75,7 @@ class _ProgressionScreenState extends State<ProgressionScreen> {
                 const Icon(Icons.stars, color: Colors.amber),
                 const SizedBox(width: 8),
                 Text(
-                  '${widget.progressionState.progressionPoints} Points',
+                  '${_state.progressionPoints} Points',
                   style: const TextStyle(fontSize: 16),
                 ),
               ],
@@ -116,12 +159,12 @@ class _ProgressionScreenState extends State<ProgressionScreen> {
   }
 
   Widget _buildNodeCard(ProgressionNode node) {
-    final isUnlocked = widget.progressionState.unlockedNodes.contains(node.id);
+    final isUnlocked = _state.unlockedNodes.contains(node.id);
     final canUnlock = NapoleonProgression.canUnlock(
       node.id,
-      widget.progressionState.unlockedNodes,
+      _state.unlockedNodes,
     );
-    final canAfford = widget.progressionState.progressionPoints >= node.cost;
+    final canAfford = _state.progressionPoints >= node.cost;
 
     Color borderColor;
     Color bgColor;
@@ -293,17 +336,19 @@ class _ProgressionScreenState extends State<ProgressionScreen> {
           ),
           if (!isUnlocked && canUnlock && canAfford)
             ElevatedButton(
-              onPressed: () {
-                if (widget.progressionState.unlock(node.id)) {
-                  widget.onStateChanged?.call();
+              onPressed: () async {
+                if (_state.unlock(node.id)) {
+                  await _saveProgression();
                   setState(() {});
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Unlocked ${node.name}!'),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
+                  if (mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Unlocked ${node.name}!'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  }
                 }
               },
               style: ElevatedButton.styleFrom(backgroundColor: Colors.amber),

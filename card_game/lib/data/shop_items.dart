@@ -53,9 +53,42 @@ class ShopInventory {
     items.addAll(_getConsumables(act));
 
     // Add a relic
-    items.addAll(_getRelics(act));
+    final relics = getAllRelics();
+    relics.shuffle();
+    if (relics.isNotEmpty) {
+      items.add(relics.first);
+    }
 
     return items;
+  }
+
+  static List<ShopItem> getAllRelics() {
+    return [
+      const ShopItem(
+        id: 'relic_gold_purse',
+        name: 'War Chest',
+        description: '+10 gold after each battle',
+        cost: 75,
+        type: ShopItemType.relic,
+        effect: 'battle_gold_10',
+      ),
+      const ShopItem(
+        id: 'relic_armor',
+        name: 'Officer\'s Armor',
+        description: '+10 max HP',
+        cost: 60,
+        type: ShopItemType.relic,
+        effect: 'max_hp_10',
+      ),
+      const ShopItem(
+        id: 'relic_morale',
+        name: 'Battle Standard',
+        description: '+1 damage to all units',
+        cost: 100,
+        type: ShopItemType.relic,
+        effect: 'damage_boost_1',
+      ),
+    ];
   }
 
   static List<GameCard> getCardsForAct(int act) {
@@ -117,36 +150,5 @@ class ShopInventory {
         effect: 'remove_card',
       ),
     ];
-  }
-
-  static List<ShopItem> _getRelics(int act) {
-    final relics = [
-      const ShopItem(
-        id: 'relic_gold_purse',
-        name: 'War Chest',
-        description: '+10 gold after each battle',
-        cost: 75,
-        type: ShopItemType.relic,
-        effect: 'battle_gold_10',
-      ),
-      const ShopItem(
-        id: 'relic_armor',
-        name: 'Officer\'s Armor',
-        description: '+10 max HP',
-        cost: 60,
-        type: ShopItemType.relic,
-        effect: 'max_hp_10',
-      ),
-      const ShopItem(
-        id: 'relic_morale',
-        name: 'Battle Standard',
-        description: '+1 damage to all units',
-        cost: 100,
-        type: ShopItemType.relic,
-        effect: 'damage_boost_1',
-      ),
-    ];
-    relics.shuffle();
-    return [relics.first];
   }
 }

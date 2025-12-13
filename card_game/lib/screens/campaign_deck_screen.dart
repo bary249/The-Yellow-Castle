@@ -255,16 +255,21 @@ class _CampaignDeckScreenState extends State<CampaignDeckScreen>
               ),
             ),
 
-            // Abilities (Tiny text)
+            // Abilities (Icons)
             if (card.abilities.isNotEmpty)
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 2),
-                child: Text(
-                  card.abilities.map((a) => a.replaceAll('_', ' ')).join(', '),
-                  style: TextStyle(color: Colors.amber[200], fontSize: 8),
-                  textAlign: TextAlign.center,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 4),
+                child: Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: 2,
+                  runSpacing: 2,
+                  children: card.abilities.take(3).map((a) {
+                    return Icon(
+                      _getAbilityIcon(a),
+                      size: 10,
+                      color: Colors.amber[300],
+                    );
+                  }).toList(),
                 ),
               ),
 

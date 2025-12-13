@@ -327,6 +327,7 @@ class _DeckSelectionScreenState extends State<DeckSelectionScreen> {
               : 'Choose Your Army',
         ),
         backgroundColor: const Color(0xFF16213E),
+        foregroundColor: Colors.white,
         automaticallyImplyLeading:
             widget.onlineMatchId == null, // Hide back button in PvP
       ),
