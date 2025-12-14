@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import '../models/campaign_state.dart';
 import '../models/deck.dart';
 import '../models/card.dart';
@@ -34,6 +36,8 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
   late EncounterGenerator _generator;
   bool _isLoading = true;
   final CampaignPersistenceService _persistence = CampaignPersistenceService();
+
+  final MapController _mapController = MapController();
 
   int _applyDiscount(int cost, int discountPercent) {
     if (discountPercent <= 0) return cost;
@@ -402,12 +406,12 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                 decoration: BoxDecoration(
                   color: _getElementColor(
                     card.element ?? 'woods',
-                  ).withOpacity(0.1),
+                  ).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
                     color: _getElementColor(
                       card.element ?? 'woods',
-                    ).withOpacity(0.5),
+                    ).withValues(alpha: 0.5),
                   ),
                 ),
                 child: Row(
@@ -727,7 +731,9 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
       'CAMPAIGN BATTLE: act=${_campaign.act}, encounter=${_campaign.encounterNumber}, hp=${_campaign.health}/${_campaign.maxHealth}, activeRelics=${_campaign.activeRelics}, damageBonus=${_campaign.globalDamageBonus}, goldBonus=${_campaign.goldPerBattleBonus}, extraStartingDraw=${mods.extraStartingDraw}, artilleryDamageBonus=${mods.artilleryDamageBonus}, difficulty=${encounter.difficulty}',
     );
 
-    final result = await Navigator.of(context).push<Map<String, dynamic>>(
+    if (!mounted) return;
+    final navigator = Navigator.of(context);
+    final result = await navigator.push<Map<String, dynamic>>(
       MaterialPageRoute(
         builder: (_) => TestMatchScreen(
           selectedHero: HeroLibrary.napoleon(),
@@ -934,7 +940,9 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
       'CAMPAIGN BOSS: act=${_campaign.act}, hp=${_campaign.health}/${_campaign.maxHealth}, activeRelics=${_campaign.activeRelics}, damageBonus=${_campaign.globalDamageBonus}, goldBonus=${_campaign.goldPerBattleBonus}, extraStartingDraw=${mods.extraStartingDraw}, artilleryDamageBonus=${mods.artilleryDamageBonus}, bossOpponentBaseHP=$bossOpponentBaseHP',
     );
 
-    final result = await Navigator.of(context).push<Map<String, dynamic>>(
+    if (!mounted) return;
+    final navigator = Navigator.of(context);
+    final result = await navigator.push<Map<String, dynamic>>(
       MaterialPageRoute(
         builder: (_) => TestMatchScreen(
           selectedHero: HeroLibrary.napoleon(),
@@ -1341,6 +1349,8 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
           : NapoleonProgressionState();
       mods = state.modifiers;
     }
+
+    if (!mounted) return;
 
     showModalBottomSheet(
       context: context,
@@ -1858,7 +1868,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
               );
               _saveCampaign();
             },
-            child: Text('Rest (+${healAmount} HP)'),
+            child: Text('Rest (+$healAmount HP)'),
           ),
         ],
       ),
@@ -1923,6 +1933,9 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
 
   Future<void> _showGameOver() async {
     await _awardCampaignLossLegacyPoints();
+
+    if (!mounted) return;
+
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -1934,11 +1947,11 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
         actions: [
           TextButton(
             onPressed: () async {
+              final navigator = Navigator.of(context);
               // Clear save
               await _persistence.clearCampaign();
-              if (mounted) {
-                Navigator.of(context).popUntil((route) => route.isFirst);
-              }
+              if (!mounted) return;
+              navigator.popUntil((route) => route.isFirst);
             },
             child: const Text('Return to Menu'),
           ),
@@ -1970,9 +1983,290 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
           child: Column(
             children: [
               _buildHeader(),
-              Expanded(child: _buildChapterSelection()),
+              Expanded(
+                child: (widget.leaderId == 'napoleon' && _campaign.act == 1)
+                    ? _buildRealMapSelection()
+                    : _buildChapterSelection(),
+              ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  LatLng _act1ItalyCenter() {
+    // Northern Italy / Alps theater (1796 campaign).
+    return const LatLng(45.2, 8.6);
+  }
+
+  // For MVP: map the *currentChoices* (2-3 encounters) to plausible real locations
+  // that progress generally toward Milan. We keep it deterministic per chapter.
+  List<LatLng> _act1CandidateLocationsForChapter(int chapterIndex) {
+    // The closer we are to boss, the closer we get to Milan.
+    // Approximate key areas: Nice, Savona, Genoa, Alessandria, Pavia/Milan.
+    final stage = _campaign.encounterNumber.clamp(0, 4);
+    final pool = <List<LatLng>>[
+      // Chapter 1-2: Ligurian coast / entry into Italy.
+      const [
+        LatLng(43.695, 7.264), // Nice
+        LatLng(44.309, 8.477), // Savona
+        LatLng(44.405, 8.946), // Genoa
+      ],
+      // Chapter 2-3: inland / Piedmont.
+      const [
+        LatLng(44.558, 7.734), // Cuneo
+        LatLng(44.915, 8.617), // Alessandria
+        LatLng(45.070, 7.687), // Turin
+      ],
+      // Chapter 3-4: Lombardy approach.
+      const [
+        LatLng(45.133, 9.158), // Pavia
+        LatLng(45.453, 9.183), // Milan
+        LatLng(45.464, 9.190), // Milan (alt point for spacing)
+      ],
+      // Chapter 4-5: near boss.
+      const [
+        LatLng(45.470, 9.190), // Milan
+        LatLng(45.542, 9.270), // Monza
+        LatLng(45.500, 9.090), // West of Milan
+      ],
+      // Boss focus.
+      const [
+        LatLng(45.464, 9.190), // Milan (boss)
+        LatLng(45.453, 9.183),
+        LatLng(45.470, 9.200),
+      ],
+    ];
+
+    final chosenPool = pool[stage];
+    // Rotate based on chapterIndex so the same encounterNumber doesn’t always map to same spot.
+    final rotated = <LatLng>[];
+    for (int i = 0; i < chosenPool.length; i++) {
+      rotated.add(chosenPool[(i + chapterIndex) % chosenPool.length]);
+    }
+    return rotated;
+  }
+
+  IconData _iconForEncounterType(EncounterType type) {
+    switch (type) {
+      case EncounterType.battle:
+        return Icons.sports_kabaddi;
+      case EncounterType.elite:
+        return Icons.local_fire_department;
+      case EncounterType.boss:
+        return Icons.whatshot;
+      case EncounterType.shop:
+        return Icons.store;
+      case EncounterType.rest:
+        return Icons.local_cafe;
+      case EncounterType.event:
+        return Icons.help_outline;
+      case EncounterType.mystery:
+        return Icons.question_mark;
+      case EncounterType.treasure:
+        return Icons.auto_awesome;
+    }
+  }
+
+  Color _colorForEncounterType(EncounterType type) {
+    switch (type) {
+      case EncounterType.battle:
+        return Colors.red[700]!;
+      case EncounterType.elite:
+        return Colors.orange[700]!;
+      case EncounterType.boss:
+        return Colors.purple[700]!;
+      case EncounterType.shop:
+        return Colors.amber[700]!;
+      case EncounterType.rest:
+        return Colors.green[700]!;
+      case EncounterType.event:
+        return Colors.blue[700]!;
+      case EncounterType.mystery:
+        return Colors.deepPurple[400]!;
+      case EncounterType.treasure:
+        return Colors.amber[800]!;
+    }
+  }
+
+  Future<void> _confirmEncounterOnMap(Encounter encounter) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF2D2D2D),
+        title: Row(
+          children: [
+            Icon(_iconForEncounterType(encounter.type), color: Colors.white),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                encounter.title,
+                style: const TextStyle(color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              encounter.description,
+              style: TextStyle(color: Colors.grey[300]),
+            ),
+            if (encounter.goldReward != null) ...[
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  const Icon(
+                    Icons.monetization_on,
+                    color: Colors.amber,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    '+${encounter.goldReward} Gold',
+                    style: const TextStyle(color: Colors.amber),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _colorForEncounterType(encounter.type),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Travel'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      _onEncounterSelected(encounter);
+    }
+  }
+
+  Widget _buildRealMapSelection() {
+    final center = _act1ItalyCenter();
+    final choices = _campaign.currentChoices;
+    final locations = _act1CandidateLocationsForChapter(
+      _campaign.encounterNumber,
+    );
+
+    final markers = <Marker>[];
+    for (int i = 0; i < choices.length; i++) {
+      final encounter = choices[i];
+      final LatLng pos = locations[i % locations.length];
+
+      markers.add(
+        Marker(
+          point: pos,
+          width: 56,
+          height: 56,
+          child: GestureDetector(
+            onTap: () => _confirmEncounterOnMap(encounter),
+            child: Container(
+              decoration: BoxDecoration(
+                color: _colorForEncounterType(
+                  encounter.type,
+                ).withValues(alpha: 0.95),
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 2),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.35),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Center(
+                child: Icon(
+                  _iconForEncounterType(encounter.type),
+                  color: Colors.white,
+                  size: 22,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.all(12),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Stack(
+          children: [
+            FlutterMap(
+              mapController: _mapController,
+              options: MapOptions(
+                initialCenter: center,
+                initialZoom: 6.4,
+                minZoom: 4,
+                maxZoom: 14,
+              ),
+              children: [
+                TileLayer(
+                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  userAgentPackageName: 'card_game',
+                ),
+                MarkerLayer(markers: markers),
+                RichAttributionWidget(
+                  attributions: [
+                    TextSourceAttribution(
+                      '© OpenStreetMap contributors',
+                      onTap: () {},
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            Positioned(
+              left: 12,
+              right: 12,
+              top: 12,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.65),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.white24),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.map, color: Colors.white, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _campaign.isBossTime
+                            ? 'Final Battle: choose where to engage'
+                            : 'Choose your next destination',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
