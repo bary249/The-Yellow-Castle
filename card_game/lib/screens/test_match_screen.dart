@@ -920,17 +920,6 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     // Check if this is a player card (row 1-2)
     if (row == 0) return; // Can't select enemy cards
 
-    // Check if card has any AP to do anything
-    if (card.currentAP <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('${card.name} has no AP left this turn'),
-          duration: const Duration(seconds: 1),
-        ),
-      );
-      return;
-    }
-
     setState(() {
       if (_selectedCardForAction == card) {
         // Deselect if already selected
@@ -943,14 +932,16 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         _selectedCardRow = row;
         _selectedCardCol = col;
 
-        // Get all reachable attack targets (including move+attack combinations)
-        // This shows all enemies the card can attack using its full AP
-        final reachableTargets = _matchManager.getReachableAttackTargets(
-          card,
-          row,
-          col,
-        );
-        _validTargets = reachableTargets.map((t) => t.target).toList();
+        if (card.currentAP > 0) {
+          final reachableTargets = _matchManager.getReachableAttackTargets(
+            card,
+            row,
+            col,
+          );
+          _validTargets = reachableTargets.map((t) => t.target).toList();
+        } else {
+          _validTargets = [];
+        }
       }
     });
   }
@@ -2654,15 +2645,6 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   void _selectCardForActionNoToggle(GameCard card, int row, int col) {
     if (!_matchManager.isPlayerTurn) return;
     if (row == 0) return;
-    if (card.currentAP <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('${card.name} has no AP left this turn'),
-          duration: const Duration(seconds: 1),
-        ),
-      );
-      return;
-    }
 
     setState(() {
       _selectedCard = null;
@@ -2670,12 +2652,16 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       _selectedCardRow = row;
       _selectedCardCol = col;
 
-      final reachableTargets = _matchManager.getReachableAttackTargets(
-        card,
-        row,
-        col,
-      );
-      _validTargets = reachableTargets.map((t) => t.target).toList();
+      if (card.currentAP > 0) {
+        final reachableTargets = _matchManager.getReachableAttackTargets(
+          card,
+          row,
+          col,
+        );
+        _validTargets = reachableTargets.map((t) => t.target).toList();
+      } else {
+        _validTargets = [];
+      }
     });
   }
 
@@ -7065,7 +7051,9 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     if (_useTYC3Mode &&
         _selectedCardForAction != null &&
         _selectedCardRow != null &&
-        _selectedCardCol != null) {
+        _selectedCardCol != null &&
+        _selectedCardForAction!.currentAP > 0 &&
+        _matchManager.isPlayerTurn) {
       // Get all reachable tiles with their AP costs
       final reachableTiles = _matchManager.getReachableTiles(
         _selectedCardForAction!,
@@ -7953,7 +7941,11 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
           _selectedCardRow = row;
           _selectedCardCol = col;
           // Calculate valid targets when drag starts
-          _validTargets = _matchManager.getValidTargetsTYC3(card, row, col);
+          if (card.currentAP > 0) {
+            _validTargets = _matchManager.getValidTargetsTYC3(card, row, col);
+          } else {
+            _validTargets = [];
+          }
         });
       },
       onDragEnd: (details) {
