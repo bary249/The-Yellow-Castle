@@ -4026,53 +4026,97 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                       style: TextStyle(fontStyle: FontStyle.italic),
                     ),
                     const SizedBox(height: 16),
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: List.generate(hand.length, (index) {
-                          final card = hand[index];
-                          final isSelected = selectedIndices.contains(index);
-                          return GestureDetector(
-                            onTap: () {
-                              setStateDialog(() {
-                                if (isSelected) {
-                                  selectedIndices.remove(index);
-                                } else if (selectedIndices.length < 2) {
-                                  selectedIndices.add(index);
-                                }
-                              });
-                            },
-                            child: Container(
-                              margin: const EdgeInsets.symmetric(horizontal: 4),
-                              child: Transform.scale(
-                                scale: isSelected ? 1.05 : 1.0,
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    border: Border.all(
-                                      color: isSelected
-                                          ? Colors.red
-                                          : Colors.transparent,
-                                      width: 3,
-                                    ),
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: Opacity(
-                                    opacity: isSelected ? 0.7 : 1.0,
-                                    // Use visual only, no internal interaction
-                                    // Pass isSelected: false to avoid green border clash
-                                    child: _buildHandCardVisual(
-                                      card,
-                                      80,
-                                      120,
-                                      false,
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final cardW = 80.0;
+                        final cardH = 120.0;
+                        final n = hand.length;
+                        final maxW = constraints.maxWidth.isFinite
+                            ? constraints.maxWidth
+                            : 420.0;
+
+                        final spread = (maxW - cardW) / (n > 1 ? (n - 1) : 1);
+                        final spacing = spread.clamp(
+                          cardW * 0.32,
+                          cardW * 0.85,
+                        );
+                        final fanWidth =
+                            cardW + spacing * (n > 0 ? (n - 1) : 0);
+                        final leftPad = ((maxW - fanWidth) / 2).clamp(
+                          0.0,
+                          maxW,
+                        );
+                        final center = (n - 1) / 2.0;
+                        final maxAngle = (n <= 1)
+                            ? 0.0
+                            : (0.32 * (1.0 - (n - 2) * 0.03)).clamp(0.18, 0.32);
+
+                        return SizedBox(
+                          width: maxW,
+                          height: cardH + 26,
+                          child: Stack(
+                            clipBehavior: Clip.none,
+                            children: List.generate(n, (index) {
+                              final card = hand[index];
+                              final isSelected = selectedIndices.contains(
+                                index,
+                              );
+                              final t = n <= 1
+                                  ? 0.0
+                                  : ((index - center) / center);
+                              final angle = t * maxAngle;
+                              final lift =
+                                  (t.abs() * 6.0) + (isSelected ? 12.0 : 0.0);
+                              final x = leftPad + index * spacing;
+
+                              return Positioned(
+                                left: x,
+                                top: 8 + (t.abs() * 4.0) - lift,
+                                child: GestureDetector(
+                                  onTap: () {
+                                    setStateDialog(() {
+                                      if (isSelected) {
+                                        selectedIndices.remove(index);
+                                      } else if (selectedIndices.length < 2) {
+                                        selectedIndices.add(index);
+                                      }
+                                    });
+                                  },
+                                  child: Transform.rotate(
+                                    angle: angle,
+                                    alignment: Alignment.bottomCenter,
+                                    child: Transform.scale(
+                                      scale: isSelected ? 1.08 : 1.0,
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          border: Border.all(
+                                            color: isSelected
+                                                ? Colors.red
+                                                : Colors.transparent,
+                                            width: 3,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
+                                        ),
+                                        child: Opacity(
+                                          opacity: isSelected ? 0.75 : 1.0,
+                                          child: _buildHandCardVisual(
+                                            card,
+                                            cardW,
+                                            cardH,
+                                            false,
+                                          ),
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ),
-                              ),
-                            ),
-                          );
-                        }),
-                      ),
+                              );
+                            }),
+                          ),
+                        );
+                      },
                     ),
                   ],
                 ),
