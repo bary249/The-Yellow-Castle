@@ -7950,18 +7950,13 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
 
         return Builder(
           builder: (ctx) => GestureDetector(
-            onTap: () {
+            onTap: () => _onCardTapTYC3(card, row, col, false, true),
+            onLongPress: () {
               final rect = _globalRectForContext(ctx);
               final terrain = _matchManager.currentMatch?.board
                   .getTile(row, col)
                   .terrain;
-              _showCardFocus(
-                card,
-                rect,
-                tileTerrain: terrain,
-                onSecondTapAction: () =>
-                    _onCardTapTYC3(card, row, col, false, true),
-              );
+              _showCardFocus(card, rect, tileTerrain: terrain);
             },
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 150),
