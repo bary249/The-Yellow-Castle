@@ -61,6 +61,20 @@ class TestMatchScreen extends StatefulWidget {
   State<TestMatchScreen> createState() => _TestMatchScreenState();
 }
 
+class _CardFocusSwitchTarget {
+  final GameCard card;
+  final String? tileTerrain;
+  final VoidCallback? onSecondTapAction;
+  final VoidCallback? onDismissed;
+
+  const _CardFocusSwitchTarget({
+    required this.card,
+    this.tileTerrain,
+    this.onSecondTapAction,
+    this.onDismissed,
+  });
+}
+
 class _TestMatchScreenState extends State<TestMatchScreen> {
   final MatchManager _matchManager = MatchManager();
   final SimpleAI _ai = SimpleAI();
@@ -97,7 +111,10 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   VoidCallback? _cardFocusOnDismissed;
 
   final Map<String, Rect> _handCardRects = {};
-  final Map<String, GameCard> _handCardsById = {};
+  final Map<String, Rect> _boardCardRects = {};
+
+  final Map<String, _CardFocusSwitchTarget> _handCardTargets = {};
+  final Map<String, _CardFocusSwitchTarget> _boardCardTargets = {};
 
   // Online multiplayer state
   StreamSubscription? _matchListener;
@@ -239,7 +256,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     VoidCallback? onSecondTapAction,
     VoidCallback? onDismissed,
     Map<String, Rect>? switchRects,
-    Map<String, GameCard>? switchCards,
+    Map<String, _CardFocusSwitchTarget>? switchTargets,
   }) {
     _cardFocusOverlay?.remove();
     _cardFocusOverlay = null;
@@ -303,20 +320,21 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                   onPointerDown: (e) {
                     if (focusedRect.contains(e.position)) return;
 
-                    if (switchRects != null && switchCards != null) {
+                    if (switchRects != null && switchTargets != null) {
                       for (final entry in switchRects.entries) {
                         final id = entry.key;
                         final rect = entry.value;
                         if (rect.contains(e.position)) {
-                          final nextCard = switchCards[id];
-                          if (nextCard != null) {
+                          final nextTarget = switchTargets[id];
+                          if (nextTarget != null) {
                             _showCardFocus(
-                              nextCard,
+                              nextTarget.card,
                               rect,
-                              onSecondTapAction: onSecondTapAction,
-                              onDismissed: onDismissed,
+                              tileTerrain: nextTarget.tileTerrain,
+                              onSecondTapAction: nextTarget.onSecondTapAction,
+                              onDismissed: nextTarget.onDismissed,
                               switchRects: switchRects,
-                              switchCards: switchCards,
+                              switchTargets: switchTargets,
                             );
                             return;
                           }
@@ -2650,6 +2668,34 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     if (isOpponent) {
       _showCardDetails(card);
     }
+  }
+
+  void _selectCardForActionNoToggle(GameCard card, int row, int col) {
+    if (!_matchManager.isPlayerTurn) return;
+    if (row == 0) return;
+    if (card.currentAP <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${card.name} has no AP left this turn'),
+          duration: const Duration(seconds: 1),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _selectedCard = null;
+      _selectedCardForAction = card;
+      _selectedCardRow = row;
+      _selectedCardCol = col;
+
+      final reachableTargets = _matchManager.getReachableAttackTargets(
+        card,
+        row,
+        col,
+      );
+      _validTargets = reachableTargets.map((t) => t.target).toList();
+    });
   }
 
   Future<void> _doAITurnTYC3() async {
@@ -7936,22 +7982,46 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         }
       },
       child: Builder(
-        builder: (ctx) => GestureDetector(
-          onTap: () {
+        builder: (ctx) {
+          void selectBoardCard() =>
+              _selectCardForActionNoToggle(card, row, col);
+
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
             final rect = _globalRectForContext(ctx);
+            if (rect == Rect.zero) return;
             final terrain = _matchManager.currentMatch?.board
                 .getTile(row, col)
                 .terrain;
-            _showCardFocus(
-              card,
-              rect,
+            final key = '${card.id}_$row,$col';
+            _boardCardRects[key] = rect;
+            _boardCardTargets[key] = _CardFocusSwitchTarget(
+              card: card,
               tileTerrain: terrain,
-              onSecondTapAction: () =>
-                  _onCardTapTYC3(card, row, col, true, false),
+              onSecondTapAction: selectBoardCard,
+              onDismissed: selectBoardCard,
             );
-          },
-          child: cardWidget,
-        ),
+          });
+
+          return GestureDetector(
+            onTap: () {
+              final rect = _globalRectForContext(ctx);
+              final terrain = _matchManager.currentMatch?.board
+                  .getTile(row, col)
+                  .terrain;
+              _showCardFocus(
+                card,
+                rect,
+                tileTerrain: terrain,
+                onSecondTapAction: selectBoardCard,
+                onDismissed: selectBoardCard,
+                switchRects: _boardCardRects,
+                switchTargets: _boardCardTargets,
+              );
+            },
+            child: cardWidget,
+          );
+        },
       ),
     );
   }
@@ -8496,13 +8566,14 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                                 _handFanAngle * (availableCards.length - 1);
                             final startAngle = -totalAngle / 2;
 
-                            _handCardsById
-                              ..clear()
-                              ..addEntries(
-                                availableCards.map((c) => MapEntry(c.id, c)),
-                              );
+                            final idsInHand = availableCards
+                                .map((c) => c.id)
+                                .toSet();
                             _handCardRects.removeWhere(
-                              (id, _) => !_handCardsById.containsKey(id),
+                              (id, _) => !idsInHand.contains(id),
+                            );
+                            _handCardTargets.removeWhere(
+                              (id, _) => !idsInHand.contains(id),
                             );
 
                             // 1. Generate all card widgets with their positions
@@ -9228,30 +9299,41 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         });
       },
       child: Builder(
-        builder: (ctx) => GestureDetector(
-          onTap: () {
+        builder: (ctx) {
+          void selectCard() {
+            setState(() {
+              _clearTYC3Selection();
+              _selectedCard = card;
+            });
+          }
+
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
             final rect = _globalRectForContext(ctx);
+            if (rect == Rect.zero) return;
             _handCardRects[card.id] = rect;
-            _handCardsById[card.id] = card;
-
-            void selectCard() {
-              setState(() {
-                _clearTYC3Selection();
-                _selectedCard = card;
-              });
-            }
-
-            _showCardFocus(
-              card,
-              rect,
+            _handCardTargets[card.id] = _CardFocusSwitchTarget(
+              card: card,
               onSecondTapAction: selectCard,
               onDismissed: selectCard,
-              switchRects: _handCardRects,
-              switchCards: _handCardsById,
             );
-          },
-          child: cardWidget,
-        ),
+          });
+
+          return GestureDetector(
+            onTap: () {
+              final rect = _globalRectForContext(ctx);
+              _showCardFocus(
+                card,
+                rect,
+                onSecondTapAction: selectCard,
+                onDismissed: selectCard,
+                switchRects: _handCardRects,
+                switchTargets: _handCardTargets,
+              );
+            },
+            child: cardWidget,
+          );
+        },
       ),
     );
   }
