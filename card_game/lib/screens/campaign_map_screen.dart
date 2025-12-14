@@ -465,6 +465,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
       _generator = EncounterGenerator(act: _campaign.act);
 
       _initMapRelicIfNeeded();
+      _initHomeTownIfNeeded();
     } else {
       _generator = EncounterGenerator(act: widget.act);
 
@@ -511,6 +512,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
       );
 
       _initMapRelicIfNeeded();
+      _initHomeTownIfNeeded();
 
       await _runPreCampaignSetupIfNeeded(
         leaderId: widget.leaderId,
@@ -552,6 +554,21 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
 
     _campaign.mapRelicLat = base.latitude + jitterLat;
     _campaign.mapRelicLng = base.longitude + jitterLng;
+  }
+
+  void _initHomeTownIfNeeded() {
+    if (!_isNapoleonAct1MapEnabled) return;
+    if (_campaign.homeTownName != null &&
+        _campaign.homeTownLat != null &&
+        _campaign.homeTownLng != null) {
+      return;
+    }
+
+    // Napoleon Act 1 home base: Nice.
+    _campaign.homeTownName = 'Nice';
+    _campaign.homeTownLat = 43.695;
+    _campaign.homeTownLng = 7.264;
+    _campaign.homeTownLevel = _campaign.homeTownLevel.clamp(1, 99);
   }
 
   List<LatLng> _act1MapRelicCandidateLocations() {
@@ -629,6 +646,122 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
 
   Future<void> _saveCampaign() async {
     await _persistence.saveCampaign(_campaign);
+  }
+
+  int _homeTownUpgradeCost(int currentLevel) {
+    return 50 + (currentLevel - 1) * 50;
+  }
+
+  void _openHomeTown() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheetState) {
+          final name = _campaign.homeTownName ?? 'Home Town';
+          final level = _campaign.homeTownLevel;
+          final cost = _homeTownUpgradeCost(level);
+          final canUpgrade = _campaign.gold >= cost;
+
+          return Container(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+            decoration: const BoxDecoration(
+              color: Color(0xFF2D2D2D),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            child: SafeArea(
+              top: false,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.home, color: Colors.amber, size: 24),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          name,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.close, color: Colors.white70),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.35),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.white24),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Town Level: $level',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        const Icon(
+                          Icons.monetization_on,
+                          color: Colors.amber,
+                          size: 18,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          '${_campaign.gold}',
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: canUpgrade
+                          ? () async {
+                              setState(() {
+                                _campaign.spendGold(cost);
+                                _campaign.homeTownLevel += 1;
+                              });
+                              setSheetState(() {});
+                              await _saveCampaign();
+                            }
+                          : null,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.amber[700],
+                        foregroundColor: Colors.black,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      child: Text('Upgrade (Cost: $cost)'),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'No effects yet — upgrades will matter once we add buildings & supply.',
+                    style: TextStyle(color: Colors.white70, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 
   void _generateNewChoices() {
@@ -2277,7 +2410,56 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
       _campaign.encounterNumber,
     );
 
+    final townLat = _campaign.homeTownLat;
+    final townLng = _campaign.homeTownLng;
+    final townName = _campaign.homeTownName ?? 'Home Town';
+
     final markers = <Marker>[];
+    if (townLat != null && townLng != null) {
+      final pos = LatLng(townLat, townLng);
+      markers.add(
+        Marker(
+          point: pos,
+          width: 70,
+          height: 70,
+          child: GestureDetector(
+            onTap: _openHomeTown,
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.teal[700]!.withValues(alpha: 0.95),
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 2),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.35),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.home, color: Colors.white, size: 22),
+                  const SizedBox(height: 2),
+                  Text(
+                    townName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     for (int i = 0; i < choices.length; i++) {
       final encounter = choices[i];
       final LatLng pos = locations[i % locations.length];
@@ -2468,6 +2650,37 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  if (_isNapoleonAct1MapEnabled) ...[
+                    InkWell(
+                      onTap: _openHomeTown,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.brown[600],
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.brown[400]!),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.home, color: Colors.white, size: 14),
+                            SizedBox(width: 4),
+                            Text(
+                              'Town',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
                   InkWell(
                     onTap: _openProgressionView,
                     child: Container(

@@ -1,8 +1,8 @@
 Changes to Story mode:
 
-1. We want the encounter selection to be on a "real map" that is relevant to the campaign, so the battle location is actually placed on a "real map" (not just a random location on the map).
-2. We want to add a "Map Relic" to the campaign mode, that is hidden on a random location on the map and can be found by the player in random encounters.
-3. We want each campaign to have a real "Home Town", this home town can be improved with gold throughout the campaign run.
+1. ✅ We want the encounter selection to be on a "real map" that is relevant to the campaign, so the battle location is actually placed on a "real map" (not just a random location on the map).
+2. ✅ We want to add a "Map Relic" to the campaign mode, that is hidden on a random location on the map and can be found by the player in random encounters.
+3. ✅ We want each campaign to have a real "Home Town", this home town can be improved with gold throughout the campaign run.
 4. The Home Town buildings are buildings that provide gold/cards/items/relics.
 5. We want cards to have persistent "destruction" throughout the campaign run - meaning cards that get destroyed in battle are gone.
 6. The buildings in the home town that provide cards, have a "supply time" to them, that considers each encounter as an iteration.
@@ -18,3 +18,5 @@ Changes to Story mode:
 16. After every encounter the Player should be able to buy stuff in the home town.
 17. The Encounter location should affect the middle and enemy base terrain, based on the true real location of the encounter on the real earth map.
 18. Some encounter nodes are conqurable cities. Conquered cities allow the player to play a defence encounter(as one of the selectable encounters after the conquer encounter), this is an easier encounter where the player has a +1 damage +1 hp to all cards for these types of battles. (They are mainly to "wait" for supply arrival)
+19. We want to show the player the path they hasve passed (like in Ticket to ride kind of style).
+20. Add a "story" dialog after every encounter, that provides a short story about the encounter, and the player's actions in it, but based on the historical real background of the encounter location.

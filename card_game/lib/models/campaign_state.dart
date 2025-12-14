@@ -70,6 +70,11 @@ class CampaignState {
   List<Encounter> currentChoices;
   DateTime lastUpdated;
 
+  String? homeTownName;
+  double? homeTownLat;
+  double? homeTownLng;
+  int homeTownLevel;
+
   double? mapRelicLat;
   double? mapRelicLng;
   bool mapRelicDiscovered;
@@ -97,6 +102,10 @@ class CampaignState {
     this.completedAt,
     this.isVictory = false,
     this.currentChoices = const [],
+    this.homeTownName,
+    this.homeTownLat,
+    this.homeTownLng,
+    this.homeTownLevel = 1,
     this.mapRelicLat,
     this.mapRelicLng,
     this.mapRelicDiscovered = false,
@@ -286,6 +295,10 @@ class CampaignState {
     'completedAt': completedAt?.toIso8601String(),
     'isVictory': isVictory,
     'currentChoices': currentChoices.map((e) => e.toJson()).toList(),
+    'homeTownName': homeTownName,
+    'homeTownLat': homeTownLat,
+    'homeTownLng': homeTownLng,
+    'homeTownLevel': homeTownLevel,
     'mapRelicLat': mapRelicLat,
     'mapRelicLng': mapRelicLng,
     'mapRelicDiscovered': mapRelicDiscovered,
@@ -333,6 +346,10 @@ class CampaignState {
             ?.map((e) => Encounter.fromJson(e as Map<String, dynamic>))
             .toList() ??
         [],
+    homeTownName: json['homeTownName'] as String?,
+    homeTownLat: (json['homeTownLat'] as num?)?.toDouble(),
+    homeTownLng: (json['homeTownLng'] as num?)?.toDouble(),
+    homeTownLevel: (json['homeTownLevel'] as num?)?.toInt() ?? 1,
     mapRelicLat: (json['mapRelicLat'] as num?)?.toDouble(),
     mapRelicLng: (json['mapRelicLng'] as num?)?.toDouble(),
     mapRelicDiscovered: json['mapRelicDiscovered'] as bool? ?? false,
