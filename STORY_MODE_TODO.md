@@ -1,120 +1,20 @@
-Make sure all title and back buttons have good contrast (some are black on brown now and hard to see).
+Changes to Story mode:
 
-[X] Add a continuity mechanism to the campaign mode.
-[X] A signed in player (not guest) should be able to continue the campaign from where they stopped (not mid battle, but yes in terms of their deck and inventory, act, and encounter selection).
-[X] Save campaign progress locally so players can resume after app restart.
-[X] Implement cloud sync for campaign progress across devices (if Firebase auth is available).
-[X] Track completed encounters and unlocked content between sessions.
-[X] Persist campaign state including deck, inventory, act progress, and encounter selections.
-[X] Ensure campaign data is properly loaded when resuming from saved state.
-
-
-The campaign mode should have a menu with 3 options: Start Camagin, Continue Camapgin(if applicable), and Hero Progress.
-Start is a new campaign, continue is if there is a saved campagin that is not done yet for this user and hero progress is teh skill tree for the hero (see @GAME_META for details).
-
-
-
-## 7. Meta Progression (Legacy System)
-
-**Legacy Points** are the persistent currency earned across all campaign runs.
-
-### 7.1 Earning Legacy Points
-
-| Source | Legacy Points |
-|--------|---------------|
-| Win Normal Battle | 5 LP |
-| Win Elite Battle | 10 LP |
-| Defeat Boss | 25 LP |
-| Complete Act 1 | 50 LP |
-| Complete Act 2 | 100 LP |
-| Complete Act 3 (Win Campaign) | 200 LP |
-| First time completing a campaign | 100 LP bonus |
-| Lose a campaign | 10-30 LP (based on progress) |
-
-### 7.2 Leader Upgrade Trees
-
-Each leader has **3 intertwining upgrade branches**. Upgrades cost Legacy Points.
-
-```
-                    ┌─────────────────┐
-                    │   LEADER ROOT   │
-                    │   (Unlocked)    │
-                    └────────┬────────┘
-           ┌─────────────────┼─────────────────┐
-           ▼                 ▼                 ▼
-    ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-    │   MILITARY   │  │   ECONOMIC   │  │   POLITICAL  │
-    │   (Offense)  │  │   (Utility)  │  │   (Defense)  │
-    └──────┬───────┘  └──────┬───────┘  └──────┬───────┘
-           │                 │                 │
-    ┌──────┴───────┐  ┌──────┴───────┐  ┌──────┴───────┐
-    │  Tier 1 (50) │  │  Tier 1 (50) │  │  Tier 1 (50) │
-    └──────┬───────┘  └──────┬───────┘  └──────┬───────┘
-           │                 │                 │
-    ┌──────┴───────┐  ┌──────┴───────┐  ┌──────┴───────┐
-    │ Tier 2 (100) │  │ Tier 2 (100) │  │ Tier 2 (100) │
-    └──────┬───────┘  └──────┬───────┘  └──────┬───────┘
-           │                 │                 │
-    ┌──────┴───────┐  ┌──────┴───────┐  ┌──────┴───────┐
-    │ Tier 3 (150) │  │ Tier 3 (150) │  │ Tier 3 (150) │
-    └──────┬───────┘  └──────┬───────┘  └──────┬───────┘
-           │                 │                 │
-    ┌──────┴───────┐  ┌──────┴───────┐  ┌──────┴───────┐
-    │ Tier 4 (200) │  │ Tier 4 (200) │  │ Tier 4 (200) │
-    └──────────────┘  └──────────────┘  └──────────────┘
-```
-
-### 7.3 Upgrade Types by Branch
-
-#### **Military Branch (Offense)**
-| Tier | Upgrade | Effect |
-|------|---------|--------|
-| 1 | Veteran Training | Starter deck cards gain +1 damage |
-| 2 | Elite Recruits | Unlock 2 new aggressive special cards |
-| 3 | War Machine | Unlock "Siege Engine" starting item |
-| 4 | Conqueror's Wrath | Leader ability deals +3 damage |
-
-#### **Economic Branch (Utility)**
-| Tier | Upgrade | Effect |
-|------|---------|--------|
-| 1 | Trade Routes | +20% gold from battles |
-| 2 | Merchant Guild | Unlock 2 new utility special cards |
-| 3 | Royal Treasury | Unlock "Golden Crown" starting item |
-| 4 | Economic Dominance | Start campaigns with 100 bonus gold |
-
-#### **Political Branch (Defense)**
-| Tier | Upgrade | Effect |
-|------|---------|--------|
-| 1 | Fortifications | Starter deck cards gain +1 HP |
-| 2 | Diplomatic Corps | Unlock 2 new defensive special cards |
-| 3 | Alliance Network | Unlock "Treaty Scroll" starting item |
-| 4 | Divine Right | Start battles with a random buff active |
-
-### 7.4 Cross-Branch Synergies
-
-Some upgrades require nodes from **multiple branches**:
-
-| Synergy Upgrade | Requirements | Effect |
-|-----------------|--------------|--------|
-| **Imperial Ambition** | Military T2 + Political T2 | Unlock alternate leader ability |
-| **Golden Age** | Economic T2 + Political T2 | +1 item slot (6 max) |
-| **Total War** | Military T2 + Economic T2 | Elite battles give double rewards |
-| **World Wonder** | All T3 nodes | Unlock leader's ultimate ability |
-
-### 7.5 Leader Abilities (Unlockable Variants)
-
-Each leader starts with **1 base ability**. Meta progression unlocks **2 alternate abilities**.
-
-**Example – Napoleon:**
-| Ability | Unlock | Effect |
-|---------|--------|--------|
-| **Tactical Genius** (Base) | Default | Draw 2 extra cards this turn |
-| **Artillery Barrage** | Military T4 | Deal 5 damage to all enemies in one lane |
-| **Grande Armée** | Imperial Ambition synergy | All units gain +2/+2 this turn |
-
----
-
-- [x] Implement act 2 and 3 for Napoleon in campaign mode.
-- [x] Add the meta progression screen for Napoleon and link it from the campaign menu.
-- [x] Add campaign mode entry points to the main menu (start/continue).
-- [x] Grant a relic reward when successfully completing each act.
+1. We want the encounter selection to be on a "real map" that is relevant to the campaign, so the battle location is actually placed on a "real map" (not just a random location on the map).
+2. We want to add a "Map Relic" to the campaign mode, that is hidden on a random location on the map and can be found by the player in random encounters.
+3. We want each campaign to have a real "Home Town", this home town can be improved with gold throughout the campaign run.
+4. The Home Town buildings are buildings that provide gold/cards/items/relics.
+5. We want cards to have persistent "destruction" throughout the campaign run - meaning cards that get destroyed in battle are gone.
+6. The buildings in the home town that provide cards, have a "supply time" to them, that considers each encounter as an iteration.
+7. Every campaign home town starts with basic common cars training grounds, that provide cards each encounter.
+8. The advanced buildable buildings provide cards in higher rarity, but slower supply time.
+9. The distance of the hero from the home town (base node) also affects supply time.
+10. Hero Progression nodes should also have perks for the home town, that can be unlocked as the hero progresses.
+11. A dialog should pop for the player each time a new card/gold/item/relic is provided to the player from their home town.
+12. Winning enctouner nodes,s should provide gold, and a pre-determined offer of items/relics/buildings (the buildings should be mainly around reducing the supply time of home town buildings) based on the node type (city/battle grounds/defence).
+13. The Player should be able to see the home town buildings, and the distance to them/the supply time of the buildings.
+14. The Player should be able to see the pre-determined reward of an encounter before selecting the encounter.
+15. Shop encounters should allow to "repair" cards that were destroyed in battle, for a price.
+16. After every encounter the Player should be able to buy stuff in the home town.
+17. The Encounter location should affect the middle and enemy base terrain, based on the true real location of the encounter on the real earth map.
+18. Some encounter nodes are conqurable cities. Conquered cities allow the player to play a defence encounter(as one of the selectable encounters after the conquer encounter), this is an easier encounter where the player has a +1 damage +1 hp to all cards for these types of battles. (They are mainly to "wait" for supply arrival)
