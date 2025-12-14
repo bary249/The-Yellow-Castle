@@ -301,18 +301,6 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
           type: MaterialType.transparency,
           child: Stack(
             children: [
-              // Dim background
-              Positioned.fill(
-                child: IgnorePointer(
-                  ignoring: true,
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 150),
-                    color: Colors.black.withOpacity(
-                      _cardFocusExpanded ? 0.25 : 0.0,
-                    ),
-                  ),
-                ),
-              ),
               // Tap outside to dismiss
               Positioned.fill(
                 child: Listener(
@@ -327,15 +315,8 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                         if (rect.contains(e.position)) {
                           final nextTarget = switchTargets[id];
                           if (nextTarget != null) {
-                            _showCardFocus(
-                              nextTarget.card,
-                              rect,
-                              tileTerrain: nextTarget.tileTerrain,
-                              onSecondTapAction: nextTarget.onSecondTapAction,
-                              onDismissed: nextTarget.onDismissed,
-                              switchRects: switchRects,
-                              switchTargets: switchTargets,
-                            );
+                            _cardFocusOnDismissed = nextTarget.onDismissed;
+                            _dismissCardFocus();
                             return;
                           }
                         }
@@ -8005,6 +7986,12 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
 
           return GestureDetector(
             onTap: () {
+              final isSelectedForAction = _selectedCardForAction == card;
+              if (!isSelectedForAction) {
+                _selectCardForActionNoToggle(card, row, col);
+                return;
+              }
+
               final rect = _globalRectForContext(ctx);
               final terrain = _matchManager.currentMatch?.board
                   .getTile(row, col)
@@ -9321,6 +9308,12 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
 
           return GestureDetector(
             onTap: () {
+              final isSelected = _selectedCard == card;
+              if (!isSelected) {
+                selectCard();
+                return;
+              }
+
               final rect = _globalRectForContext(ctx);
               _showCardFocus(
                 card,
