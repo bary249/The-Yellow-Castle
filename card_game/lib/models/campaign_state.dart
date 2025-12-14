@@ -70,6 +70,12 @@ class CampaignState {
   List<Encounter> currentChoices;
   DateTime lastUpdated;
 
+  double? mapRelicLat;
+  double? mapRelicLng;
+  bool mapRelicDiscovered;
+  double? lastTravelLat;
+  double? lastTravelLng;
+
   CampaignState({
     required this.id,
     required this.leaderId,
@@ -91,6 +97,11 @@ class CampaignState {
     this.completedAt,
     this.isVictory = false,
     this.currentChoices = const [],
+    this.mapRelicLat,
+    this.mapRelicLng,
+    this.mapRelicDiscovered = false,
+    this.lastTravelLat,
+    this.lastTravelLng,
     DateTime? lastUpdated,
   }) : inventory = inventory ?? [],
        relics = relics ?? [],
@@ -275,6 +286,11 @@ class CampaignState {
     'completedAt': completedAt?.toIso8601String(),
     'isVictory': isVictory,
     'currentChoices': currentChoices.map((e) => e.toJson()).toList(),
+    'mapRelicLat': mapRelicLat,
+    'mapRelicLng': mapRelicLng,
+    'mapRelicDiscovered': mapRelicDiscovered,
+    'lastTravelLat': lastTravelLat,
+    'lastTravelLng': lastTravelLng,
     'lastUpdated': lastUpdated.toIso8601String(),
   };
 
@@ -317,6 +333,11 @@ class CampaignState {
             ?.map((e) => Encounter.fromJson(e as Map<String, dynamic>))
             .toList() ??
         [],
+    mapRelicLat: (json['mapRelicLat'] as num?)?.toDouble(),
+    mapRelicLng: (json['mapRelicLng'] as num?)?.toDouble(),
+    mapRelicDiscovered: json['mapRelicDiscovered'] as bool? ?? false,
+    lastTravelLat: (json['lastTravelLat'] as num?)?.toDouble(),
+    lastTravelLng: (json['lastTravelLng'] as num?)?.toDouble(),
     lastUpdated: json['lastUpdated'] != null
         ? DateTime.parse(json['lastUpdated'] as String)
         : null,

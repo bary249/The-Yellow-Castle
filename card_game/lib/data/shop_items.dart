@@ -53,7 +53,9 @@ class ShopInventory {
     items.addAll(_getConsumables(act));
 
     // Add a relic
-    final relics = getAllRelics();
+    final relics = getAllRelics()
+        .where((r) => !r.id.startsWith('campaign_'))
+        .toList();
     relics.shuffle();
     if (relics.isNotEmpty) {
       items.add(relics.first);
@@ -93,6 +95,14 @@ class ShopInventory {
 
   static List<ShopItem> getAllRelics() {
     return [
+      const ShopItem(
+        id: 'campaign_map_relic',
+        name: 'Map Relic',
+        description: 'A hidden cache discovered through exploration.',
+        cost: 0,
+        type: ShopItemType.relic,
+        effect: 'map_relic',
+      ),
       const ShopItem(
         id: 'relic_gold_purse',
         name: 'War Chest',

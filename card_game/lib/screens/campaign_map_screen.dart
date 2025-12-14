@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -36,6 +38,11 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
   late EncounterGenerator _generator;
   bool _isLoading = true;
   final CampaignPersistenceService _persistence = CampaignPersistenceService();
+
+  static const String _campaignMapRelicId = 'campaign_map_relic';
+  static const double _mapRelicDiscoverDistanceMeters = 25000;
+
+  final Random _random = Random();
 
   final MapController _mapController = MapController();
 
@@ -456,6 +463,8 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     if (widget.savedState != null) {
       _campaign = widget.savedState!;
       _generator = EncounterGenerator(act: _campaign.act);
+
+      _initMapRelicIfNeeded();
     } else {
       _generator = EncounterGenerator(act: widget.act);
 
@@ -501,6 +510,8 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
         startedAt: DateTime.now(),
       );
 
+      _initMapRelicIfNeeded();
+
       await _runPreCampaignSetupIfNeeded(
         leaderId: widget.leaderId,
         act: widget.act,
@@ -519,6 +530,101 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
 
     // Save initial state
     await _saveCampaign();
+  }
+
+  bool get _isNapoleonAct1MapEnabled {
+    return widget.leaderId == 'napoleon' && _campaign.act == 1;
+  }
+
+  void _initMapRelicIfNeeded() {
+    if (!_isNapoleonAct1MapEnabled) return;
+    if (_campaign.mapRelicDiscovered) return;
+    if (_campaign.mapRelicLat != null && _campaign.mapRelicLng != null) return;
+
+    final pool = _act1MapRelicCandidateLocations();
+    if (pool.isEmpty) return;
+
+    final base = pool[_random.nextInt(pool.length)];
+
+    // Small jitter to avoid always matching a city center exactly.
+    final jitterLat = (_random.nextDouble() - 0.5) * 0.16;
+    final jitterLng = (_random.nextDouble() - 0.5) * 0.16;
+
+    _campaign.mapRelicLat = base.latitude + jitterLat;
+    _campaign.mapRelicLng = base.longitude + jitterLng;
+  }
+
+  List<LatLng> _act1MapRelicCandidateLocations() {
+    // A handful of plausible Act 1 (Italy 1796) locations.
+    // The exact route is not enforced; this just keeps the relic in-theater.
+    return const [
+      LatLng(44.107, 7.669), // Tende / Alps pass area
+      LatLng(44.384, 7.823), // Mondovì
+      LatLng(44.418, 8.869), // Genoa outskirts
+      LatLng(44.913, 8.616), // Alessandria
+      LatLng(45.041, 7.657), // Turin outskirts
+      LatLng(45.184, 9.159), // Pavia area
+      LatLng(45.309, 9.503), // Lodi
+      LatLng(45.263, 10.992), // Mantua
+    ];
+  }
+
+  Future<void> _maybeDiscoverMapRelicAfterEncounter(Encounter encounter) async {
+    if (!_isNapoleonAct1MapEnabled) return;
+    if (_campaign.mapRelicDiscovered) return;
+    if (_campaign.hasRelic(_campaignMapRelicId)) return;
+
+    final relicLat = _campaign.mapRelicLat;
+    final relicLng = _campaign.mapRelicLng;
+    final travelLat = _campaign.lastTravelLat;
+    final travelLng = _campaign.lastTravelLng;
+    if (relicLat == null ||
+        relicLng == null ||
+        travelLat == null ||
+        travelLng == null) {
+      return;
+    }
+
+    final isEligible =
+        encounter.type == EncounterType.event ||
+        encounter.type == EncounterType.treasure;
+    if (!isEligible) return;
+
+    final distanceMeters = const Distance()(
+      LatLng(travelLat, travelLng),
+      LatLng(relicLat, relicLng),
+    );
+    if (distanceMeters > _mapRelicDiscoverDistanceMeters) return;
+
+    if (!mounted) return;
+    setState(() {
+      _campaign.mapRelicDiscovered = true;
+      _campaign.addRelic(_campaignMapRelicId);
+    });
+    await _saveCampaign();
+    if (!mounted) return;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF2D2D2D),
+        title: const Text(
+          'Map Relic Found!',
+          style: TextStyle(color: Colors.purpleAccent),
+        ),
+        content: const Text(
+          'Your scouts uncover a hidden cache while exploring the area.',
+          style: TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Claim'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _saveCampaign() async {
@@ -677,14 +783,15 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
               setState(() {
                 _campaign.addGold(goldReward);
                 _campaign.completeEncounter();
                 _generateNewChoices();
               });
-              _saveCampaign();
+              await _saveCampaign();
+              await _maybeDiscoverMapRelicAfterEncounter(encounter);
             },
             child: const Text('Claim'),
           ),
@@ -1904,7 +2011,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
               setState(() {
                 if (isGold) {
@@ -1922,7 +2029,8 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                 _campaign.completeEncounter();
                 _generateNewChoices();
               });
-              _saveCampaign();
+              await _saveCampaign();
+              await _maybeDiscoverMapRelicAfterEncounter(encounter);
             },
             child: const Text('Continue'),
           ),
@@ -2090,7 +2198,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     }
   }
 
-  Future<void> _confirmEncounterOnMap(Encounter encounter) async {
+  Future<void> _confirmEncounterOnMap(Encounter encounter, LatLng pos) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -2152,6 +2260,12 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     );
 
     if (confirmed == true && mounted) {
+      setState(() {
+        _campaign.lastTravelLat = pos.latitude;
+        _campaign.lastTravelLng = pos.longitude;
+      });
+      await _saveCampaign();
+      if (!mounted) return;
       _onEncounterSelected(encounter);
     }
   }
@@ -2174,7 +2288,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
           width: 56,
           height: 56,
           child: GestureDetector(
-            onTap: () => _confirmEncounterOnMap(encounter),
+            onTap: () => _confirmEncounterOnMap(encounter, pos),
             child: Container(
               decoration: BoxDecoration(
                 color: _colorForEncounterType(
