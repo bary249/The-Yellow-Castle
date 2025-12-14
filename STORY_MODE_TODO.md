@@ -3,7 +3,7 @@ Changes to Story mode:
 1. ✅ We want the encounter selection to be on a "real map" that is relevant to the campaign, so the battle location is actually placed on a "real map" (not just a random location on the map).
 2. ✅ We want to add a "Map Relic" to the campaign mode, that is hidden on a random location on the map and can be found by the player in random encounters.
 3. ✅ We want each campaign to have a real "Home Town", this home town can be improved with gold throughout the campaign run.
-4. The Home Town buildings are buildings that provide gold/cards/items/relics.
+4. ✅ The Home Town buildings are buildings that provide gold/cards/items/relics.
 5. We want cards to have persistent "destruction" throughout the campaign run - meaning cards that get destroyed in battle are gone.
 6. The buildings in the home town that provide cards, have a "supply time" to them, that considers each encounter as an iteration.
 7. Every campaign home town starts with basic common cars training grounds, that provide cards each encounter.
