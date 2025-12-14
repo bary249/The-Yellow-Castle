@@ -72,6 +72,19 @@ class MatchManager {
   /// Tracks if player has a damage boost active for this turn (from hero ability).
   bool _playerDamageBoostActive = false;
 
+  int _playerDamageBoostExtra = 0;
+
+  void addPlayerDamageBoostThisTurn(int amount, {String? source}) {
+    if (_currentMatch == null) return;
+    if (amount <= 0) return;
+
+    if (_playerDamageBoostExtra >= amount) return;
+    _playerDamageBoostExtra = amount;
+    _log(
+      '   Bonus damage this turn: +$amount${source != null ? " ($source)" : ""}',
+    );
+  }
+
   /// Start a new match
   /// For online mode, pass [predefinedTerrains] and [predefinedRelicColumn] to use
   /// the board setup from the host (Player 1).
@@ -182,6 +195,7 @@ class MatchManager {
 
     // Reset temporary buffs
     _playerDamageBoostActive = false;
+    _playerDamageBoostExtra = 0;
 
     // Start first turn
     _currentMatch!.currentPhase = MatchPhase.turnPhase;
@@ -331,7 +345,8 @@ class MatchManager {
   }
 
   /// Get the damage boost amount for player cards this turn.
-  int get playerDamageBoost => _playerDamageBoostActive ? 1 : 0;
+  int get playerDamageBoost =>
+      (_playerDamageBoostActive ? 1 : 0) + _playerDamageBoostExtra;
 
   /// Player submits their card placements for the turn (tile-based)
   /// placements is a Map<String, List<GameCard>> where key is "row,col"
@@ -1664,6 +1679,7 @@ class MatchManager {
     // Reset temporary buffs (Saladin hero ability, etc.)
     // Always reset this at the end of a turn cycle to ensure it doesn't carry over
     _playerDamageBoostActive = false;
+    _playerDamageBoostExtra = 0;
 
     // Draw a card for the new active player
     final newActive = activePlayer;

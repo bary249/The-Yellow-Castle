@@ -38,6 +38,7 @@ class TestMatchScreen extends StatefulWidget {
   playerDamageBonus; // Flat damage bonus applied to all player deck cards
   final int extraStartingDraw;
   final int artilleryDamageBonus;
+  final int heroAbilityDamageBoost;
   final int? opponentBaseHP;
 
   const TestMatchScreen({
@@ -52,6 +53,7 @@ class TestMatchScreen extends StatefulWidget {
     this.playerDamageBonus = 0,
     this.extraStartingDraw = 0,
     this.artilleryDamageBonus = 0,
+    this.heroAbilityDamageBoost = 0,
     this.opponentBaseHP,
   });
 
@@ -65,6 +67,16 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   final AuthService _authService = AuthService();
   final DeckStorageService _deckStorage = DeckStorageService();
   FirebaseFirestore? _firestore;
+
+  bool _isArtilleryCard(GameCard card) {
+    if (card.abilities.contains('cannon')) return true;
+    if (card.attackRange >= 2) return true;
+    final lowerName = card.name.toLowerCase();
+    if (lowerName.contains('cannon') || lowerName.contains('artillery')) {
+      return true;
+    }
+    return false;
+  }
 
   String? _playerId;
   String? _playerName;
@@ -2524,6 +2536,10 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     _savedDeck = await _deckStorage.loadDeck();
     debugPrint('Loaded saved deck: ${_savedDeck?.length ?? 0} cards');
 
+    debugPrint(
+      'Match init flags: onlineMatchId=${widget.onlineMatchId}, forceCampaignDeck=${widget.forceCampaignDeck}, playerId=$_playerId',
+    );
+
     // Check if online mode
     if (widget.onlineMatchId != null && _playerId != null) {
       _isOnlineMode = true;
@@ -2987,11 +3003,10 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       case 'long_range':
         return Icons.gps_fixed; // Target/crosshair for cannon (long range)
       case 'ranged':
-        return Icons
-            .keyboard_double_arrow_right; // Double arrow for archer (ranged, no retaliation)
+        return Icons.arrow_forward; // Arrow for ranged (no retaliation)
       case 'melee':
       default:
-        return Icons.content_cut; // Sword for melee
+        return Icons.sports_martial_arts; // Sword for melee
     }
   }
 
@@ -4124,6 +4139,9 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   Future<void> _startNewMatch() async {
     debugPrint('🚀 _startNewMatch called');
     debugPrint(
+      '   mode flags: onlineMatchId=${widget.onlineMatchId}, _isOnlineMode=$_isOnlineMode, forceCampaignDeck=${widget.forceCampaignDeck}',
+    );
+    debugPrint(
       '   _selectedOnlineDeck: ${_selectedOnlineDeck?.length} cards, first: ${_selectedOnlineDeck?.firstOrNull?.name}',
     );
     debugPrint(
@@ -4238,18 +4256,23 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       }
     }
 
-    // Apply a flat player damage bonus to the selected deck (campaign relics, etc.)
+    // Apply campaign bonuses to the selected deck.
     // This is applied only for the current match; it does not mutate saved/campaign deck state.
-    final Deck effectivePlayerDeck = widget.playerDamageBonus != 0
+    final bool hasDeckBonuses =
+        widget.playerDamageBonus != 0 || widget.artilleryDamageBonus != 0;
+    final Deck effectivePlayerDeck = hasDeckBonuses
         ? Deck.fromCards(
             playerId: id,
             name: playerDeck.name,
-            cards: playerDeck.cards
-                .map(
-                  (c) =>
-                      c.copyWith(damage: c.damage + widget.playerDamageBonus),
-                )
-                .toList(),
+            cards: playerDeck.cards.map((c) {
+              final artilleryBonus = _isArtilleryCard(c)
+                  ? widget.artilleryDamageBonus
+                  : 0;
+              final totalBonus = widget.playerDamageBonus + artilleryBonus;
+              return totalBonus != 0
+                  ? c.copyWith(damage: c.damage + totalBonus)
+                  : c;
+            }).toList(),
           )
         : playerDeck;
 
@@ -4264,6 +4287,9 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       'Player hero: ${playerHero.name} (${playerHero.abilityDescription})',
     );
     debugPrint('Opponent hero: ${opponentHero.name}');
+    debugPrint(
+      'Battle modifiers: playerBaseHP=${widget.playerCurrentHealth}, opponentBaseHP=${widget.opponentBaseHP}, playerDamageBonus=${widget.playerDamageBonus}, artilleryDamageBonus=${widget.artilleryDamageBonus}, extraStartingDraw=${widget.extraStartingDraw}',
+    );
     debugPrint('Deck name: ${effectivePlayerDeck.name}');
     debugPrint('Deck cards (${effectivePlayerDeck.cards.length}):');
     for (final card in effectivePlayerDeck.cards) {
@@ -6530,6 +6556,15 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
             ? () {
                 final success = _matchManager.activatePlayerHeroAbility();
                 if (success) {
+                  if (!_isOnlineMode &&
+                      widget.forceCampaignDeck &&
+                      hero.abilityType == HeroAbilityType.drawCards &&
+                      widget.heroAbilityDamageBoost > 0) {
+                    _matchManager.addPlayerDamageBoostThisTurn(
+                      widget.heroAbilityDamageBoost,
+                      source: 'Inspiring Presence',
+                    );
+                  }
                   setState(() {});
                   _showHeroAbilityDialog(
                     SyncedHeroAbility(
@@ -7815,18 +7850,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     }
 
     // Infer type icon
-    IconData typeIcon = Icons.person; // Default (Infantry)
-    if (card.abilities.contains('cavalry')) {
-      typeIcon = Icons.directions_run; // Horse/Speed
-    } else if (card.abilities.contains('pikeman')) {
-      typeIcon = Icons.change_history; // Pike tip
-    } else if (card.abilities.contains('shield_guard')) {
-      typeIcon = Icons.shield;
-    } else if (card.abilities.contains('archer') || card.isRanged) {
-      typeIcon = Icons.gps_fixed; // Target
-    } else if (card.abilities.contains('cannon') || card.isLongRange) {
-      typeIcon = Icons.circle; // Cannonball
-    }
+    final IconData typeIcon = _getAttackStyleIcon(_getAttackStyle(card));
 
     return Container(
       width: width,
@@ -8616,18 +8640,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     final baseBorder = _getRarityBorderColor(card);
 
     // Infer type icon
-    IconData typeIcon = Icons.person; // Default (Infantry)
-    if (card.abilities.contains('cavalry')) {
-      typeIcon = Icons.directions_run; // Horse/Speed
-    } else if (card.abilities.contains('pikeman')) {
-      typeIcon = Icons.change_history; // Pike tip
-    } else if (card.abilities.contains('shield_guard')) {
-      typeIcon = Icons.shield;
-    } else if (card.abilities.contains('archer') || card.isRanged) {
-      typeIcon = Icons.gps_fixed; // Target
-    } else if (card.abilities.contains('cannon') || card.isLongRange) {
-      typeIcon = Icons.circle; // Cannonball
-    }
+    final IconData typeIcon = _getAttackStyleIcon(_getAttackStyle(card));
 
     return Container(
       width: width,

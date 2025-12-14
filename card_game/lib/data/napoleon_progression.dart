@@ -53,7 +53,7 @@ class NapoleonProgression {
       name: 'Tactical Genius I',
       description: 'Draw 1 extra card at the start of each battle',
       type: ProgressionNodeType.deckBonus,
-      cost: 1,
+      cost: 100,
       prerequisites: ['start'],
       effect: 'extra_draw_1',
       tier: 1,
@@ -64,7 +64,7 @@ class NapoleonProgression {
       name: 'War Chest I',
       description: '+10 starting gold in campaigns',
       type: ProgressionNodeType.startingBonus,
-      cost: 1,
+      cost: 100,
       prerequisites: ['start'],
       effect: 'starting_gold_10',
       tier: 1,
@@ -75,7 +75,7 @@ class NapoleonProgression {
       name: 'Inspiring Presence I',
       description: 'Hero ability also grants +1 damage this turn',
       type: ProgressionNodeType.heroAbility,
-      cost: 1,
+      cost: 100,
       prerequisites: ['start'],
       effect: 'hero_damage_boost_1',
       tier: 1,
@@ -88,7 +88,7 @@ class NapoleonProgression {
       name: 'Artillery Master',
       description: 'All Artillery units gain +1 damage',
       type: ProgressionNodeType.deckBonus,
-      cost: 2,
+      cost: 200,
       prerequisites: ['tactical_genius_1'],
       effect: 'artillery_damage_1',
       tier: 2,
@@ -98,7 +98,7 @@ class NapoleonProgression {
       name: 'Tactical Genius II',
       description: 'Draw 2 extra cards at the start of each battle',
       type: ProgressionNodeType.deckBonus,
-      cost: 3,
+      cost: 300,
       prerequisites: ['tactical_genius_1'],
       effect: 'extra_draw_2',
       tier: 2,
@@ -110,7 +110,7 @@ class NapoleonProgression {
       name: 'War Chest II',
       description: '+25 starting gold in campaigns',
       type: ProgressionNodeType.startingBonus,
-      cost: 2,
+      cost: 200,
       prerequisites: ['war_chest_1'],
       effect: 'starting_gold_25',
       tier: 2,
@@ -120,7 +120,7 @@ class NapoleonProgression {
       name: 'Merchant Connections',
       description: '15% discount at all shops',
       type: ProgressionNodeType.startingBonus,
-      cost: 2,
+      cost: 200,
       prerequisites: ['war_chest_1'],
       effect: 'shop_discount_15',
       tier: 2,
@@ -132,7 +132,7 @@ class NapoleonProgression {
       name: 'Inspiring Presence II',
       description: 'Hero ability grants +2 damage this turn',
       type: ProgressionNodeType.heroAbility,
-      cost: 2,
+      cost: 200,
       prerequisites: ['inspiring_presence_1'],
       effect: 'hero_damage_boost_2',
       tier: 2,
@@ -142,7 +142,7 @@ class NapoleonProgression {
       name: 'Old Guard',
       description: 'Start each campaign with a Grenadier in your deck',
       type: ProgressionNodeType.startingBonus,
-      cost: 3,
+      cost: 300,
       prerequisites: ['inspiring_presence_1'],
       effect: 'starting_grenadier',
       tier: 2,
@@ -154,7 +154,7 @@ class NapoleonProgression {
       name: 'Emperor of France',
       description: 'All units gain +1 HP. Unlocks Imperial Guard units.',
       type: ProgressionNodeType.special,
-      cost: 5,
+      cost: 500,
       prerequisites: ['tactical_genius_2', 'inspiring_presence_2'],
       effect: 'emperor_unlock',
       tier: 3,
@@ -164,7 +164,7 @@ class NapoleonProgression {
       name: 'La Grande Armée',
       description: '+5 max HP. Start with 2 extra cards in hand.',
       type: ProgressionNodeType.startingBonus,
-      cost: 4,
+      cost: 400,
       prerequisites: ['artillery_master', 'old_guard'],
       effect: 'grand_armee',
       tier: 3,
@@ -174,7 +174,7 @@ class NapoleonProgression {
       name: 'Continental System',
       description: '+50 starting gold. Shops have better items.',
       type: ProgressionNodeType.startingBonus,
-      cost: 4,
+      cost: 400,
       prerequisites: ['war_chest_2', 'merchant_connections'],
       effect: 'continental_system',
       tier: 3,
@@ -212,6 +212,30 @@ class NapoleonProgression {
   static int get totalCost => nodes.fold(0, (sum, n) => sum + n.cost);
 }
 
+class NapoleonProgressionModifiers {
+  final int startingGoldBonus;
+  final int extraStartingDraw;
+  final int artilleryDamageBonus;
+  final int heroAbilityDamageBoost;
+  final int shopDiscountPercent;
+  final int campaignMaxHpBonus;
+  final int startingGrenadierCount;
+  final Set<String> startingRelicOptionIds;
+  final int startingSpecialCardOptionCount;
+
+  const NapoleonProgressionModifiers({
+    this.startingGoldBonus = 0,
+    this.extraStartingDraw = 0,
+    this.artilleryDamageBonus = 0,
+    this.heroAbilityDamageBoost = 0,
+    this.shopDiscountPercent = 0,
+    this.campaignMaxHpBonus = 0,
+    this.startingGrenadierCount = 0,
+    this.startingRelicOptionIds = const {'relic_gold_purse'},
+    this.startingSpecialCardOptionCount = 2,
+  });
+}
+
 /// Player's Napoleon progression state
 class NapoleonProgressionState {
   Set<String> unlockedNodes;
@@ -245,6 +269,93 @@ class NapoleonProgressionState {
     completedCampaigns += 1;
   }
 
+  NapoleonProgressionModifiers get modifiers {
+    int startingGoldBonus = getEffectSumValue('starting_gold');
+    if (hasEffect('continental_system')) {
+      startingGoldBonus += 50;
+    }
+
+    int extraStartingDraw = getEffectValue('extra_draw');
+    if (hasEffect('grand_armee')) {
+      extraStartingDraw += 2;
+    }
+
+    final int artilleryDamageBonus = hasEffect('artillery_damage_1') ? 1 : 0;
+
+    final int heroAbilityDamageBoost = getEffectValue('hero_damage_boost');
+
+    final int shopDiscountPercent = hasEffect('shop_discount_15') ? 15 : 0;
+
+    final int campaignMaxHpBonus = hasEffect('grand_armee') ? 5 : 0;
+
+    final int startingGrenadierCount = hasEffect('starting_grenadier') ? 1 : 0;
+
+    final startingRelicOptionIds = <String>{'relic_gold_purse'};
+    if (unlockedNodes.contains('war_chest_1')) {
+      startingRelicOptionIds.add('relic_armor');
+    }
+    if (unlockedNodes.contains('war_chest_2')) {
+      startingRelicOptionIds.add('relic_morale');
+    }
+
+    int startingSpecialCardOptionCount = 2;
+    if (getEffectValue('extra_draw') > 0) {
+      startingSpecialCardOptionCount = 3;
+    }
+    if (hasEffect('artillery_damage_1')) {
+      startingSpecialCardOptionCount = 4;
+    }
+    if (hasEffect('grand_armee')) {
+      startingSpecialCardOptionCount = 5;
+    }
+
+    return NapoleonProgressionModifiers(
+      startingGoldBonus: startingGoldBonus,
+      extraStartingDraw: extraStartingDraw,
+      artilleryDamageBonus: artilleryDamageBonus,
+      heroAbilityDamageBoost: heroAbilityDamageBoost,
+      shopDiscountPercent: shopDiscountPercent,
+      campaignMaxHpBonus: campaignMaxHpBonus,
+      startingGrenadierCount: startingGrenadierCount,
+      startingRelicOptionIds: startingRelicOptionIds,
+      startingSpecialCardOptionCount: startingSpecialCardOptionCount,
+    );
+  }
+
+  List<String> get unimplementedEffects {
+    final effects = <String>{};
+    for (final nodeId in unlockedNodes) {
+      final node = NapoleonProgression.getNode(nodeId);
+      final effect = node?.effect;
+      if (effect != null && effect.isNotEmpty) {
+        effects.add(effect);
+      }
+    }
+
+    final implementedPrefixes = <String>{
+      'starting_gold',
+      'extra_draw',
+      'hero_damage_boost',
+    };
+    final implementedExact = <String>{
+      'continental_system',
+      'artillery_damage_1',
+      'grand_armee',
+      'shop_discount_15',
+      'starting_grenadier',
+    };
+
+    bool isImplemented(String effect) {
+      if (implementedExact.contains(effect)) return true;
+      for (final prefix in implementedPrefixes) {
+        if (effect.startsWith(prefix)) return true;
+      }
+      return false;
+    }
+
+    return effects.where((e) => !isImplemented(e)).toList()..sort();
+  }
+
   /// Check if a specific effect is active
   bool hasEffect(String effect) {
     for (final nodeId in unlockedNodes) {
@@ -266,6 +377,21 @@ class NapoleonProgressionState {
       }
     }
     return maxValue;
+  }
+
+  /// Get the SUM of numeric effect values for a prefix.
+  /// Used when upgrades are meant to stack additively (e.g., starting_gold_10 + starting_gold_25).
+  int getEffectSumValue(String effectPrefix) {
+    int sum = 0;
+    for (final nodeId in unlockedNodes) {
+      final node = NapoleonProgression.getNode(nodeId);
+      if (node?.effect?.startsWith(effectPrefix) ?? false) {
+        final parts = node!.effect!.split('_');
+        final value = int.tryParse(parts.last) ?? 0;
+        sum += value;
+      }
+    }
+    return sum;
   }
 
   /// Serialize to JSON

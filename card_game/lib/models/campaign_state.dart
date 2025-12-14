@@ -59,6 +59,8 @@ class CampaignState {
   List<GameCard> inventory;
   List<String> relics;
   List<String> activeRelics;
+  String? startingRelicId;
+  String? startingSpecialCardId;
   Map<String, int> consumables;
   Map<String, int> activeConsumables;
   Set<String> awardedLegacyMilestones;
@@ -80,6 +82,8 @@ class CampaignState {
     List<GameCard>? inventory,
     List<String>? relics,
     List<String>? activeRelics,
+    this.startingRelicId,
+    this.startingSpecialCardId,
     Map<String, int>? consumables,
     Map<String, int>? activeConsumables,
     Set<String>? awardedLegacyMilestones,
@@ -119,12 +123,14 @@ class CampaignState {
   int get goldPerBattleBonus {
     int bonus = 0;
     if (activeRelics.contains('relic_gold_purse')) bonus += 10;
+    if (activeRelics.contains('legendary_relic_gold_purse')) bonus += 20;
     return bonus;
   }
 
   int get globalDamageBonus {
     int bonus = 0;
     if (activeRelics.contains('relic_morale')) bonus += 1;
+    if (activeRelics.contains('legendary_relic_morale')) bonus += 2;
     return bonus;
   }
 
@@ -165,6 +171,11 @@ class CampaignState {
         maxHealth += 10;
         health += 10; // Heal the amount increased
       }
+
+      if (relicId == 'legendary_relic_armor') {
+        maxHealth += 20;
+        health += 20;
+      }
     }
   }
 
@@ -175,7 +186,7 @@ class CampaignState {
   }
 
   void deactivateRelic(String relicId) {
-    if (relicId == 'relic_armor') return;
+    if (relicId == 'relic_armor' || relicId == 'legendary_relic_armor') return;
     activeRelics.remove(relicId);
   }
 
@@ -255,6 +266,8 @@ class CampaignState {
     'inventory': inventory.map((c) => c.toJson()).toList(),
     'relics': relics,
     'activeRelics': activeRelics,
+    'startingRelicId': startingRelicId,
+    'startingSpecialCardId': startingSpecialCardId,
     'consumables': consumables,
     'activeConsumables': activeConsumables,
     'awardedLegacyMilestones': awardedLegacyMilestones.toList(),
@@ -283,6 +296,8 @@ class CampaignState {
     activeRelics: (json['activeRelics'] as List?)
         ?.map((e) => e as String)
         .toList(),
+    startingRelicId: json['startingRelicId'] as String?,
+    startingSpecialCardId: json['startingSpecialCardId'] as String?,
     consumables: (json['consumables'] as Map?)?.map(
       (key, value) => MapEntry(key as String, (value as num).toInt()),
     ),

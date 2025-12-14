@@ -120,6 +120,35 @@ class ShopInventory {
     ];
   }
 
+  static List<ShopItem> getAllLegendaryRelics() {
+    return [
+      const ShopItem(
+        id: 'legendary_relic_gold_purse',
+        name: 'Imperial Treasury',
+        description: '+20 gold after each battle',
+        cost: 0,
+        type: ShopItemType.relic,
+        effect: 'battle_gold_20',
+      ),
+      const ShopItem(
+        id: 'legendary_relic_armor',
+        name: 'Marshal\'s Armor',
+        description: '+20 max HP',
+        cost: 0,
+        type: ShopItemType.relic,
+        effect: 'max_hp_20',
+      ),
+      const ShopItem(
+        id: 'legendary_relic_morale',
+        name: 'Imperial Standard',
+        description: '+2 damage to all units',
+        cost: 0,
+        type: ShopItemType.relic,
+        effect: 'damage_boost_2',
+      ),
+    ];
+  }
+
   static List<GameCard> getCardsForAct(int act) {
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     switch (act) {

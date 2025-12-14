@@ -23,6 +23,11 @@ class _ProgressionScreenState extends State<ProgressionScreen> {
   late NapoleonProgressionState _state;
   bool _isLoading = true;
   final CampaignPersistenceService _persistence = CampaignPersistenceService();
+  final GlobalKey _treeKey = GlobalKey();
+  final Map<String, GlobalKey> _nodeKeys = <String, GlobalKey>{};
+  List<_NodeConnection> _connections = const <_NodeConnection>[];
+  bool _connectionsDirty = true;
+  bool _connectionsScheduled = false;
 
   @override
   void initState() {
@@ -45,8 +50,70 @@ class _ProgressionScreenState extends State<ProgressionScreen> {
           _state = NapoleonProgressionState(); // Default start state
         }
         _isLoading = false;
+        _connectionsDirty = true;
       });
     }
+  }
+
+  GlobalKey _keyForNode(String nodeId) {
+    return _nodeKeys.putIfAbsent(nodeId, () => GlobalKey());
+  }
+
+  void _scheduleRebuildConnectionsIfNeeded() {
+    if (_connectionsScheduled) return;
+    if (!_connectionsDirty) return;
+    _connectionsScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _connectionsScheduled = false;
+      if (!mounted) return;
+      final treeContext = _treeKey.currentContext;
+      if (treeContext == null) return;
+
+      final treeBox = treeContext.findRenderObject();
+      if (treeBox is! RenderBox) return;
+
+      final next = <_NodeConnection>[];
+      for (final node in NapoleonProgression.nodes) {
+        if (node.prerequisites.isEmpty) continue;
+        final toKey = _nodeKeys[node.id];
+        final toContext = toKey?.currentContext;
+        if (toContext == null) continue;
+        final toBox = toContext.findRenderObject();
+        if (toBox is! RenderBox) continue;
+
+        final end = toBox.localToGlobal(
+          Offset(toBox.size.width / 2, 0),
+          ancestor: treeBox,
+        );
+
+        for (final prereqId in node.prerequisites) {
+          final fromKey = _nodeKeys[prereqId];
+          final fromContext = fromKey?.currentContext;
+          if (fromContext == null) continue;
+          final fromBox = fromContext.findRenderObject();
+          if (fromBox is! RenderBox) continue;
+
+          final start = fromBox.localToGlobal(
+            Offset(fromBox.size.width / 2, fromBox.size.height),
+            ancestor: treeBox,
+          );
+
+          next.add(
+            _NodeConnection(
+              fromId: prereqId,
+              toId: node.id,
+              start: start,
+              end: end,
+            ),
+          );
+        }
+      }
+
+      setState(() {
+        _connections = next;
+        _connectionsDirty = false;
+      });
+    });
   }
 
   Future<void> _saveProgression() async {
@@ -62,6 +129,8 @@ class _ProgressionScreenState extends State<ProgressionScreen> {
         body: Center(child: CircularProgressIndicator(color: Colors.amber)),
       );
     }
+
+    _scheduleRebuildConnectionsIfNeeded();
 
     return Scaffold(
       backgroundColor: const Color(0xFF1A1A2E),
@@ -87,50 +156,48 @@ class _ProgressionScreenState extends State<ProgressionScreen> {
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            // Info card
-            Card(
-              color: const Color(0xFF16213E),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    const Text(
-                      'Progression Tree',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
+        child: CustomPaint(
+          key: _treeKey,
+          painter: _ProgressionConnectionsPainter(
+            connections: _connections,
+            unlockedNodes: _state.unlockedNodes,
+          ),
+          child: Column(
+            children: [
+              Card(
+                color: const Color(0xFF16213E),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      const Text(
+                        'Progression Tree',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Earn progression points by completing campaigns.\nUnlock abilities to strengthen Napoleon.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.grey[400]),
-                    ),
-                  ],
+                      const SizedBox(height: 8),
+                      Text(
+                        'Earn progression points by completing campaigns.\nUnlock abilities to strengthen Napoleon.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.grey[400]),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 24),
-
-            // Tier 0 - Start
-            _buildTierSection(0, 'Origin'),
-            const SizedBox(height: 16),
-
-            // Tier 1 - First choices
-            _buildTierSection(1, 'First Steps'),
-            const SizedBox(height: 16),
-
-            // Tier 2 - Specializations
-            _buildTierSection(2, 'Specialization'),
-            const SizedBox(height: 16),
-
-            // Tier 3 - Mastery
-            _buildTierSection(3, 'Mastery'),
-          ],
+              const SizedBox(height: 24),
+              _buildTierSection(0, 'Origin'),
+              const SizedBox(height: 16),
+              _buildTierSection(1, 'First Steps'),
+              const SizedBox(height: 16),
+              _buildTierSection(2, 'Specialization'),
+              const SizedBox(height: 16),
+              _buildTierSection(3, 'Mastery'),
+            ],
+          ),
         ),
       ),
     );
@@ -187,6 +254,7 @@ class _ProgressionScreenState extends State<ProgressionScreen> {
     return GestureDetector(
       onTap: () => _showNodeDetails(node, isUnlocked, canUnlock, canAfford),
       child: Container(
+        key: _keyForNode(node.id),
         width: 160,
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
@@ -341,7 +409,9 @@ class _ProgressionScreenState extends State<ProgressionScreen> {
               onPressed: () async {
                 if (_state.unlock(node.id)) {
                   await _saveProgression();
-                  setState(() {});
+                  setState(() {
+                    _connectionsDirty = true;
+                  });
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(content: Text('Unlocked: ${node.name}!')),
@@ -355,5 +425,66 @@ class _ProgressionScreenState extends State<ProgressionScreen> {
         ],
       ),
     );
+  }
+}
+
+class _NodeConnection {
+  final String fromId;
+  final String toId;
+  final Offset start;
+  final Offset end;
+
+  const _NodeConnection({
+    required this.fromId,
+    required this.toId,
+    required this.start,
+    required this.end,
+  });
+}
+
+class _ProgressionConnectionsPainter extends CustomPainter {
+  final List<_NodeConnection> connections;
+  final Set<String> unlockedNodes;
+
+  _ProgressionConnectionsPainter({
+    required this.connections,
+    required this.unlockedNodes,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    for (final c in connections) {
+      final bool fromUnlocked = unlockedNodes.contains(c.fromId);
+      final bool toUnlocked = unlockedNodes.contains(c.toId);
+      final bool active = fromUnlocked && toUnlocked;
+
+      final paint = Paint()
+        ..color = active
+            ? Colors.amber.withValues(alpha: 0.7)
+            : Colors.white.withValues(alpha: 0.15)
+        ..strokeWidth = active ? 3 : 2
+        ..style = PaintingStyle.stroke;
+
+      final path = Path();
+      path.moveTo(c.start.dx, c.start.dy);
+
+      final midY = (c.start.dy + c.end.dy) / 2;
+      path.cubicTo(c.start.dx, midY, c.end.dx, midY, c.end.dx, c.end.dy);
+
+      canvas.drawPath(path, paint);
+
+      if (active) {
+        final dotPaint = Paint()
+          ..color = Colors.amber.withValues(alpha: 0.9)
+          ..style = PaintingStyle.fill;
+        canvas.drawCircle(c.end, 3.5, dotPaint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _ProgressionConnectionsPainter oldDelegate) {
+    return oldDelegate.connections != connections ||
+        oldDelegate.unlockedNodes != unlockedNodes;
   }
 }

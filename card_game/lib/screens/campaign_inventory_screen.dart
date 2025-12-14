@@ -32,7 +32,11 @@ class _CampaignInventoryScreenState extends State<CampaignInventoryScreen>
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
 
-    _relicById = {for (final r in ShopInventory.getAllRelics()) r.id: r};
+    final allRelics = [
+      ...ShopInventory.getAllRelics(),
+      ...ShopInventory.getAllLegendaryRelics(),
+    ];
+    _relicById = {for (final r in allRelics) r.id: r};
     _consumableById = {
       for (final c in ShopInventory.getAllConsumables()) c.id: c,
     };

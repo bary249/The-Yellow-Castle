@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/campaign_state.dart';
 import '../models/deck.dart';
+import '../models/card.dart';
 import '../data/card_library.dart';
 import '../data/shop_items.dart';
 import 'test_match_screen.dart';
@@ -34,13 +35,420 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
   bool _isLoading = true;
   final CampaignPersistenceService _persistence = CampaignPersistenceService();
 
+  int _applyDiscount(int cost, int discountPercent) {
+    if (discountPercent <= 0) return cost;
+    final discounted = (cost * (100 - discountPercent)) / 100.0;
+    return discounted.round().clamp(0, cost);
+  }
+
   @override
   void initState() {
     super.initState();
     _initCampaign();
   }
 
-  void _initCampaign() {
+  String _cardTypeKey(GameCard card) {
+    final id = card.id;
+    final parts = id.split('_');
+    if (parts.isNotEmpty && int.tryParse(parts.last) != null) {
+      return parts.sublist(0, parts.length - 1).join('_');
+    }
+    return id;
+  }
+
+  List<GameCard> _campaignCardPoolForLeader(String leaderId) {
+    if (leaderId == 'napoleon') {
+      return buildNapoleonCampaignCardPool();
+    }
+    return buildStarterCardPool()
+        .where((c) => !c.id.startsWith('scout_'))
+        .toList();
+  }
+
+  List<GameCard> _startingSpecialCardOptions({
+    required String leaderId,
+    required int act,
+    NapoleonProgressionState? napoleonProgression,
+  }) {
+    final pool = _campaignCardPoolForLeader(leaderId);
+    final seen = <String>{};
+    final unique = <GameCard>[];
+    for (final c in pool) {
+      final key = _cardTypeKey(c);
+      if (seen.contains(key)) continue;
+      seen.add(key);
+      unique.add(c);
+    }
+
+    int desired = 2;
+    if (leaderId == 'napoleon' && napoleonProgression != null) {
+      desired = napoleonProgression.modifiers.startingSpecialCardOptionCount;
+    }
+
+    if (unique.length <= desired) return unique;
+    return unique.take(desired).toList();
+  }
+
+  List<ShopItem> _startingRelicOptions({
+    required String leaderId,
+    NapoleonProgressionState? napoleonProgression,
+  }) {
+    final all = ShopInventory.getAllRelics();
+    final allowedIds = (leaderId == 'napoleon' && napoleonProgression != null)
+        ? napoleonProgression.modifiers.startingRelicOptionIds
+        : const <String>{'relic_gold_purse'};
+
+    final options = <ShopItem>[];
+    for (final r in all) {
+      if (allowedIds.contains(r.id)) {
+        options.add(r);
+      }
+    }
+
+    if (options.isEmpty && all.isNotEmpty) {
+      options.add(all.first);
+    }
+
+    return options;
+  }
+
+  Future<void> _runPreCampaignSetupIfNeeded({
+    required String leaderId,
+    required int act,
+    NapoleonProgressionState? napoleonProgression,
+  }) async {
+    if (!mounted) return;
+
+    if (_campaign.startingRelicId == null) {
+      final relicOptions = _startingRelicOptions(
+        leaderId: leaderId,
+        napoleonProgression: napoleonProgression,
+      ).where((r) => !_campaign.hasRelic(r.id)).toList();
+
+      final selectedRelicId = relicOptions.isEmpty
+          ? null
+          : await showDialog<String>(
+              context: context,
+              barrierDismissible: false,
+              builder: (context) => AlertDialog(
+                backgroundColor: const Color(0xFF2D2D2D),
+                title: const Text(
+                  'Choose Starting Relic',
+                  style: TextStyle(color: Colors.white),
+                ),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (final r in relicOptions)
+                      ListTile(
+                        leading: const Icon(
+                          Icons.auto_awesome,
+                          color: Colors.purple,
+                        ),
+                        title: Text(
+                          r.name,
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                        subtitle: Text(
+                          r.description,
+                          style: TextStyle(color: Colors.grey[400]),
+                        ),
+                        onTap: () => Navigator.pop(context, r.id),
+                      ),
+                  ],
+                ),
+              ),
+            );
+
+      if (selectedRelicId != null) {
+        _campaign.startingRelicId = selectedRelicId;
+        _campaign.addRelic(selectedRelicId);
+      }
+    }
+
+    if (!mounted) return;
+
+    if (_campaign.startingSpecialCardId == null) {
+      final options = _startingSpecialCardOptions(
+        leaderId: leaderId,
+        act: act,
+        napoleonProgression: napoleonProgression,
+      );
+
+      final chosen = options.isEmpty
+          ? null
+          : await _pickStartingSpecialCardWithDetails(options);
+
+      if (chosen != null) {
+        final selectedTypeKey = _cardTypeKey(chosen);
+        _campaign.startingSpecialCardId = selectedTypeKey;
+        _campaign.addCard(chosen.copy());
+      }
+    }
+  }
+
+  Future<GameCard?> _pickStartingSpecialCardWithDetails(
+    List<GameCard> options,
+  ) async {
+    return showDialog<GameCard>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF2D2D2D),
+        title: const Text(
+          'Choose Starting Special Card',
+          style: TextStyle(color: Colors.white),
+        ),
+        content: SizedBox(
+          width: 360,
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              for (final c in options)
+                ListTile(
+                  leading: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: _getElementColor(c.element ?? 'woods'),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Icon(Icons.style, color: Colors.white),
+                  ),
+                  title: Text(
+                    c.name,
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                  subtitle: Text(
+                    '${c.element ?? ""}  ATK:${c.damage}  HP:${c.health}  AP:${c.maxAP}',
+                    style: TextStyle(color: Colors.grey[400]),
+                  ),
+                  trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+                  onTap: () async {
+                    final confirmed = await _showCardDetailsForPick(c);
+                    if (!context.mounted) return;
+                    if (confirmed == true) {
+                      Navigator.pop(context, c);
+                    }
+                  },
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<bool?> _showCardDetailsForPick(GameCard card) {
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF2D2D2D),
+        contentPadding: EdgeInsets.zero,
+        content: Container(
+          width: 320,
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      card.name,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.grey),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              const Divider(color: Colors.grey),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _buildDetailStat(
+                    'ATK',
+                    '${card.damage}',
+                    Icons.local_fire_department,
+                    Colors.orange,
+                  ),
+                  _buildDetailStat(
+                    'HP',
+                    '${card.health}',
+                    Icons.favorite,
+                    Colors.red,
+                  ),
+                  _buildDetailStat(
+                    'AP',
+                    '${card.maxAP}',
+                    Icons.bolt,
+                    Colors.blue,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: _getAttackTypeColor(card),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      _getAttackTypeIcon(card),
+                      color: Colors.white,
+                      size: 16,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      _getAttackTypeLabel(card),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              if (card.abilities.isNotEmpty) ...[
+                const Text(
+                  'Abilities',
+                  style: TextStyle(
+                    color: Colors.grey,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: card.abilities
+                      .map(
+                        (a) => Tooltip(
+                          message: _getAbilityDescription(a),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.amber[800],
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              a.replaceAll('_', ' ').toUpperCase(),
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ),
+                      )
+                      .toList(),
+                ),
+                const SizedBox(height: 8),
+                ...card.abilities.map(
+                  (a) => Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          _getAbilityIcon(a),
+                          color: Colors.amber[300],
+                          size: 14,
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            _getAbilityDescription(a),
+                            style: TextStyle(
+                              color: Colors.grey[400],
+                              fontSize: 10,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+              ],
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: _getElementColor(
+                    card.element ?? 'woods',
+                  ).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: _getElementColor(
+                      card.element ?? 'woods',
+                    ).withOpacity(0.5),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      _getElementIcon(card.element ?? 'woods'),
+                      color: _getElementColor(card.element ?? 'woods'),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '${card.element ?? "Neutral"} Unit',
+                      style: TextStyle(
+                        color: _getElementColor(card.element ?? 'woods'),
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  icon: const Icon(Icons.check),
+                  label: const Text('Choose This Card'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green[700],
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  onPressed: () => Navigator.pop(context, true),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _initCampaign() async {
     if (widget.savedState != null) {
       _campaign = widget.savedState!;
       _generator = EncounterGenerator(act: _campaign.act);
@@ -52,26 +460,61 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
           ? buildNapoleonStarterDeck()
           : buildStarterCardPool();
 
+      int startingGold = 50;
+      int startingMaxHealth = 50;
+      int startingHealth = 50;
+
+      NapoleonProgressionState? napoleonProgression;
+      if (widget.leaderId == 'napoleon') {
+        final progressionData = await _persistence.loadProgression();
+        napoleonProgression = progressionData != null
+            ? NapoleonProgressionState.fromJson(progressionData)
+            : NapoleonProgressionState();
+        final mods = napoleonProgression.modifiers;
+
+        startingGold += mods.startingGoldBonus;
+        startingMaxHealth += mods.campaignMaxHpBonus;
+        startingHealth += mods.campaignMaxHpBonus;
+
+        debugPrint(
+          'CAMPAIGN START BONUSES: leader=${widget.leaderId}, startingGold=$startingGold (base 50), hp=$startingHealth/$startingMaxHealth, points=${napoleonProgression.progressionPoints}, unlocked=[${napoleonProgression.unlockedNodes.join(", ")}]',
+        );
+        if (napoleonProgression.unimplementedEffects.isNotEmpty) {
+          debugPrint(
+            'CAMPAIGN START: Unimplemented progression effects: ${napoleonProgression.unimplementedEffects.join(", ")}',
+          );
+        }
+      }
+
       _campaign = CampaignState(
         id: 'campaign_${DateTime.now().millisecondsSinceEpoch}',
         leaderId: widget.leaderId,
         act: widget.act,
-        gold: 50,
-        health: 50,
+        gold: startingGold,
+        health: startingHealth,
+        maxHealth: startingMaxHealth,
         deck: deck,
         startedAt: DateTime.now(),
+      );
+
+      await _runPreCampaignSetupIfNeeded(
+        leaderId: widget.leaderId,
+        act: widget.act,
+        napoleonProgression: napoleonProgression,
       );
 
       // Generate initial choices
       _generateNewChoices();
     }
 
-    setState(() {
-      _isLoading = false;
-    });
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+      });
+    }
 
     // Save initial state
-    _saveCampaign();
+    await _saveCampaign();
   }
 
   Future<void> _saveCampaign() async {
@@ -274,12 +717,15 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
         ? NapoleonProgressionState.fromJson(progressionData)
         : NapoleonProgressionState();
 
-    int extraStartingDraw = progressionState.getEffectValue('extra_draw');
-    if (progressionState.hasEffect('grand_armee')) {
-      extraStartingDraw += 2;
-    }
-    final int artilleryDamageBonus =
-        progressionState.hasEffect('artillery_damage_1') ? 1 : 0;
+    final mods = progressionState.modifiers;
+
+    debugPrint(
+      'CAMPAIGN PROGRESSION: points=${progressionState.progressionPoints}, unlocked=[${progressionState.unlockedNodes.join(", ")}]',
+    );
+
+    debugPrint(
+      'CAMPAIGN BATTLE: act=${_campaign.act}, encounter=${_campaign.encounterNumber}, hp=${_campaign.health}/${_campaign.maxHealth}, activeRelics=${_campaign.activeRelics}, damageBonus=${_campaign.globalDamageBonus}, goldBonus=${_campaign.goldPerBattleBonus}, extraStartingDraw=${mods.extraStartingDraw}, artilleryDamageBonus=${mods.artilleryDamageBonus}, difficulty=${encounter.difficulty}',
+    );
 
     final result = await Navigator.of(context).push<Map<String, dynamic>>(
       MaterialPageRoute(
@@ -290,8 +736,9 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
           enemyDeck: enemyDeck,
           customDeck: _campaign.deck,
           playerDamageBonus: _campaign.globalDamageBonus,
-          extraStartingDraw: extraStartingDraw,
-          artilleryDamageBonus: artilleryDamageBonus,
+          extraStartingDraw: mods.extraStartingDraw,
+          artilleryDamageBonus: mods.artilleryDamageBonus,
+          heroAbilityDamageBoost: mods.heroAbilityDamageBoost,
           playerCurrentHealth: _campaign.health,
         ),
       ),
@@ -475,14 +922,17 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
         ? NapoleonProgressionState.fromJson(progressionData)
         : NapoleonProgressionState();
 
-    int extraStartingDraw = progressionState.getEffectValue('extra_draw');
-    if (progressionState.hasEffect('grand_armee')) {
-      extraStartingDraw += 2;
-    }
-    final int artilleryDamageBonus =
-        progressionState.hasEffect('artillery_damage_1') ? 1 : 0;
+    final mods = progressionState.modifiers;
 
     final int bossOpponentBaseHP = 25 + (25 * _campaign.act);
+
+    debugPrint(
+      'CAMPAIGN PROGRESSION: points=${progressionState.progressionPoints}, unlocked=[${progressionState.unlockedNodes.join(", ")}]',
+    );
+
+    debugPrint(
+      'CAMPAIGN BOSS: act=${_campaign.act}, hp=${_campaign.health}/${_campaign.maxHealth}, activeRelics=${_campaign.activeRelics}, damageBonus=${_campaign.globalDamageBonus}, goldBonus=${_campaign.goldPerBattleBonus}, extraStartingDraw=${mods.extraStartingDraw}, artilleryDamageBonus=${mods.artilleryDamageBonus}, bossOpponentBaseHP=$bossOpponentBaseHP',
+    );
 
     final result = await Navigator.of(context).push<Map<String, dynamic>>(
       MaterialPageRoute(
@@ -491,9 +941,11 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
           forceCampaignDeck: true,
           campaignAct: _campaign.act,
           customDeck: _campaign.deck,
+          playerCurrentHealth: _campaign.health,
           playerDamageBonus: _campaign.globalDamageBonus,
-          extraStartingDraw: extraStartingDraw,
-          artilleryDamageBonus: artilleryDamageBonus,
+          extraStartingDraw: mods.extraStartingDraw,
+          artilleryDamageBonus: mods.artilleryDamageBonus,
+          heroAbilityDamageBoost: mods.heroAbilityDamageBoost,
           opponentBaseHP: bossOpponentBaseHP,
         ),
       ),
@@ -567,7 +1019,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     }
 
     // Get a random relic as reward
-    final allRelics = ShopInventory.getAllRelics();
+    final allRelics = ShopInventory.getAllLegendaryRelics();
     // Filter out already owned relics
     final availableRelics = allRelics
         .where((r) => !_campaign.hasRelic(r.id))
@@ -610,7 +1062,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
             if (relicReward != null) ...[
               const SizedBox(height: 24),
               const Text(
-                'Relic Discovered!',
+                'Legendary Relic Discovered!',
                 style: TextStyle(
                   color: Colors.purple,
                   fontWeight: FontWeight.bold,
@@ -878,8 +1330,17 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     );
   }
 
-  void _openShop(Encounter encounter) {
+  void _openShop(Encounter encounter) async {
     final shopItems = ShopInventory.generateForAct(_campaign.act);
+
+    NapoleonProgressionModifiers mods = const NapoleonProgressionModifiers();
+    if (widget.leaderId == 'napoleon') {
+      final data = await _persistence.loadProgression();
+      final state = data != null
+          ? NapoleonProgressionState.fromJson(data)
+          : NapoleonProgressionState();
+      mods = state.modifiers;
+    }
 
     showModalBottomSheet(
       context: context,
@@ -967,7 +1428,11 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                   itemCount: shopItems.length,
                   itemBuilder: (context, index) {
                     final item = shopItems[index];
-                    final canAfford = _campaign.gold >= item.cost;
+                    final effectiveCost = _applyDiscount(
+                      item.cost,
+                      mods.shopDiscountPercent,
+                    );
+                    final canAfford = _campaign.gold >= effectiveCost;
                     // Check if already owned relic
                     final isOwned =
                         item.type == ShopItemType.relic &&
@@ -996,7 +1461,11 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                               )
                             : ElevatedButton(
                                 onPressed: canAfford
-                                    ? () => _buyItem(item, setShopState)
+                                    ? () => _buyItem(
+                                        item,
+                                        effectiveCost,
+                                        setShopState,
+                                      )
                                     : null,
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: canAfford
@@ -1004,7 +1473,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                                       : Colors.grey,
                                 ),
                                 child: Text(
-                                  '${item.cost} 🪙',
+                                  '$effectiveCost',
                                   style: TextStyle(
                                     color: canAfford
                                         ? Colors.black
@@ -1083,6 +1552,170 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     }
   }
 
+  Widget _buildDetailStat(
+    String label,
+    String value,
+    IconData icon,
+    Color color,
+  ) {
+    return Column(
+      children: [
+        Icon(icon, color: color, size: 24),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        Text(label, style: TextStyle(color: Colors.grey[400], fontSize: 10)),
+      ],
+    );
+  }
+
+  String _getAttackType(GameCard card) {
+    if (card.isLongRange || card.abilities.contains('far_attack')) {
+      return 'long_range';
+    }
+    if (card.isRanged) return 'ranged';
+    return 'melee';
+  }
+
+  Color _getAttackTypeColor(GameCard card) {
+    switch (_getAttackType(card)) {
+      case 'long_range':
+        return Colors.deepOrange[700]!;
+      case 'ranged':
+        return Colors.teal[600]!;
+      default:
+        return Colors.red[700]!;
+    }
+  }
+
+  IconData _getAttackTypeIcon(GameCard card) {
+    switch (_getAttackType(card)) {
+      case 'long_range':
+        return Icons.gps_fixed;
+      case 'ranged':
+        return Icons.arrow_forward;
+      default:
+        return Icons.sports_martial_arts;
+    }
+  }
+
+  String _getAttackTypeLabel(GameCard card) {
+    switch (_getAttackType(card)) {
+      case 'long_range':
+        return 'LONG RANGE (2 tiles)';
+      case 'ranged':
+        return 'RANGED (No Retaliation)';
+      default:
+        return 'MELEE';
+    }
+  }
+
+  IconData _getAbilityIcon(String ability) {
+    switch (ability) {
+      case 'guard':
+        return Icons.security;
+      case 'scout':
+        return Icons.visibility;
+      case 'long_range':
+        return Icons.gps_fixed;
+      case 'ranged':
+        return Icons.arrow_forward;
+      case 'flanking':
+        return Icons.swap_horiz;
+      case 'cavalry':
+        return Icons.directions_run;
+      case 'pikeman':
+        return Icons.vertical_align_top;
+      case 'archer':
+        return Icons.arrow_forward;
+      default:
+        if (ability.startsWith('inspire')) return Icons.music_note;
+        if (ability.startsWith('fury')) return Icons.local_fire_department;
+        if (ability.startsWith('shield')) return Icons.shield;
+        if (ability.startsWith('thorns')) return Icons.grass;
+        if (ability.startsWith('regen') || ability.startsWith('regenerate')) {
+          return Icons.healing;
+        }
+        if (ability.startsWith('rally')) return Icons.campaign;
+        if (ability.startsWith('command')) return Icons.military_tech;
+        if (ability == 'first_strike') return Icons.bolt;
+        if (ability == 'far_attack') return Icons.adjust;
+        if (ability == 'cleave') return Icons.all_inclusive;
+        return Icons.star;
+    }
+  }
+
+  String _getAbilityDescription(String ability) {
+    if (ability.startsWith('shield_')) {
+      final value = ability.split('_').last;
+      return 'Reduces incoming damage by $value.';
+    }
+    if (ability.startsWith('fury_')) {
+      final value = ability.split('_').last;
+      return '+$value damage on attack and retaliation.';
+    }
+    if (ability.startsWith('inspire_')) {
+      final value = ability.split('_').last;
+      return '+$value damage to all friendly units in this lane.';
+    }
+    if (ability.startsWith('rally_')) {
+      final value = ability.split('_').last;
+      return '+$value damage to adjacent ally in stack.';
+    }
+    if (ability.startsWith('command_')) {
+      final value = ability.split('_').last;
+      return '+$value damage AND +$value shield to all allies in lane.';
+    }
+    if (ability.startsWith('thorns_')) {
+      final value = ability.split('_').last;
+      return 'Deals $value damage to attackers after combat.';
+    }
+    if (ability.startsWith('regen_')) {
+      final value = ability.split('_').last;
+      return 'Regenerates $value HP at the start of each turn.';
+    }
+
+    switch (ability) {
+      case 'guard':
+        return 'Must be defeated before other units can be targeted.';
+      case 'scout':
+        return 'Reveals enemy cards in adjacent lanes.';
+      case 'long_range':
+        return 'Can attack enemies 2 tiles away.';
+      case 'ranged':
+        return 'Attacks without triggering retaliation from melee units.';
+      case 'flanking':
+        return 'Can move to adjacent lanes (left/right).';
+      case 'first_strike':
+        return 'Attacks FIRST in the same tick. Can kill before counterattacks.';
+      case 'far_attack':
+        return 'Attacks enemies at OTHER tiles in same lane. Disabled if contested.';
+      case 'cleave':
+        return 'Hits BOTH enemies on the same tile with full damage.';
+      default:
+        return ability.replaceAll('_', ' ');
+    }
+  }
+
+  IconData _getElementIcon(String element) {
+    switch (element.toLowerCase()) {
+      case 'woods':
+        return Icons.forest;
+      case 'lake':
+        return Icons.water_drop;
+      case 'desert':
+        return Icons.wb_sunny;
+      default:
+        return Icons.help_outline;
+    }
+  }
+
   Color _getElementColor(String element) {
     switch (element.toLowerCase()) {
       case 'woods':
@@ -1096,8 +1729,8 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     }
   }
 
-  void _buyItem(ShopItem item, StateSetter setShopState) {
-    if (!_campaign.spendGold(item.cost)) return;
+  void _buyItem(ShopItem item, int effectiveCost, StateSetter setShopState) {
+    if (!_campaign.spendGold(effectiveCost)) return;
 
     switch (item.type) {
       case ShopItemType.card:
