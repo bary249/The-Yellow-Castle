@@ -94,6 +94,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   // Card focus overlay state
   OverlayEntry? _cardFocusOverlay;
   bool _cardFocusExpanded = false;
+  VoidCallback? _cardFocusOnDismissed;
 
   // Online multiplayer state
   StreamSubscription? _matchListener;
@@ -217,9 +218,14 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     if (_cardFocusOverlay == null) return;
     _cardFocusExpanded = false;
     _cardFocusOverlay?.markNeedsBuild();
+    final onDismissed = _cardFocusOnDismissed;
+    _cardFocusOnDismissed = null;
     Future.delayed(const Duration(milliseconds: 150), () {
       _cardFocusOverlay?.remove();
       _cardFocusOverlay = null;
+      if (onDismissed != null && mounted) {
+        onDismissed();
+      }
     });
   }
 
@@ -228,10 +234,12 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     Rect sourceRect, {
     String? tileTerrain,
     VoidCallback? onSecondTapAction,
+    VoidCallback? onDismissed,
   }) {
     _cardFocusOverlay?.remove();
     _cardFocusOverlay = null;
     _cardFocusExpanded = false;
+    _cardFocusOnDismissed = onDismissed;
 
     final overlay = Overlay.of(context, rootOverlay: true);
 
@@ -9192,6 +9200,12 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
               card,
               rect,
               onSecondTapAction: () {
+                setState(() {
+                  _clearTYC3Selection();
+                  _selectedCard = card;
+                });
+              },
+              onDismissed: () {
                 setState(() {
                   _clearTYC3Selection();
                   _selectedCard = card;
