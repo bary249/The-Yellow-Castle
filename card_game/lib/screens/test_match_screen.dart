@@ -91,6 +91,10 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   // UI state: battle log drawer visibility
   bool _showBattleLog = false;
 
+  // Card focus overlay state
+  OverlayEntry? _cardFocusOverlay;
+  bool _cardFocusExpanded = false;
+
   // Online multiplayer state
   StreamSubscription? _matchListener;
   bool _isOnlineMode = false;
@@ -195,9 +199,146 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     _turnTimer?.cancel();
     _turnOverlayTimer?.cancel();
     _turnDialogOverlay?.remove();
+    _cardFocusOverlay?.remove();
     _onlineStateSubscription?.cancel();
     _onlineGameManager?.dispose();
     super.dispose();
+  }
+
+  Rect _globalRectForContext(BuildContext ctx) {
+    final renderObject = ctx.findRenderObject();
+    if (renderObject is! RenderBox) return Rect.zero;
+    if (!renderObject.hasSize) return Rect.zero;
+    final topLeft = renderObject.localToGlobal(Offset.zero);
+    return topLeft & renderObject.size;
+  }
+
+  void _dismissCardFocus() {
+    if (_cardFocusOverlay == null) return;
+    _cardFocusExpanded = false;
+    _cardFocusOverlay?.markNeedsBuild();
+    Future.delayed(const Duration(milliseconds: 150), () {
+      _cardFocusOverlay?.remove();
+      _cardFocusOverlay = null;
+    });
+  }
+
+  void _showCardFocus(
+    GameCard card,
+    Rect sourceRect, {
+    String? tileTerrain,
+    VoidCallback? onSecondTapAction,
+  }) {
+    _cardFocusOverlay?.remove();
+    _cardFocusOverlay = null;
+    _cardFocusExpanded = false;
+
+    final overlay = Overlay.of(context, rootOverlay: true);
+
+    _cardFocusOverlay = OverlayEntry(
+      builder: (overlayContext) {
+        final mediaSize = MediaQuery.of(overlayContext).size;
+
+        // Keep overlay close to ~2x the tapped card, with conservative max
+        final minW = max(sourceRect.width * 1.5, 160.0);
+        final maxW = min(300.0, mediaSize.width - 24.0);
+        final targetW = (sourceRect.width * 2.0).clamp(minW, maxW).toDouble();
+        final targetH = (targetW * 1.4)
+            .clamp(200.0, mediaSize.height - 24.0)
+            .toDouble();
+
+        final center = sourceRect.center;
+        final targetLeft = (center.dx - targetW / 2)
+            .clamp(12.0, max(12.0, mediaSize.width - targetW - 12.0))
+            .toDouble();
+        final targetTop = (center.dy - targetH / 2)
+            .clamp(12.0, max(12.0, mediaSize.height - targetH - 12.0))
+            .toDouble();
+
+        final startLeft = sourceRect.left;
+        final startTop = sourceRect.top;
+        final startW = sourceRect.width;
+        final startH = sourceRect.height;
+
+        final left = _cardFocusExpanded ? targetLeft : startLeft;
+        final top = _cardFocusExpanded ? targetTop : startTop;
+        final w = _cardFocusExpanded ? targetW : startW;
+        final h = _cardFocusExpanded ? targetH : startH;
+
+        final focusedRect = Rect.fromLTWH(left, top, w, h);
+
+        return Material(
+          type: MaterialType.transparency,
+          child: Stack(
+            children: [
+              // Dim background
+              Positioned.fill(
+                child: IgnorePointer(
+                  ignoring: true,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    color: Colors.black.withOpacity(
+                      _cardFocusExpanded ? 0.25 : 0.0,
+                    ),
+                  ),
+                ),
+              ),
+              // Tap outside to dismiss
+              Positioned.fill(
+                child: Listener(
+                  behavior: HitTestBehavior.translucent,
+                  onPointerDown: (e) {
+                    if (!focusedRect.contains(e.position)) {
+                      _dismissCardFocus();
+                    }
+                  },
+                  child: const SizedBox.expand(),
+                ),
+              ),
+              // Focused card
+              AnimatedPositioned(
+                duration: const Duration(milliseconds: 150),
+                curve: Curves.easeOutCubic,
+                left: left,
+                top: top,
+                width: w,
+                height: h,
+                child: Material(
+                  elevation: _cardFocusExpanded ? 12 : 0,
+                  borderRadius: BorderRadius.circular(10),
+                  color: Colors.transparent,
+                  child: GestureDetector(
+                    onTap: () {
+                      if (!_cardFocusExpanded) return;
+                      // Second tap on focused card = action
+                      if (onSecondTapAction != null) {
+                        onSecondTapAction();
+                      }
+                      _dismissCardFocus();
+                    },
+                    child: _buildHandCardVisual(
+                      card,
+                      w,
+                      h,
+                      false,
+                      showDetails: _cardFocusExpanded,
+                      tileTerrain: tileTerrain,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    overlay.insert(_cardFocusOverlay!);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _cardFocusExpanded = true;
+      _cardFocusOverlay?.markNeedsBuild();
+    });
   }
 
   /// Show a non-blocking overlay when turn changes
@@ -7760,10 +7901,23 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
           // Don't clear immediately - let tap handle it
         }
       },
-      child: GestureDetector(
-        onTap: () => _onCardTapTYC3(card, row, col, true, false),
-        onLongPress: () => _showCardDetails(card),
-        child: cardWidget,
+      child: Builder(
+        builder: (ctx) => GestureDetector(
+          onTap: () {
+            final rect = _globalRectForContext(ctx);
+            final terrain = _matchManager.currentMatch?.board
+                .getTile(row, col)
+                .terrain;
+            _showCardFocus(
+              card,
+              rect,
+              tileTerrain: terrain,
+              onSecondTapAction: () =>
+                  _onCardTapTYC3(card, row, col, true, false),
+            );
+          },
+          child: cardWidget,
+        ),
       ),
     );
   }
@@ -7794,28 +7948,41 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         final isBeingDraggedOver =
             candidateData.isNotEmpty && _validTargets.contains(card);
 
-        return GestureDetector(
-          onTap: () => _onCardTapTYC3(card, row, col, false, true),
-          onLongPress: () => _showCardDetails(card),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
-            transform: Matrix4.identity()
-              ..scale(isBeingDraggedOver ? 1.15 : 1.0)
-              ..translate(0.0, isBeingDraggedOver ? -10.0 : 0.0),
-            transformAlignment: Alignment.center,
-            decoration: isBeingDraggedOver
-                ? BoxDecoration(
-                    borderRadius: BorderRadius.circular(8),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.orange.withOpacity(0.7),
-                        blurRadius: 16,
-                        spreadRadius: 4,
-                      ),
-                    ],
-                  )
-                : null,
-            child: cardWidget,
+        return Builder(
+          builder: (ctx) => GestureDetector(
+            onTap: () {
+              final rect = _globalRectForContext(ctx);
+              final terrain = _matchManager.currentMatch?.board
+                  .getTile(row, col)
+                  .terrain;
+              _showCardFocus(
+                card,
+                rect,
+                tileTerrain: terrain,
+                onSecondTapAction: () =>
+                    _onCardTapTYC3(card, row, col, false, true),
+              );
+            },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              transform: Matrix4.identity()
+                ..scale(isBeingDraggedOver ? 1.15 : 1.0)
+                ..translate(0.0, isBeingDraggedOver ? -10.0 : 0.0),
+              transformAlignment: Alignment.center,
+              decoration: isBeingDraggedOver
+                  ? BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.orange.withOpacity(0.7),
+                          blurRadius: 16,
+                          spreadRadius: 4,
+                        ),
+                      ],
+                    )
+                  : null,
+              child: cardWidget,
+            ),
           ),
         );
       },
@@ -8678,8 +8845,10 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     GameCard card,
     double width,
     double height,
-    bool isSelected,
-  ) {
+    bool isSelected, {
+    bool showDetails = false,
+    String? tileTerrain,
+  }) {
     final baseFill = _getRarityFillColor(card);
     final baseBorder = _getRarityBorderColor(card);
 
@@ -8739,8 +8908,9 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
             right: width * 0.25, // Make room for element
             child: Row(
               children: [
-                Icon(typeIcon, size: width * 0.15, color: Colors.black87),
-                const SizedBox(width: 2),
+                if (!showDetails)
+                  Icon(typeIcon, size: width * 0.15, color: Colors.black87),
+                if (!showDetails) const SizedBox(width: 2),
                 Expanded(
                   child: Text(
                     card.name,
@@ -8758,101 +8928,102 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
           ),
 
           // 3. Stats Column - Left Side (Ability Icons -> AP -> Damage -> HP)
-          Positioned(
-            left: 2,
-            bottom: 4,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Ability Icons (Moved to left bar)
-                if (card.abilities.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 2),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: card.abilities
-                          .where(
-                            (a) => ![
-                              'cavalry',
-                              'pikeman',
-                              'shield_guard',
-                            ].contains(a),
-                          )
-                          .take(3)
-                          .map(
-                            (a) => Padding(
-                              padding: const EdgeInsets.only(bottom: 1),
-                              child: Icon(
-                                _abilityIconData(a),
-                                size: width * 0.14,
-                                color: Colors.black87,
+          if (!showDetails)
+            Positioned(
+              left: 2,
+              bottom: 4,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Ability Icons (Moved to left bar)
+                  if (card.abilities.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 2),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: card.abilities
+                            .where(
+                              (a) => ![
+                                'cavalry',
+                                'pikeman',
+                                'shield_guard',
+                              ].contains(a),
+                            )
+                            .take(3)
+                            .map(
+                              (a) => Padding(
+                                padding: const EdgeInsets.only(bottom: 1),
+                                child: Icon(
+                                  _abilityIconData(a),
+                                  size: width * 0.14,
+                                  color: Colors.black87,
+                                ),
                               ),
-                            ),
-                          )
-                          .toList(),
+                            )
+                            .toList(),
+                      ),
                     ),
-                  ),
 
-                // AP (Top of stack)
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.bolt,
-                      size: width * 0.12,
-                      color: Colors.blue[800],
-                    ),
-                    Text(
-                      '${card.maxAP}',
-                      style: TextStyle(
-                        fontSize: width * 0.11,
-                        fontWeight: FontWeight.bold,
+                  // AP (Top of stack)
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.bolt,
+                        size: width * 0.12,
+                        color: Colors.blue[800],
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 1),
-                // Damage
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.local_fire_department,
-                      size: width * 0.12,
-                      color: Colors.deepOrange,
-                    ),
-                    Text(
-                      '${card.damage}',
-                      style: TextStyle(
-                        fontSize: width * 0.11,
-                        fontWeight: FontWeight.bold,
+                      Text(
+                        '${card.maxAP}',
+                        style: TextStyle(
+                          fontSize: width * 0.11,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 1),
-                // HP (Bottom of stack)
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.favorite,
-                      size: width * 0.12,
-                      color: Colors.red[700],
-                    ),
-                    Text(
-                      '${card.health}',
-                      style: TextStyle(
-                        fontSize: width * 0.11,
-                        fontWeight: FontWeight.bold,
+                    ],
+                  ),
+                  const SizedBox(height: 1),
+                  // Damage
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.local_fire_department,
+                        size: width * 0.12,
+                        color: Colors.deepOrange,
                       ),
-                    ),
-                  ],
-                ),
-              ],
+                      Text(
+                        '${card.damage}',
+                        style: TextStyle(
+                          fontSize: width * 0.11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 1),
+                  // HP (Bottom of stack)
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.favorite,
+                        size: width * 0.12,
+                        color: Colors.red[700],
+                      ),
+                      Text(
+                        '${card.health}',
+                        style: TextStyle(
+                          fontSize: width * 0.11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
 
           // Decoy Indicator (Overlay)
           if (card.isDecoy)
@@ -8870,6 +9041,127 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
                     fontSize: 10,
+                  ),
+                ),
+              ),
+            ),
+
+          // Full details panel when focused
+          if (showDetails)
+            Positioned(
+              top: height * 0.18,
+              left: 4,
+              right: 4,
+              bottom: 4,
+              child: Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.85),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: SingleChildScrollView(
+                  child: DefaultTextStyle(
+                    style: TextStyle(
+                      fontSize: (width * 0.065).clamp(11.0, 14.0),
+                      color: Colors.black87,
+                      height: 1.15,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Attack style
+                        Row(
+                          children: [
+                            Icon(typeIcon, size: 14, color: Colors.black87),
+                            const SizedBox(width: 4),
+                            Text(
+                              _getAttackStyle(card).toUpperCase(),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        // Stats row
+                        Row(
+                          children: [
+                            Icon(Icons.bolt, size: 12, color: Colors.blue[800]),
+                            Text(' ${card.currentAP}/${card.maxAP}'),
+                            const SizedBox(width: 8),
+                            Icon(
+                              Icons.local_fire_department,
+                              size: 12,
+                              color: Colors.deepOrange,
+                            ),
+                            Text(' ${card.currentDamage}/${card.damage}'),
+                            const SizedBox(width: 8),
+                            Icon(
+                              Icons.favorite,
+                              size: 12,
+                              color: Colors.red[700],
+                            ),
+                            Text(' ${card.currentHealth}/${card.health}'),
+                          ],
+                        ),
+                        // Terrain affinity
+                        if (card.element != null) ...[
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Icon(
+                                _getTerrainIcon(card.element!),
+                                size: 12,
+                                color: _getTerrainColor(card.element!),
+                              ),
+                              const SizedBox(width: 4),
+                              Text('Terrain: ${card.element}'),
+                            ],
+                          ),
+                        ],
+                        // Tile terrain (if on board)
+                        if (tileTerrain != null) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            'On: $tileTerrain',
+                            style: TextStyle(
+                              color: Colors.grey[700],
+                              fontSize: 10,
+                            ),
+                          ),
+                        ],
+                        // Abilities
+                        if (card.abilities.isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          const Text(
+                            'Abilities:',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          ...card.abilities.map(
+                            (a) => Padding(
+                              padding: const EdgeInsets.only(top: 2),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Icon(
+                                    _abilityIconData(a),
+                                    size: 12,
+                                    color: Colors.black54,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Expanded(
+                                    child: Text(
+                                      '$a: ${_abilityDescription(a)}',
+                                      style: const TextStyle(fontSize: 10),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -8902,15 +9194,23 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
           _selectedCard = card;
         });
       },
-      child: GestureDetector(
-        onTap: () {
-          setState(() {
-            _clearTYC3Selection();
-            _selectedCard = _selectedCard == card ? null : card;
-          });
-        },
-        onLongPress: () => _showCardDetails(card),
-        child: cardWidget,
+      child: Builder(
+        builder: (ctx) => GestureDetector(
+          onTap: () {
+            final rect = _globalRectForContext(ctx);
+            _showCardFocus(
+              card,
+              rect,
+              onSecondTapAction: () {
+                setState(() {
+                  _clearTYC3Selection();
+                  _selectedCard = _selectedCard == card ? null : card;
+                });
+              },
+            );
+          },
+          child: cardWidget,
+        ),
       ),
     );
   }
