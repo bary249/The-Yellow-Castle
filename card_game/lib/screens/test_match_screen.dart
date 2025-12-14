@@ -8498,14 +8498,10 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                                       (totalCardsWidth + 40) / 2 -
                                       cardWidth / 2 +
                                       xOffset,
-                                  // Pop up significantly if selected (-60 instead of -15)
-                                  top: yOffset + (isSelected ? -60 : 5),
+                                  top: yOffset + 5,
                                   child: Transform(
                                     transform: Matrix4.identity()
-                                      ..rotateZ(angle)
-                                      ..scale(
-                                        isSelected ? 1.3 : 1.0,
-                                      ), // Scale up
+                                      ..rotateZ(angle),
                                     alignment: Alignment.bottomCenter,
                                     child: _buildDraggableHandCard(
                                       card,
@@ -8517,20 +8513,6 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                                 );
                               },
                             );
-
-                            // 2. Reorder widgets so selected card is last (drawn on top)
-                            if (_selectedCard != null) {
-                              final selectedIndex = availableCards.indexOf(
-                                _selectedCard!,
-                              );
-                              if (selectedIndex != -1 &&
-                                  selectedIndex < cardWidgets.length) {
-                                final selectedWidget = cardWidgets.removeAt(
-                                  selectedIndex,
-                                );
-                                cardWidgets.add(selectedWidget);
-                              }
-                            }
 
                             return Center(
                               child: SizedBox(
