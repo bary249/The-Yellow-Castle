@@ -107,6 +107,9 @@ This document captures the **implemented and intended logic** of the game, mappe
 - Campaign mode can apply **persistent bonuses** (e.g. from relics) into a battle.
 - These bonuses are passed into the battle screen (`TestMatchScreen`) as parameters and applied at match initialization.
 
+- Campaign mode can also apply **persistent deck changes**.
+  - In Story Mode, player cards destroyed during a battle are removed from `CampaignState.deck` for the rest of the run.
+
 **Implemented campaign bonuses:**
 - **Gold per battle bonus**: `CampaignState.goldPerBattleBonus` (e.g. `relic_gold_purse` => +10 gold per battle reward).
 - **Global damage bonus**: `CampaignState.globalDamageBonus` (e.g. `relic_morale` => +1 damage).

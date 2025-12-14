@@ -64,6 +64,8 @@
 - These campaign relics can modify battle rewards (gold) or apply a flat stat bonus (e.g. +1 damage) at match start.
 - These are separate from the in-match relic tile described above.
 
+- Story Mode can also apply **persistent deck changes**: cards destroyed during battle are removed from your campaign deck for the rest of the run.
+
 - Campaign mode also has **consumables** (e.g. healing, remove-card) that are stored in the campaign inventory and can be equipped/used between encounters.
 
 ---
