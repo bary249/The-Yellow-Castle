@@ -96,6 +96,9 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   bool _cardFocusExpanded = false;
   VoidCallback? _cardFocusOnDismissed;
 
+  final Map<String, Rect> _handCardRects = {};
+  final Map<String, GameCard> _handCardsById = {};
+
   // Online multiplayer state
   StreamSubscription? _matchListener;
   bool _isOnlineMode = false;
@@ -235,6 +238,8 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     String? tileTerrain,
     VoidCallback? onSecondTapAction,
     VoidCallback? onDismissed,
+    Map<String, Rect>? switchRects,
+    Map<String, GameCard>? switchCards,
   }) {
     _cardFocusOverlay?.remove();
     _cardFocusOverlay = null;
@@ -296,9 +301,30 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                 child: Listener(
                   behavior: HitTestBehavior.translucent,
                   onPointerDown: (e) {
-                    if (!focusedRect.contains(e.position)) {
-                      _dismissCardFocus();
+                    if (focusedRect.contains(e.position)) return;
+
+                    if (switchRects != null && switchCards != null) {
+                      for (final entry in switchRects.entries) {
+                        final id = entry.key;
+                        final rect = entry.value;
+                        if (rect.contains(e.position)) {
+                          final nextCard = switchCards[id];
+                          if (nextCard != null) {
+                            _showCardFocus(
+                              nextCard,
+                              rect,
+                              onSecondTapAction: onSecondTapAction,
+                              onDismissed: onDismissed,
+                              switchRects: switchRects,
+                              switchCards: switchCards,
+                            );
+                            return;
+                          }
+                        }
+                      }
                     }
+
+                    _dismissCardFocus();
                   },
                   child: const SizedBox.expand(),
                 ),
@@ -8470,6 +8496,15 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                                 _handFanAngle * (availableCards.length - 1);
                             final startAngle = -totalAngle / 2;
 
+                            _handCardsById
+                              ..clear()
+                              ..addEntries(
+                                availableCards.map((c) => MapEntry(c.id, c)),
+                              );
+                            _handCardRects.removeWhere(
+                              (id, _) => !_handCardsById.containsKey(id),
+                            );
+
                             // 1. Generate all card widgets with their positions
                             final cardWidgets = List<Widget>.generate(
                               availableCards.length,
@@ -9196,21 +9231,23 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         builder: (ctx) => GestureDetector(
           onTap: () {
             final rect = _globalRectForContext(ctx);
+            _handCardRects[card.id] = rect;
+            _handCardsById[card.id] = card;
+
+            void selectCard() {
+              setState(() {
+                _clearTYC3Selection();
+                _selectedCard = card;
+              });
+            }
+
             _showCardFocus(
               card,
               rect,
-              onSecondTapAction: () {
-                setState(() {
-                  _clearTYC3Selection();
-                  _selectedCard = card;
-                });
-              },
-              onDismissed: () {
-                setState(() {
-                  _clearTYC3Selection();
-                  _selectedCard = card;
-                });
-              },
+              onSecondTapAction: selectCard,
+              onDismissed: selectCard,
+              switchRects: _handCardRects,
+              switchCards: _handCardsById,
             );
           },
           child: cardWidget,
