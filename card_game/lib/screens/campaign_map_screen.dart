@@ -42,6 +42,9 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
   static const String _campaignMapRelicId = 'campaign_map_relic';
   static const double _mapRelicDiscoverDistanceMeters = 25000;
 
+  static const String _buildingTrainingGroundsId = 'building_training_grounds';
+  static const String _buildingSupplyDepotId = 'building_supply_depot';
+
   final Random _random = Random();
 
   final MapController _mapController = MapController();
@@ -561,6 +564,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     if (_campaign.homeTownName != null &&
         _campaign.homeTownLat != null &&
         _campaign.homeTownLng != null) {
+      _ensureHomeTownStarterBuildings();
       return;
     }
 
@@ -569,6 +573,20 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     _campaign.homeTownLat = 43.695;
     _campaign.homeTownLng = 7.264;
     _campaign.homeTownLevel = _campaign.homeTownLevel.clamp(1, 99);
+
+    _ensureHomeTownStarterBuildings();
+  }
+
+  void _ensureHomeTownStarterBuildings() {
+    if (_campaign.homeTownBuildings.any(
+      (b) => b.id == _buildingTrainingGroundsId,
+    )) {
+      return;
+    }
+    _campaign.homeTownBuildings = [
+      ..._campaign.homeTownBuildings,
+      HomeTownBuilding(id: _buildingTrainingGroundsId),
+    ];
   }
 
   List<LatLng> _act1MapRelicCandidateLocations() {
@@ -652,6 +670,158 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     return 50 + (currentLevel - 1) * 50;
   }
 
+  String _homeTownBuildingName(String id) {
+    switch (id) {
+      case _buildingTrainingGroundsId:
+        return 'Training Grounds';
+      case _buildingSupplyDepotId:
+        return 'Supply Depot';
+      default:
+        return id;
+    }
+  }
+
+  String _homeTownBuildingDescription(String id) {
+    switch (id) {
+      case _buildingTrainingGroundsId:
+        return 'Provides a common unit card once per encounter.';
+      case _buildingSupplyDepotId:
+        return 'Provides gold once per encounter.';
+      default:
+        return '';
+    }
+  }
+
+  int _homeTownBuildCost(String id) {
+    switch (id) {
+      case _buildingSupplyDepotId:
+        return 120;
+      default:
+        return 0;
+    }
+  }
+
+  bool _canCollectBuilding(HomeTownBuilding building) {
+    return building.lastCollectedEncounter < _campaign.encounterNumber;
+  }
+
+  Future<void> _collectBuilding(HomeTownBuilding building) async {
+    if (!_canCollectBuilding(building)) return;
+
+    if (building.id == _buildingTrainingGroundsId) {
+      final candidates = ShopInventory.getCardsForAct(_campaign.act);
+      if (candidates.isNotEmpty) {
+        candidates.shuffle(_random);
+        final card = candidates.first;
+        setState(() {
+          _campaign.addCard(card);
+          building.lastCollectedEncounter = _campaign.encounterNumber;
+        });
+        await _saveCampaign();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Training Grounds delivered: ${card.name}')),
+          );
+        }
+      }
+      return;
+    }
+
+    if (building.id == _buildingSupplyDepotId) {
+      const goldReward = 15;
+      setState(() {
+        _campaign.addGold(goldReward);
+        building.lastCollectedEncounter = _campaign.encounterNumber;
+      });
+      await _saveCampaign();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Supply Depot delivered: +15 Gold')),
+        );
+      }
+      return;
+    }
+  }
+
+  Future<void> _showBuildBuildingDialog() async {
+    final alreadyBuilt = _campaign.homeTownBuildings.map((b) => b.id).toSet();
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        final options = <String>[
+          _buildingSupplyDepotId,
+        ].where((id) => !alreadyBuilt.contains(id)).toList();
+
+        return AlertDialog(
+          backgroundColor: const Color(0xFF2D2D2D),
+          title: const Text(
+            'Build New Building',
+            style: TextStyle(color: Colors.white),
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: options.isEmpty
+                ? const Text(
+                    'No buildings available to build right now.',
+                    style: TextStyle(color: Colors.white70),
+                  )
+                : ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: options.length,
+                    itemBuilder: (context, index) {
+                      final id = options[index];
+                      final cost = _homeTownBuildCost(id);
+                      final canAfford = _campaign.gold >= cost;
+
+                      return Card(
+                        color: Colors.grey[850],
+                        child: ListTile(
+                          title: Text(
+                            _homeTownBuildingName(id),
+                            style: const TextStyle(color: Colors.white),
+                          ),
+                          subtitle: Text(
+                            _homeTownBuildingDescription(id),
+                            style: const TextStyle(color: Colors.white70),
+                          ),
+                          trailing: ElevatedButton(
+                            onPressed: canAfford
+                                ? () async {
+                                    setState(() {
+                                      _campaign.spendGold(cost);
+                                      _campaign.homeTownBuildings = [
+                                        ..._campaign.homeTownBuildings,
+                                        HomeTownBuilding(id: id),
+                                      ];
+                                    });
+                                    await _saveCampaign();
+                                    if (!context.mounted) return;
+                                    Navigator.pop(context);
+                                  }
+                                : null,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.amber[700],
+                              foregroundColor: Colors.black,
+                            ),
+                            child: Text('Build ($cost)'),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   void _openHomeTown() {
     showModalBottomSheet(
       context: context,
@@ -663,6 +833,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
           final level = _campaign.homeTownLevel;
           final cost = _homeTownUpgradeCost(level);
           final canUpgrade = _campaign.gold >= cost;
+          final buildings = _campaign.homeTownBuildings;
 
           return Container(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
@@ -750,6 +921,73 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                       child: Text('Upgrade (Cost: $cost)'),
                     ),
                   ),
+                  const SizedBox(height: 18),
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.apartment,
+                        color: Colors.white70,
+                        size: 18,
+                      ),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text(
+                          'Buildings',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () async {
+                          await _showBuildBuildingDialog();
+                          setSheetState(() {});
+                        },
+                        child: const Text('Build New'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  if (buildings.isEmpty)
+                    const Text(
+                      'No buildings yet.',
+                      style: TextStyle(color: Colors.white70),
+                    )
+                  else
+                    ...buildings.map((b) {
+                      final canCollect = _canCollectBuilding(b);
+                      final label = canCollect ? 'Collect' : 'Collected';
+
+                      return Card(
+                        color: Colors.grey[850],
+                        margin: const EdgeInsets.symmetric(vertical: 6),
+                        child: ListTile(
+                          title: Text(
+                            _homeTownBuildingName(b.id),
+                            style: const TextStyle(color: Colors.white),
+                          ),
+                          subtitle: Text(
+                            _homeTownBuildingDescription(b.id),
+                            style: const TextStyle(color: Colors.white70),
+                          ),
+                          trailing: ElevatedButton(
+                            onPressed: canCollect
+                                ? () async {
+                                    await _collectBuilding(b);
+                                    setSheetState(() {});
+                                  }
+                                : null,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.green[700],
+                              foregroundColor: Colors.white,
+                            ),
+                            child: Text(label),
+                          ),
+                        ),
+                      );
+                    }),
                   const SizedBox(height: 8),
                   const Text(
                     'No effects yet — upgrades will matter once we add buildings & supply.',

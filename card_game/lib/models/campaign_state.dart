@@ -47,6 +47,32 @@ class Encounter {
   );
 }
 
+class HomeTownBuilding {
+  final String id;
+  int level;
+  int lastCollectedEncounter;
+
+  HomeTownBuilding({
+    required this.id,
+    this.level = 1,
+    this.lastCollectedEncounter = -1,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'level': level,
+    'lastCollectedEncounter': lastCollectedEncounter,
+  };
+
+  factory HomeTownBuilding.fromJson(Map<String, dynamic> json) =>
+      HomeTownBuilding(
+        id: json['id'] as String,
+        level: (json['level'] as num?)?.toInt() ?? 1,
+        lastCollectedEncounter:
+            (json['lastCollectedEncounter'] as num?)?.toInt() ?? -1,
+      );
+}
+
 class CampaignState {
   final String id;
   final String leaderId;
@@ -74,6 +100,7 @@ class CampaignState {
   double? homeTownLat;
   double? homeTownLng;
   int homeTownLevel;
+  List<HomeTownBuilding> homeTownBuildings;
 
   double? mapRelicLat;
   double? mapRelicLng;
@@ -106,6 +133,7 @@ class CampaignState {
     this.homeTownLat,
     this.homeTownLng,
     this.homeTownLevel = 1,
+    List<HomeTownBuilding>? homeTownBuildings,
     this.mapRelicLat,
     this.mapRelicLng,
     this.mapRelicDiscovered = false,
@@ -116,6 +144,7 @@ class CampaignState {
        relics = relics ?? [],
        activeRelics =
            activeRelics ?? (relics != null ? [...relics] : <String>[]),
+       homeTownBuildings = homeTownBuildings ?? <HomeTownBuilding>[],
        consumables = consumables ?? <String, int>{},
        activeConsumables = activeConsumables ?? <String, int>{},
        awardedLegacyMilestones = awardedLegacyMilestones ?? <String>{},
@@ -299,6 +328,7 @@ class CampaignState {
     'homeTownLat': homeTownLat,
     'homeTownLng': homeTownLng,
     'homeTownLevel': homeTownLevel,
+    'homeTownBuildings': homeTownBuildings.map((b) => b.toJson()).toList(),
     'mapRelicLat': mapRelicLat,
     'mapRelicLng': mapRelicLng,
     'mapRelicDiscovered': mapRelicDiscovered,
@@ -350,6 +380,11 @@ class CampaignState {
     homeTownLat: (json['homeTownLat'] as num?)?.toDouble(),
     homeTownLng: (json['homeTownLng'] as num?)?.toDouble(),
     homeTownLevel: (json['homeTownLevel'] as num?)?.toInt() ?? 1,
+    homeTownBuildings:
+        (json['homeTownBuildings'] as List?)
+            ?.map((e) => HomeTownBuilding.fromJson(e as Map<String, dynamic>))
+            .toList() ??
+        <HomeTownBuilding>[],
     mapRelicLat: (json['mapRelicLat'] as num?)?.toDouble(),
     mapRelicLng: (json['mapRelicLng'] as num?)?.toDouble(),
     mapRelicDiscovered: json['mapRelicDiscovered'] as bool? ?? false,
