@@ -8514,6 +8514,19 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                               },
                             );
 
+                            if (_selectedCard != null) {
+                              final selectedIndex = availableCards.indexOf(
+                                _selectedCard!,
+                              );
+                              if (selectedIndex != -1 &&
+                                  selectedIndex < cardWidgets.length) {
+                                final selectedWidget = cardWidgets.removeAt(
+                                  selectedIndex,
+                                );
+                                cardWidgets.add(selectedWidget);
+                              }
+                            }
+
                             return Center(
                               child: SizedBox(
                                 width: totalCardsWidth + 40,
@@ -9186,7 +9199,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
               onSecondTapAction: () {
                 setState(() {
                   _clearTYC3Selection();
-                  _selectedCard = _selectedCard == card ? null : card;
+                  _selectedCard = card;
                 });
               },
             );
