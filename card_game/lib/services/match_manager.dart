@@ -513,6 +513,7 @@ class MatchManager {
 
   /// Callback for combat animation updates
   Function()? onCombatUpdate;
+  Function(GameCard card)? onCardDestroyed;
 
   /// Current tick information for UI display
   String? currentTickInfo;
@@ -927,6 +928,9 @@ class MatchManager {
           );
 
           // Cleanup dead cards
+          if (died) {
+            onCardDestroyed?.call(target);
+          }
           enemyCards.cleanup();
         }
       }
@@ -2401,6 +2405,7 @@ class MatchManager {
       );
 
       // Remove dead card from tile
+      onCardDestroyed?.call(target);
       targetTile.cards.remove(target);
 
       // Melee attacker advances to target's tile after kill (if not ranged and attacker survived)
@@ -2469,6 +2474,7 @@ class MatchManager {
         );
 
         // Remove dead attacker from tile
+        onCardDestroyed?.call(attacker);
         attackerTile.cards.remove(attacker);
       }
     }

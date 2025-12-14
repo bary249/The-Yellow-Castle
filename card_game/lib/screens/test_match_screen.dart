@@ -82,6 +82,8 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   final DeckStorageService _deckStorage = DeckStorageService();
   FirebaseFirestore? _firestore;
 
+  final Set<String> _campaignDestroyedPlayerCardIds = <String>{};
+
   bool _isArtilleryCard(GameCard card) {
     if (card.abilities.contains('cannon')) return true;
     if (card.attackRange >= 2) return true;
@@ -4425,10 +4427,11 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     if (widget.forceCampaignDeck) {
       // Campaign mode: prefer the campaign deck passed in from the campaign state.
       if (widget.customDeck != null) {
-        playerDeck = Deck.fromCards(
-          playerId: id,
-          cards: widget.customDeck!.map((c) => c.clone()).toList(),
+        playerDeck = Deck(
+          id: 'custom_$id',
           name: "${playerHero.name} Campaign Deck",
+          cards: widget.customDeck!.map((c) => c.clone()).toList(),
+          skipValidation: true,
         );
         debugPrint(
           '🎖️ CAMPAIGN MODE: Using provided campaign deck (${widget.customDeck!.length} cards)',
@@ -4493,20 +4496,49 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     final bool hasDeckBonuses =
         widget.playerDamageBonus != 0 || widget.artilleryDamageBonus != 0;
     final Deck effectivePlayerDeck = hasDeckBonuses
-        ? Deck.fromCards(
-            playerId: id,
-            name: playerDeck.name,
-            cards: playerDeck.cards.map((c) {
-              final artilleryBonus = _isArtilleryCard(c)
-                  ? widget.artilleryDamageBonus
-                  : 0;
-              final totalBonus = widget.playerDamageBonus + artilleryBonus;
-              return totalBonus != 0
-                  ? c.copyWith(damage: c.damage + totalBonus)
-                  : c;
-            }).toList(),
-          )
+        ? (widget.forceCampaignDeck
+              ? Deck(
+                  id: 'custom_$id',
+                  name: playerDeck.name,
+                  cards: playerDeck.cards.map((c) {
+                    final artilleryBonus = _isArtilleryCard(c)
+                        ? widget.artilleryDamageBonus
+                        : 0;
+                    final totalBonus =
+                        widget.playerDamageBonus + artilleryBonus;
+                    return totalBonus != 0
+                        ? c.copyWith(damage: c.damage + totalBonus)
+                        : c;
+                  }).toList(),
+                  skipValidation: true,
+                )
+              : Deck.fromCards(
+                  playerId: id,
+                  name: playerDeck.name,
+                  cards: playerDeck.cards.map((c) {
+                    final artilleryBonus = _isArtilleryCard(c)
+                        ? widget.artilleryDamageBonus
+                        : 0;
+                    final totalBonus =
+                        widget.playerDamageBonus + artilleryBonus;
+                    return totalBonus != 0
+                        ? c.copyWith(damage: c.damage + totalBonus)
+                        : c;
+                  }).toList(),
+                ))
         : playerDeck;
+
+    _campaignDestroyedPlayerCardIds.clear();
+    if (widget.forceCampaignDeck && !_isOnlineMode) {
+      _matchManager.onCardDestroyed = (card) {
+        final match = _matchManager.currentMatch;
+        if (match == null) return;
+        if (card.ownerId != match.player.id) return;
+        _campaignDestroyedPlayerCardIds.add(card.id);
+      };
+    } else {
+      _matchManager.onCardDestroyed = null;
+    }
 
     // Determine opponent name and deck
     final opponentNameFinal = _isOnlineMode
@@ -5703,6 +5735,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                   'won': playerWon,
                   'crystalDamage': damageTaken,
                   'turnsPlayed': match.turnNumber,
+                  'destroyedCardIds': _campaignDestroyedPlayerCardIds.toList(),
                 });
               } else {
                 // Return to main menu safely (avoid popping the app)

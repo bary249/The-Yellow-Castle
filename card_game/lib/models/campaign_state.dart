@@ -290,6 +290,10 @@ class CampaignState {
     inventory = [...inventory, card];
   }
 
+  void destroyCardPermanently(String cardId) {
+    deck = deck.where((c) => c.id != cardId).toList();
+  }
+
   void addCardFromInventory(String cardId) {
     final card = inventory.firstWhere(
       (c) => c.id == cardId,

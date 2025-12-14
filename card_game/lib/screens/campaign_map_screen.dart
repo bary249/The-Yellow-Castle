@@ -1232,10 +1232,16 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     if (result != null) {
       final won = result['won'] as bool? ?? false;
       final crystalDamage = result['crystalDamage'] as int? ?? 0;
+      final destroyedCardIds =
+          (result['destroyedCardIds'] as List?)?.whereType<String>().toList() ??
+          <String>[];
 
       // Apply damage taken during battle regardless of outcome
       setState(() {
         _campaign.takeDamage(crystalDamage);
+        for (final id in destroyedCardIds) {
+          _campaign.destroyCardPermanently(id);
+        }
       });
       _saveCampaign();
 
