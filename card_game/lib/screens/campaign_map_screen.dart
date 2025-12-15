@@ -1000,6 +1000,9 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
   }
 
   String _buildingSupplyBreakdownText(HomeTownBuilding building) {
+    if (building.id == _buildingSupplyDepotId) {
+      return '';
+    }
     final base = _buildingBaseSupplyEveryEncounters(building);
     final modifier = _distanceSupplyModifierEncounters();
     final total = (base + modifier).clamp(1, 99);
@@ -1863,7 +1866,10 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
                             style: const TextStyle(color: Colors.white),
                           ),
                           subtitle: Text(
-                            '$producesText\n$supplyText',
+                            [
+                              producesText,
+                              supplyText,
+                            ].where((s) => s.trim().isNotEmpty).join('\n'),
                             style: const TextStyle(color: Colors.white70),
                           ),
                           trailing: ElevatedButton(
@@ -2130,7 +2136,11 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
                             style: const TextStyle(color: Colors.white),
                           ),
                           subtitle: Text(
-                            '${_homeTownBuildingDescription(b.id)}\n${_buildingSupplyBreakdownText(b)}\n${_buildingSupplyStatusText(b)}',
+                            [
+                              _homeTownBuildingDescription(b.id),
+                              _buildingSupplyBreakdownText(b),
+                              _buildingSupplyStatusText(b),
+                            ].where((s) => s.trim().isNotEmpty).join('\n'),
                             style: const TextStyle(color: Colors.white70),
                           ),
                           trailing: Icon(

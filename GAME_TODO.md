@@ -472,6 +472,7 @@
 - [x] Point-and-click card placement (tap to select, tap tile to place)
 - [x] Responsive layout (portrait vs landscape)
 - [x] Mini card widgets with stats display
+- [x] Show an animated attacker→defender arrow on the board between attack preview and battle result
 - [ ] Test on various screen sizes (phone, tablet, web)
 - [ ] Integrate best patterns into main game screen
 
