@@ -292,6 +292,23 @@ class _TestMatchScreenState extends State<TestMatchScreen>
     });
   }
 
+  ({GameCard card, int row, int col})? _findBoardCardById(
+    MatchState match,
+    String cardId,
+  ) {
+    for (int row = 0; row < 3; row++) {
+      for (int col = 0; col < 3; col++) {
+        final tile = match.board.getTile(row, col);
+        for (final c in tile.cards) {
+          if (c.id == cardId) {
+            return (card: c, row: row, col: col);
+          }
+        }
+      }
+    }
+    return null;
+  }
+
   Future<void> _playAttackArrowToTile(
     GameCard attacker,
     int attackerRow,
@@ -2319,6 +2336,44 @@ class _TestMatchScreenState extends State<TestMatchScreen>
     final bgColor = isOpponentAttacking ? Colors.red[50] : Colors.blue[50];
     final accentColor = isOpponentAttacking ? Colors.red : Colors.blue;
 
+    final match = _matchManager.currentMatch;
+    if (match != null &&
+        result.attackerId != null &&
+        result.attackerRow != null &&
+        result.attackerCol != null &&
+        result.targetRow != null &&
+        result.targetCol != null) {
+      final attackerInfo = _findBoardCardById(match, result.attackerId!);
+      if (attackerInfo != null) {
+        if (mounted) {
+          setState(() {});
+          await WidgetsBinding.instance.endOfFrame;
+        }
+
+        if (result.isBaseAttack) {
+          await _playAttackArrowToTile(
+            attackerInfo.card,
+            result.attackerRow!,
+            result.attackerCol!,
+            result.targetRow!,
+            result.targetCol!,
+          );
+        } else if (result.targetId != null) {
+          final targetInfo = _findBoardCardById(match, result.targetId!);
+          if (targetInfo != null) {
+            await _playAttackArrow(
+              attackerInfo.card,
+              result.attackerRow!,
+              result.attackerCol!,
+              targetInfo.card,
+              result.targetRow!,
+              result.targetCol!,
+            );
+          }
+        }
+      }
+    }
+
     await showDialog(
       context: context,
       barrierDismissible: true,
@@ -3048,7 +3103,12 @@ class _TestMatchScreenState extends State<TestMatchScreen>
                 targetRow,
                 targetCol,
               );
-              await _showAIBattleResultDialog(result, attacker, target, col);
+              await _showAIBattleResultDialog(
+                result,
+                attacker,
+                target,
+                targetCol,
+              );
             }
           },
       onBaseAttack:
@@ -3070,7 +3130,7 @@ class _TestMatchScreenState extends State<TestMatchScreen>
                 targetBaseRow,
                 targetBaseCol,
               );
-              await _showAIBaseAttackDialog(attacker, damage, col);
+              await _showAIBaseAttackDialog(attacker, damage, targetBaseCol);
             }
           },
     );
@@ -9143,6 +9203,10 @@ class _TestMatchScreenState extends State<TestMatchScreen>
   }
 
   Widget _buildHand(player) {
+    final match = _matchManager.currentMatch;
+    final canPlayMoreCardsThisTurn =
+        match != null && match.isPlayerTurn && match.canPlaceMoreCards;
+
     // Calculate available cards (not yet staged)
     final stagedCardSet = _stagedCards.values.expand((list) => list).toSet();
     final availableCards = (player.hand as List<GameCard>)
@@ -9160,11 +9224,15 @@ class _TestMatchScreenState extends State<TestMatchScreen>
                 Padding(
                   padding: const EdgeInsets.only(top: 4),
                   child: Text(
-                    'Your Hand (${availableCards.length}) - Tap to select, drag to place',
+                    canPlayMoreCardsThisTurn
+                        ? 'Your Hand (${availableCards.length}) - Tap to select, drag to place'
+                        : 'Your Hand (${availableCards.length}) - No card plays left this turn',
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.bold,
-                      color: Colors.brown[800],
+                      color: canPlayMoreCardsThisTurn
+                          ? Colors.brown[800]
+                          : Colors.grey[700],
                     ),
                   ),
                 ),
@@ -9241,6 +9309,7 @@ class _TestMatchScreenState extends State<TestMatchScreen>
                                       cardWidth,
                                       cardHeight,
                                       isSelected,
+                                      enabled: canPlayMoreCardsThisTurn,
                                     ),
                                   ),
                                 );
@@ -9302,8 +9371,13 @@ class _TestMatchScreenState extends State<TestMatchScreen>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Your Hand (${availableCards.length} cards)',
-            style: const TextStyle(fontWeight: FontWeight.bold),
+            canPlayMoreCardsThisTurn
+                ? 'Your Hand (${availableCards.length} cards)'
+                : 'Your Hand (${availableCards.length} cards) - No card plays left this turn',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: canPlayMoreCardsThisTurn ? Colors.black : Colors.grey[700],
+            ),
           ),
           const SizedBox(height: 4),
           Expanded(
@@ -9322,174 +9396,168 @@ class _TestMatchScreenState extends State<TestMatchScreen>
                       final baseBorder = _getRarityBorderColor(card);
 
                       return GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            // Clear board card selection when selecting hand card
-                            _clearTYC3Selection();
-                            _selectedCard = isSelected ? null : card;
-                          });
-                        },
+                        onTap: canPlayMoreCardsThisTurn
+                            ? () {
+                                setState(() {
+                                  // Clear board card selection when selecting hand card
+                                  _clearTYC3Selection();
+                                  _selectedCard = isSelected ? null : card;
+                                });
+                              }
+                            : null,
                         onLongPress: () => _showCardDetails(card),
-                        child: Container(
-                          width: 90,
-                          margin: const EdgeInsets.symmetric(horizontal: 4),
-                          decoration: BoxDecoration(
-                            color: baseFill,
-                            border: Border.all(
-                              color: isSelected ? Colors.green : baseBorder,
-                              width: isSelected ? 3 : 1,
+                        child: Opacity(
+                          opacity: canPlayMoreCardsThisTurn ? 1.0 : 0.35,
+                          child: Container(
+                            width: 90,
+                            margin: const EdgeInsets.symmetric(horizontal: 4),
+                            decoration: BoxDecoration(
+                              color: baseFill,
+                              border: Border.all(
+                                color: isSelected ? Colors.green : baseBorder,
+                                width: 2,
+                              ),
+                              borderRadius: BorderRadius.circular(8),
                             ),
-                            borderRadius: BorderRadius.circular(8),
-                            boxShadow: isSelected
-                                ? [
-                                    BoxShadow(
-                                      color: Colors.green.withValues(
-                                        alpha: 0.5,
-                                      ),
-                                      blurRadius: 8,
-                                      spreadRadius: 2,
+                            padding: const EdgeInsets.all(6),
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    card.name,
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.bold,
                                     ),
-                                  ]
-                                : null,
-                          ),
-                          padding: const EdgeInsets.all(6),
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(
-                                  card.name,
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.bold,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                const SizedBox(height: 2),
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    // Show damage as current/max
-                                    _buildStatIconWithMax(
-                                      Icons.local_fire_department,
-                                      card.currentDamage,
-                                      card.damage,
-                                      size: 10,
-                                    ),
-                                    // Show attack AP cost only if > 1
-                                    if (card.attackAPCost > 1) ...[
-                                      Text(
-                                        ' (${card.attackAPCost}',
-                                        style: TextStyle(
-                                          fontSize: 8,
-                                          color: Colors.orange[700],
-                                        ),
-                                      ),
-                                      Icon(
-                                        Icons.bolt,
-                                        size: 8,
-                                        color: Colors.orange[700],
-                                      ),
-                                      Text(
-                                        ')',
-                                        style: TextStyle(
-                                          fontSize: 8,
-                                          color: Colors.orange[700],
-                                        ),
-                                      ),
-                                    ],
-                                    const SizedBox(width: 2),
-                                    // Show HP as current/max for hand cards
-                                    _buildStatIconWithMax(
-                                      Icons.favorite,
-                                      card.currentHealth,
-                                      card.health,
-                                      size: 10,
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 1),
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    // TYC3: Show AP (current/max) and attack style icon
-                                    if (_useTYC3Mode) ...[
-                                      _buildStatIconWithMax(
-                                        Icons.bolt,
-                                        card.currentAP,
-                                        card.maxAP,
-                                        size: 10,
-                                      ),
-                                      const SizedBox(width: 2),
-                                      // Attack style: melee (sword), ranged (bow), far_attack (cannon)
-                                      _buildAttackStyleIcon(card, size: 10),
-                                    ] else ...[
-                                      _buildStatIcon(
-                                        Icons.timer,
-                                        card.tick,
-                                        size: 10,
-                                      ),
-                                      const SizedBox(width: 2),
-                                      _buildStatIcon(
-                                        Icons.directions_run,
-                                        card.moveSpeed,
-                                        size: 10,
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                                // Element/Terrain icon
-                                if (card.element != null) ...[
                                   const SizedBox(height: 2),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 4,
-                                      vertical: 1,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: _getTerrainColor(card.element!),
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: Icon(
-                                      _getTerrainIcon(card.element!),
-                                      size: 10,
-                                      color: Colors.white,
-                                    ),
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      // Show damage as current/max
+                                      _buildStatIconWithMax(
+                                        Icons.local_fire_department,
+                                        card.currentDamage,
+                                        card.damage,
+                                        size: 10,
+                                      ),
+                                      // Show attack AP cost only if > 1
+                                      if (card.attackAPCost > 1) ...[
+                                        Text(
+                                          ' (${card.attackAPCost}',
+                                          style: TextStyle(
+                                            fontSize: 8,
+                                            color: Colors.orange[700],
+                                          ),
+                                        ),
+                                        Icon(
+                                          Icons.bolt,
+                                          size: 8,
+                                          color: Colors.orange[700],
+                                        ),
+                                        Text(
+                                          ')',
+                                          style: TextStyle(
+                                            fontSize: 8,
+                                            color: Colors.orange[700],
+                                          ),
+                                        ),
+                                      ],
+                                      const SizedBox(width: 2),
+                                      // Show HP as current/max for hand cards
+                                      _buildStatIconWithMax(
+                                        Icons.favorite,
+                                        card.currentHealth,
+                                        card.health,
+                                        size: 10,
+                                      ),
+                                    ],
                                   ),
-                                ],
-                                if (card.abilities.isNotEmpty) ...[
                                   const SizedBox(height: 1),
                                   Row(
                                     mainAxisSize: MainAxisSize.min,
-                                    children: card.abilities
-                                        .map<Widget>(
-                                          (a) => Padding(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 1,
-                                            ),
-                                            child: Icon(
-                                              _abilityIconData(a),
-                                              size: 9,
-                                            ),
-                                          ),
-                                        )
-                                        .toList(),
+                                    children: [
+                                      // TYC3: Show AP (current/max) and attack style icon
+                                      if (_useTYC3Mode) ...[
+                                        _buildStatIconWithMax(
+                                          Icons.bolt,
+                                          card.currentAP,
+                                          card.maxAP,
+                                          size: 10,
+                                        ),
+                                        const SizedBox(width: 2),
+                                        // Attack style: melee (sword), ranged (bow), far_attack (cannon)
+                                        _buildAttackStyleIcon(card, size: 10),
+                                      ] else ...[
+                                        _buildStatIcon(
+                                          Icons.timer,
+                                          card.tick,
+                                          size: 10,
+                                        ),
+                                        const SizedBox(width: 2),
+                                        _buildStatIcon(
+                                          Icons.directions_run,
+                                          card.moveSpeed,
+                                          size: 10,
+                                        ),
+                                      ],
+                                    ],
                                   ),
-                                ],
-                                if (isSelected)
-                                  const Padding(
-                                    padding: EdgeInsets.only(top: 2),
-                                    child: Icon(
-                                      Icons.touch_app,
-                                      size: 14,
-                                      color: Colors.green,
+                                  if (card.element != null) ...[
+                                    const SizedBox(height: 2),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 4,
+                                        vertical: 1,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: _getTerrainColor(card.element!),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Icon(
+                                        _getTerrainIcon(card.element!),
+                                        size: 10,
+                                        color: Colors.white,
+                                      ),
                                     ),
-                                  ),
-                              ],
+                                  ],
+                                  if (card.abilities.isNotEmpty) ...[
+                                    const SizedBox(height: 1),
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: card.abilities
+                                          .map<Widget>(
+                                            (a) => Padding(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 1,
+                                                  ),
+                                              child: Icon(
+                                                _abilityIconData(a),
+                                                size: 9,
+                                              ),
+                                            ),
+                                          )
+                                          .toList(),
+                                    ),
+                                  ],
+                                  if (isSelected)
+                                    const Padding(
+                                      padding: EdgeInsets.only(top: 2),
+                                      child: Icon(
+                                        Icons.touch_app,
+                                        size: 14,
+                                        color: Colors.green,
+                                      ),
+                                    ),
+                                ],
+                              ),
                             ),
                           ),
                         ),
@@ -9904,9 +9972,17 @@ class _TestMatchScreenState extends State<TestMatchScreen>
     GameCard card,
     double width,
     double height,
-    bool isSelected,
-  ) {
+    bool isSelected, {
+    required bool enabled,
+  }) {
     final cardWidget = _buildHandCardVisual(card, width, height, isSelected);
+
+    if (!enabled) {
+      return GestureDetector(
+        onLongPress: () => _showCardDetails(card),
+        child: Opacity(opacity: 0.35, child: cardWidget),
+      );
+    }
 
     return Draggable<GameCard>(
       data: card,

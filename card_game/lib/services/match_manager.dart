@@ -2536,6 +2536,7 @@ class MatchManager {
       isBaseAttack: false,
       attackerName: attacker.name,
       targetName: target.name,
+      targetId: target.id,
       damageDealt: result.damageDealt,
       retaliationDamage: result.retaliationDamage,
       targetDied: result.targetDied,
@@ -2551,6 +2552,10 @@ class MatchManager {
       laneCol: targetCol,
       attackerOwnerId: attacker.ownerId ?? '',
       attackerId: attacker.id,
+      attackerRow: attackerRow,
+      attackerCol: attackerCol,
+      targetRow: targetRow,
+      targetCol: targetCol,
     );
 
     // Track enemy units that attacked player for fog of war (visible next turn)
@@ -2779,6 +2784,10 @@ class MatchManager {
       laneCol: attackerCol,
       attackerOwnerId: attacker.ownerId ?? '',
       attackerId: attacker.id,
+      attackerRow: attackerRow,
+      attackerCol: attackerCol,
+      targetRow: targetBaseRow,
+      targetCol: attackerCol,
     );
 
     // Track enemy units that attacked player base for fog of war (visible next turn)

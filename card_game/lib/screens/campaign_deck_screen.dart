@@ -218,6 +218,21 @@ class _CampaignDeckScreenState extends State<CampaignDeckScreen>
             ),
           ),
           const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _addAllAvailableReservesToDeck,
+              icon: const Icon(Icons.playlist_add),
+              label: Text(
+                'Add all available to deck (${_availableReserveCount()})',
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green[700],
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
           GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
@@ -235,6 +250,42 @@ class _CampaignDeckScreenState extends State<CampaignDeckScreen>
         ],
       ],
     );
+  }
+
+  int _availableReserveCount() {
+    return widget.campaign.inventory
+        .where((c) => !widget.campaign.isCardGated(c.id))
+        .length;
+  }
+
+  void _addAllAvailableReservesToDeck() {
+    final toAdd = widget.campaign.inventory
+        .where((c) => !widget.campaign.isCardGated(c.id))
+        .toList();
+
+    if (toAdd.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No available reserve cards to add.')),
+      );
+      return;
+    }
+
+    for (final c in toAdd) {
+      if (widget.onAddCard != null) {
+        widget.onAddCard!(c);
+      } else {
+        widget.campaign.addCardFromInventory(c.id);
+      }
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Added ${toAdd.length} reserve cards to deck'),
+        backgroundColor: Colors.green,
+      ),
+    );
+
+    setState(() {});
   }
 
   Widget _buildDeceasedTab() {
@@ -868,7 +919,11 @@ class _CampaignDeckScreenState extends State<CampaignDeckScreen>
           padding: const EdgeInsets.symmetric(vertical: 12),
         ),
         onPressed: () {
-          widget.campaign.addCardFromInventory(card.id);
+          if (widget.onAddCard != null) {
+            widget.onAddCard!(card);
+          } else {
+            widget.campaign.addCardFromInventory(card.id);
+          }
           Navigator.pop(context);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -928,7 +983,11 @@ class _CampaignDeckScreenState extends State<CampaignDeckScreen>
                           card.id,
                           _gatedCardUnlockCost,
                         );
-                        widget.campaign.addCardFromInventory(card.id);
+                        if (widget.onAddCard != null) {
+                          widget.onAddCard!(card);
+                        } else {
+                          widget.campaign.addCardFromInventory(card.id);
+                        }
                         Navigator.pop(context);
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
@@ -1000,8 +1059,9 @@ class _CampaignDeckScreenState extends State<CampaignDeckScreen>
 
   IconData _getTypeIcon(GameCard card) {
     if (card.abilities.contains('cavalry')) return Icons.directions_run;
-    if (card.abilities.contains('archer') || card.isRanged)
+    if (card.abilities.contains('archer') || card.isRanged) {
       return Icons.gps_fixed;
+    }
     if (card.abilities.contains('cannon')) return Icons.circle;
     if (card.abilities.contains('shield_guard')) return Icons.shield;
     return Icons.person;
