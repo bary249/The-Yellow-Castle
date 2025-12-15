@@ -3627,9 +3627,27 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
             children: [
               _buildHeader(),
               Expanded(
-                child: (widget.leaderId == 'napoleon' && _campaign.act == 1)
-                    ? _buildRealMapSelection()
-                    : _buildChapterSelection(),
+                child: Stack(
+                  children: [
+                    (widget.leaderId == 'napoleon' && _campaign.act == 1)
+                        ? _buildRealMapSelection()
+                        : _buildChapterSelection(),
+                    if (_campaign.visitedNodes.length >= 2)
+                      Positioned(
+                        bottom: 16,
+                        left: 16,
+                        child: FloatingActionButton.extended(
+                          onPressed: _returnToPreviousNode,
+                          backgroundColor: Colors.orange[700],
+                          icon: const Icon(Icons.undo, color: Colors.white),
+                          label: const Text(
+                            'Return',
+                            style: TextStyle(color: Colors.white),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -4118,9 +4136,53 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
       decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.7)),
       child: Row(
         children: [
-          IconButton(
-            icon: const Icon(Icons.arrow_back, color: Colors.white),
-            onPressed: () => Navigator.pop(context),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.menu, color: Colors.white),
+            color: const Color(0xFF2D2D2D),
+            onSelected: (value) {
+              if (value == 'back') {
+                Navigator.pop(context);
+              } else if (value == 'legacy') {
+                _openProgressionView();
+              } else if (value == 'reserves') {
+                _openInventory();
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'back',
+                child: Row(
+                  children: [
+                    Icon(Icons.arrow_back, color: Colors.white, size: 18),
+                    SizedBox(width: 8),
+                    Text(
+                      'Exit Campaign',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'legacy',
+                child: Row(
+                  children: [
+                    Icon(Icons.account_tree, color: Colors.white, size: 18),
+                    SizedBox(width: 8),
+                    Text('Legacy', style: TextStyle(color: Colors.white)),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'reserves',
+                child: Row(
+                  children: [
+                    Icon(Icons.inventory_2, color: Colors.white, size: 18),
+                    SizedBox(width: 8),
+                    Text('Reserves', style: TextStyle(color: Colors.white)),
+                  ],
+                ),
+              ),
+            ],
           ),
           Expanded(
             child: Column(
@@ -4228,7 +4290,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                     const SizedBox(width: 8),
                   ],
                   InkWell(
-                    onTap: _openProgressionView,
+                    onTap: _openRelicsView,
                     child: Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 8,
@@ -4239,18 +4301,21 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: Colors.brown[400]!),
                       ),
-                      child: const Row(
+                      child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(
-                            Icons.account_tree,
+                          const Icon(
+                            Icons.auto_awesome,
                             color: Colors.white,
                             size: 14,
                           ),
-                          SizedBox(width: 4),
+                          const SizedBox(width: 4),
                           Text(
-                            'Legacy',
-                            style: TextStyle(color: Colors.white, fontSize: 12),
+                            'Relics (${_campaign.relics.length})',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                            ),
                           ),
                         ],
                       ),
@@ -4258,41 +4323,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                   ),
                   const SizedBox(width: 8),
                   InkWell(
-                    onTap: _campaign.visitedNodes.length >= 2
-                        ? _returnToPreviousNode
-                        : null,
-                    child: Opacity(
-                      opacity: _campaign.visitedNodes.length >= 2 ? 1.0 : 0.45,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.brown[600],
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.brown[400]!),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.undo, color: Colors.white, size: 14),
-                            SizedBox(width: 4),
-                            Text(
-                              'Return',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  InkWell(
-                    onTap: _openInventory,
+                    onTap: _openItemsView,
                     child: Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 8,
@@ -4303,18 +4334,21 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: Colors.brown[400]!),
                       ),
-                      child: const Row(
+                      child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(
-                            Icons.inventory_2,
+                          const Icon(
+                            Icons.local_hospital,
                             color: Colors.white,
                             size: 14,
                           ),
-                          SizedBox(width: 4),
+                          const SizedBox(width: 4),
                           Text(
-                            'Reserves',
-                            style: TextStyle(color: Colors.white, fontSize: 12),
+                            'Items (${_totalConsumables()})',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                            ),
                           ),
                         ],
                       ),
@@ -4356,6 +4390,140 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                 ],
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  int _totalConsumables() {
+    int total = 0;
+    for (final count in _campaign.consumables.values) {
+      total += count;
+    }
+    return total;
+  }
+
+  void _openRelicsView() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF2D2D2D),
+        title: const Text('Relics', style: TextStyle(color: Colors.white)),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: _campaign.relics.isEmpty
+              ? const Text(
+                  'No relics collected yet.',
+                  style: TextStyle(color: Colors.white70),
+                )
+              : ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: _campaign.relics.length,
+                  itemBuilder: (context, index) {
+                    final relicId = _campaign.relics[index];
+                    final all = ShopInventory.getAllRelics();
+                    final relic = all.firstWhere(
+                      (r) => r.id == relicId,
+                      orElse: () => all.first,
+                    );
+                    final isActive = _campaign.isRelicActive(relicId);
+                    return ListTile(
+                      leading: Icon(
+                        Icons.auto_awesome,
+                        color: isActive ? Colors.purpleAccent : Colors.grey,
+                      ),
+                      title: Text(
+                        relic.name,
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                      subtitle: Text(
+                        relic.description,
+                        style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                      ),
+                      trailing: isActive
+                          ? const Icon(Icons.check_circle, color: Colors.green)
+                          : const Icon(
+                              Icons.radio_button_unchecked,
+                              color: Colors.grey,
+                            ),
+                    );
+                  },
+                ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openItemsView() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF2D2D2D),
+        title: const Text('Items', style: TextStyle(color: Colors.white)),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: _campaign.consumables.isEmpty
+              ? const Text(
+                  'No items collected yet.',
+                  style: TextStyle(color: Colors.white70),
+                )
+              : ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: _campaign.consumables.keys.length,
+                  itemBuilder: (context, index) {
+                    final itemId = _campaign.consumables.keys.elementAt(index);
+                    final count = _campaign.consumables[itemId] ?? 0;
+                    if (count <= 0) return const SizedBox.shrink();
+                    final all = ShopInventory.getAllConsumables();
+                    final item = all.firstWhere(
+                      (c) => c.id == itemId,
+                      orElse: () => all.first,
+                    );
+                    return ListTile(
+                      leading: const Icon(
+                        Icons.local_hospital,
+                        color: Colors.greenAccent,
+                      ),
+                      title: Text(
+                        item.name,
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                      subtitle: Text(
+                        item.description,
+                        style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                      ),
+                      trailing: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.green[800],
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          '×$count',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
           ),
         ],
       ),

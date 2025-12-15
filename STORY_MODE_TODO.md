@@ -33,6 +33,6 @@ Changes to Story mode:
 31. ✅ I want the player to see thier cards production line in thier inventoryu, so they will see which players are going to be added, and see how many enocunters it will take for them to be added.And they will only be able to add them to the deck once they "arrive"
 32. ✅ If cards are moved to reserves, beacuse of a random event, the player should be able to move them back to the deck, but it will cost them gold or they will have to wait for 1 encounters.
 33. ✅ Add a "decesed" card tab to the edit deck page, where cards that were destoryed in battle are stored.
-34.Campagin menu itmes shoudl be Edit deck, Relics (constant passive buffs), Items (Consumables), Town. Legacy should be in the user menu, and return node should be on the map or somehwere else.
+34. ✅ Campagin menu itmes shoudl be Edit deck, Relics (constant passive buffs), Items (Consumables), Town. Legacy should be in the user menu, and return node should be on the map or somehwere else.
 35. Always show wich card is being produced in the home town, in the home town building.
 36. If a player losses or retreats form an enoucnter or boss fight, they should have more enocunter possbilites in order to get stronger via gold and items or supply chain.
