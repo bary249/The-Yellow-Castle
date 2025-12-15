@@ -2067,11 +2067,6 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
         );
         if (offerEvent != null) rewardEvents.add(offerEvent);
 
-        // Show card reward selection
-        if (mounted) {
-          await _showCardRewardDialog();
-        }
-
         Encounter? pendingDefense;
         double? pendingDefenseLat;
         double? pendingDefenseLng;
@@ -2134,81 +2129,6 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
       // Battle was exited - show retreat dialog
       _showRetreatDialog(encounter);
     }
-  }
-
-  Future<void> _showCardRewardDialog() async {
-    final availableCards = ShopInventory.getCardsForAct(_campaign.act);
-    availableCards.shuffle();
-    final rewards = availableCards.take(3).toList();
-
-    await showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF2D2D2D),
-        title: const Text(
-          'Victory! Choose a Reward',
-          style: TextStyle(color: Colors.white),
-        ),
-        content: SizedBox(
-          width: double.maxFinite,
-          height: 340,
-          child: ListView.builder(
-            itemCount: rewards.length,
-            itemBuilder: (context, index) {
-              final card = rewards[index];
-              return Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                decoration: BoxDecoration(
-                  color: Colors.grey[800],
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.grey[700]!),
-                ),
-                child: ListTile(
-                  leading: Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: _getElementColor(card.element ?? 'woods'),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: const Icon(Icons.style, color: Colors.white),
-                  ),
-                  title: Text(
-                    card.name,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  subtitle: Text(
-                    '${card.element ?? "Neutral"} - ${card.damage} ATK / ${card.health} HP\n${card.abilities.isEmpty ? "No abilities" : card.abilities.join(", ")}',
-                    style: TextStyle(color: Colors.grey[400], fontSize: 12),
-                  ),
-                  trailing: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.amber,
-                      foregroundColor: Colors.black,
-                    ),
-                    onPressed: () {
-                      _campaign.addCard(card);
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Added ${card.name} to your deck!'),
-                        ),
-                      );
-                      _saveCampaign();
-                    },
-                    child: const Text('Pick'),
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-      ),
-    );
   }
 
   void _showRetreatDialog(Encounter encounter) {

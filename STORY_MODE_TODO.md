@@ -26,7 +26,8 @@ Changes to Story mode:
 24. ✅ The player should not press "collect" in order ot receive the new cards, they should automatically be added ot the player card invetntory , and they should have a dialog that alerts about it when they are added.
 25. ✅ Change deck "Inventory" to "Reserves" 
 26. ✅ After every enocunter, show the colleccted rewards in a calebretory dialog, andalso , with the story dialog, add a random reward/punsihment. around new cards (merceneries decided to join you), remove cards (a unit fell ill), found or lost gold etc.
-27. Remove the 3 card selection after every encounter and before first encounter.
+27. ✅ Remove the 3 card selection after every encounter and before first encounter.
 28. Keep the first item selection, phrase as "what you choose to take on you journey"
 29. The new building screen in the home town needs to display all information of this building, which cards it provides and thier production time.
 30. Allow the player to "return" the hero 1 node back, but it always comes with a small random "bad" result (lost cards/gold), but it counts as an iteration in the path, shortens supply time, and the player can return to the previous node as many times as they want.
+31. I want the player to se
