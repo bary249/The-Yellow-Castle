@@ -1230,6 +1230,132 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
     );
   }
 
+  /// Show dialog for multiple deliveries at the same location
+  Future<void> _showMultipleDeliveriesDialog({
+    required List<
+      ({PendingCardDelivery delivery, String phase, int eta, int prodRemaining})
+    >
+    deliveries,
+  }) async {
+    final navigator = Navigator.of(context);
+    if (!mounted) return;
+
+    final km = _campaign.distanceHomeToHeroKm();
+    final distanceText = km != null ? '${km.toStringAsFixed(0)} km' : 'unknown';
+
+    String enc(int n) => n == 1 ? '1 encounter' : '$n encounters';
+
+    await showDialog<void>(
+      context: navigator.context,
+      barrierDismissible: true,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF2D2D2D),
+        title: Row(
+          children: [
+            const Icon(Icons.local_shipping, color: Colors.greenAccent),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Supply Deliveries (${deliveries.length})',
+                style: const TextStyle(color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Distance to hero: $distanceText',
+                style: const TextStyle(color: Colors.white70, fontSize: 12),
+              ),
+              const SizedBox(height: 12),
+              ...deliveries.map((d) {
+                final delivery = d.delivery;
+                final phase = d.phase;
+                final eta = d.eta;
+                final prodRemaining = d.prodRemaining;
+                final buildingName = _homeTownBuildingName(
+                  delivery.sourceBuildingId,
+                );
+                final cardName = delivery.card.name;
+                final prodDone = prodRemaining <= 0;
+                final travelDone = prodDone && eta <= 0;
+
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[800],
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            phase == 'Producing'
+                                ? Icons.build
+                                : Icons.directions,
+                            color: phase == 'Producing'
+                                ? Colors.orangeAccent
+                                : Colors.greenAccent,
+                            size: 16,
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              cardName,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'From: $buildingName',
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 11,
+                        ),
+                      ),
+                      Text(
+                        travelDone
+                            ? 'Arriving now!'
+                            : prodDone
+                            ? 'Traveling: ${enc(eta)}'
+                            : 'Producing: ${enc(prodRemaining)}',
+                        style: TextStyle(
+                          color: travelDone
+                              ? Colors.greenAccent
+                              : Colors.white70,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _showDeliveryDetailsDialog({
     required PendingCardDelivery delivery,
     required String phase,
@@ -4803,6 +4929,23 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
 
     if (townLat != null && townLng != null) {
       final km = _campaign.distanceHomeToHeroKm();
+
+      // Group deliveries by location to avoid stacking markers
+      final deliveriesByLocation =
+          <
+            String,
+            List<
+              ({
+                PendingCardDelivery delivery,
+                String phase,
+                int eta,
+                int prodRemaining,
+                double lat,
+                double lng,
+              })
+            >
+          >{};
+
       for (final d in _campaign.pendingCardDeliveries) {
         if (d.forcedArrivesAtEncounter != null) {
           continue;
@@ -4814,25 +4957,49 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
 
         double lat;
         double lng;
-        Color markerColor;
         String phase;
 
         if (!isProduced) {
           // Still in production: show at Home Town
           lat = townLat;
           lng = townLng;
-          markerColor = Colors.orangeAccent;
           phase = 'Producing';
         } else if (heroPos != null && km != null && km > 0) {
           // Traveling: interpolate position
           final frac = (d.traveledKm / km).clamp(0.0, 1.0);
           lat = townLat + ((heroPos.latitude - townLat) * frac);
           lng = townLng + ((heroPos.longitude - townLng) * frac);
-          markerColor = Colors.greenAccent;
           phase = 'Traveling';
         } else {
           continue;
         }
+
+        // Round to 3 decimal places to group nearby markers
+        final locationKey =
+            '${lat.toStringAsFixed(3)},${lng.toStringAsFixed(3)}';
+        deliveriesByLocation.putIfAbsent(locationKey, () => []);
+        deliveriesByLocation[locationKey]!.add((
+          delivery: d,
+          phase: phase,
+          eta: eta,
+          prodRemaining: prodRemaining,
+          lat: lat,
+          lng: lng,
+        ));
+      }
+
+      // Create one marker per location
+      for (final entry in deliveriesByLocation.entries) {
+        final deliveryList = entry.value;
+        final firstDelivery = deliveryList.first;
+        final lat = firstDelivery.lat;
+        final lng = firstDelivery.lng;
+
+        // Use orange if any are producing, green if all traveling
+        final hasProducing = deliveryList.any((d) => d.phase == 'Producing');
+        final markerColor = hasProducing
+            ? Colors.orangeAccent
+            : Colors.greenAccent;
 
         markers.add(
           Marker(
@@ -4840,32 +5007,74 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
             width: 32,
             height: 32,
             child: GestureDetector(
-              onTap: () => _showDeliveryDetailsDialog(
-                delivery: d,
-                phase: phase,
-                eta: eta,
-                prodRemaining: prodRemaining,
-              ),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: markerColor.withValues(alpha: 0.9),
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.black, width: 1.5),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.35),
-                      blurRadius: 6,
-                      offset: const Offset(0, 3),
+              onTap: () {
+                if (deliveryList.length == 1) {
+                  _showDeliveryDetailsDialog(
+                    delivery: firstDelivery.delivery,
+                    phase: firstDelivery.phase,
+                    eta: firstDelivery.eta,
+                    prodRemaining: firstDelivery.prodRemaining,
+                  );
+                } else {
+                  _showMultipleDeliveriesDialog(
+                    deliveries: deliveryList
+                        .map(
+                          (d) => (
+                            delivery: d.delivery,
+                            phase: d.phase,
+                            eta: d.eta,
+                            prodRemaining: d.prodRemaining,
+                          ),
+                        )
+                        .toList(),
+                  );
+                }
+              },
+              child: Stack(
+                children: [
+                  Container(
+                    decoration: BoxDecoration(
+                      color: markerColor.withValues(alpha: 0.9),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.black, width: 1.5),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.35),
+                          blurRadius: 6,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-                child: const Center(
-                  child: Icon(
-                    Icons.local_shipping,
-                    color: Colors.black,
-                    size: 18,
+                    child: const Center(
+                      child: Icon(
+                        Icons.local_shipping,
+                        color: Colors.black,
+                        size: 18,
+                      ),
+                    ),
                   ),
-                ),
+                  // Show count badge if multiple deliveries
+                  if (deliveryList.length > 1)
+                    Positioned(
+                      right: 0,
+                      top: 0,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: const BoxDecoration(
+                          color: Colors.red,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Text(
+                          '${deliveryList.length}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ),
           ),
