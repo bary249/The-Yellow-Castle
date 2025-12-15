@@ -3309,6 +3309,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
       setState(() {
         _campaign.lastTravelLat = pos.latitude;
         _campaign.lastTravelLng = pos.longitude;
+        _campaign.addTravelPoint(pos.latitude, pos.longitude);
       });
       await _saveCampaign();
       if (!mounted) return;
@@ -3322,6 +3323,9 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     final locations = _act1CandidateLocationsForChapter(
       _campaign.encounterNumber,
     );
+    final travelPoints = _campaign.travelHistory
+        .map((p) => LatLng(p.lat, p.lng))
+        .toList();
 
     final townLat = _campaign.homeTownLat;
     final townLng = _campaign.homeTownLng;
@@ -3441,6 +3445,21 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                   urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                   userAgentPackageName: 'card_game',
                 ),
+                if (travelPoints.length >= 2)
+                  PolylineLayer(
+                    polylines: [
+                      Polyline(
+                        points: travelPoints,
+                        strokeWidth: 7,
+                        color: Colors.black.withValues(alpha: 0.55),
+                      ),
+                      Polyline(
+                        points: travelPoints,
+                        strokeWidth: 4,
+                        color: Colors.tealAccent.withValues(alpha: 0.85),
+                      ),
+                    ],
+                  ),
                 MarkerLayer(markers: markers),
                 RichAttributionWidget(
                   attributions: [

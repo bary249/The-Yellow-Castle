@@ -95,6 +95,20 @@ class HomeTownBuilding {
       );
 }
 
+class TravelPoint {
+  final double lat;
+  final double lng;
+
+  const TravelPoint({required this.lat, required this.lng});
+
+  Map<String, dynamic> toJson() => {'lat': lat, 'lng': lng};
+
+  factory TravelPoint.fromJson(Map<String, dynamic> json) => TravelPoint(
+    lat: (json['lat'] as num).toDouble(),
+    lng: (json['lng'] as num).toDouble(),
+  );
+}
+
 class CampaignState {
   final String id;
   final String leaderId;
@@ -134,6 +148,8 @@ class CampaignState {
   double? lastTravelLat;
   double? lastTravelLng;
 
+  List<TravelPoint> travelHistory;
+
   CampaignState({
     required this.id,
     required this.leaderId,
@@ -169,6 +185,7 @@ class CampaignState {
     this.mapRelicDiscovered = false,
     this.lastTravelLat,
     this.lastTravelLng,
+    List<TravelPoint>? travelHistory,
     DateTime? lastUpdated,
   }) : inventory = inventory ?? [],
        destroyedDeckCards = destroyedDeckCards ?? [],
@@ -179,7 +196,12 @@ class CampaignState {
        consumables = consumables ?? <String, int>{},
        activeConsumables = activeConsumables ?? <String, int>{},
        awardedLegacyMilestones = awardedLegacyMilestones ?? <String>{},
+       travelHistory = travelHistory ?? <TravelPoint>[],
        lastUpdated = lastUpdated ?? DateTime.now();
+
+  void addTravelPoint(double lat, double lng) {
+    travelHistory = [...travelHistory, TravelPoint(lat: lat, lng: lng)];
+  }
 
   bool hasAwardedMilestone(String milestoneId) {
     return awardedLegacyMilestones.contains(milestoneId);
@@ -416,6 +438,7 @@ class CampaignState {
     'mapRelicDiscovered': mapRelicDiscovered,
     'lastTravelLat': lastTravelLat,
     'lastTravelLng': lastTravelLng,
+    'travelHistory': travelHistory.map((p) => p.toJson()).toList(),
     'lastUpdated': lastUpdated.toIso8601String(),
   };
 
@@ -482,6 +505,11 @@ class CampaignState {
     mapRelicDiscovered: json['mapRelicDiscovered'] as bool? ?? false,
     lastTravelLat: (json['lastTravelLat'] as num?)?.toDouble(),
     lastTravelLng: (json['lastTravelLng'] as num?)?.toDouble(),
+    travelHistory:
+        (json['travelHistory'] as List?)
+            ?.map((e) => TravelPoint.fromJson(e as Map<String, dynamic>))
+            .toList() ??
+        <TravelPoint>[],
     lastUpdated: json['lastUpdated'] != null
         ? DateTime.parse(json['lastUpdated'] as String)
         : null,

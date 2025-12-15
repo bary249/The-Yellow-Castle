@@ -86,6 +86,8 @@
 - After conquering a city, a **Defense** encounter can appear as a selectable encounter.
 - Defense encounters give **+1 damage and +1 HP** to all player cards for that battle.
 
+- The campaign map can show the route you have traveled so far.
+
 - Campaign mode also has **consumables** (e.g. healing, remove-card) that are stored in the campaign inventory and can be equipped/used between encounters.
 
 ---

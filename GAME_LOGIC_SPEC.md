@@ -124,6 +124,7 @@ This document captures the **implemented and intended logic** of the game, mappe
 - In Story Mode, the encounter location can be used to generate deterministic board terrains for the enemy base and middle row.
 - Some Story Mode battles can be **conquerable cities**. Winning a conquerable city can create a temporary **Defense** encounter option.
 - Defense encounters grant a temporary **+1 damage and +1 HP** to all player cards for that match.
+- Campaign tracks the player's travel history and can render the traveled route on the real map.
 
 **Implemented campaign bonuses:**
 - **Gold per battle bonus**: `CampaignState.goldPerBattleBonus` (e.g. `relic_gold_purse` => +10 gold per battle reward).
