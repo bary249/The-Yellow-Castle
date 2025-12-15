@@ -265,7 +265,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
               builder: (context) => AlertDialog(
                 backgroundColor: const Color(0xFF2D2D2D),
                 title: const Text(
-                  'Choose Starting Relic',
+                  'What you choose to take on your journey',
                   style: TextStyle(color: Colors.white),
                 ),
                 content: Column(
@@ -328,7 +328,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF2D2D2D),
         title: const Text(
-          'Choose Starting Special Card',
+          'What you choose to take on your journey',
           style: TextStyle(color: Colors.white),
         ),
         content: SizedBox(

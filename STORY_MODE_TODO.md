@@ -27,7 +27,9 @@ Changes to Story mode:
 25. ✅ Change deck "Inventory" to "Reserves" 
 26. ✅ After every enocunter, show the colleccted rewards in a calebretory dialog, andalso , with the story dialog, add a random reward/punsihment. around new cards (merceneries decided to join you), remove cards (a unit fell ill), found or lost gold etc.
 27. ✅ Remove the 3 card selection after every encounter and before first encounter.
-28. Keep the first item selection, phrase as "what you choose to take on you journey"
+28. ✅ Keep the first item selection, phrase as "what you choose to take on you journey"
 29. The new building screen in the home town needs to display all information of this building, which cards it provides and thier production time.
 30. Allow the player to "return" the hero 1 node back, but it always comes with a small random "bad" result (lost cards/gold), but it counts as an iteration in the path, shortens supply time, and the player can return to the previous node as many times as they want.
-31. I want the player to se
+31. I want the player to see thier cards production line in thier inventoryu, so they will see which players are going to be added, and see how many enocunters it will take for them to be added.And they will only be able to add them to the deck once they "arrive"
+32. 
+
