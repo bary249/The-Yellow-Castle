@@ -709,6 +709,9 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
 
     // Save initial state
     await _saveCampaign();
+
+    // Start initial production for all buildings
+    await _autoCollectHomeTownDeliveries(showDialogs: false);
   }
 
   bool get _isNapoleonRealMapEnabled {
@@ -742,15 +745,15 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
         _campaign.homeTownLng != null) {
       _ensureHomeTownStarterBuildings();
 
-      // Backward compat: older saves may have buildings with lastCollectedEncounter = -1,
-      // which makes them look "Ready" immediately. Treat them as starting cooldown now.
+      // Backward compat: older saves may have buildings with lastCollectedEncounter = -1.
+      // Keep them as -99 so they're ready to produce immediately.
       final updated = _campaign.homeTownBuildings
           .map(
-            (b) => b.lastCollectedEncounter < 0
+            (b) => b.lastCollectedEncounter == -1
                 ? HomeTownBuilding(
                     id: b.id,
                     level: b.level,
-                    lastCollectedEncounter: _campaign.encounterNumber,
+                    lastCollectedEncounter: -99, // Ready to produce immediately
                   )
                 : b,
           )
@@ -801,7 +804,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
       ..._campaign.homeTownBuildings,
       HomeTownBuilding(
         id: _buildingTrainingGroundsId,
-        lastCollectedEncounter: _campaign.encounterNumber,
+        lastCollectedEncounter: -99, // Ready to produce immediately
       ),
     ];
   }
@@ -2136,16 +2139,20 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
                                 ? () async {
                                     setState(() {
                                       _campaign.spendGold(effectiveCost);
+                                      // Set lastCollectedEncounter to -99 so building can start producing immediately
                                       _campaign.homeTownBuildings = [
                                         ..._campaign.homeTownBuildings,
                                         HomeTownBuilding(
                                           id: id,
-                                          lastCollectedEncounter:
-                                              _campaign.encounterNumber,
+                                          lastCollectedEncounter: -99,
                                         ),
                                       ];
                                     });
                                     await _saveCampaign();
+                                    // Trigger production immediately for new building
+                                    await _autoCollectHomeTownDeliveries(
+                                      showDialogs: true,
+                                    );
                                     if (!context.mounted) return;
                                     Navigator.pop(context);
                                   }
