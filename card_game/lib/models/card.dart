@@ -1,3 +1,6 @@
+/// Card tier for upgrade system
+enum CardTier { basic, advanced, expert }
+
 /// Represents a playing card in the game
 /// TYC3: Turn-based AP system with manual targeting
 class GameCard {
@@ -5,6 +8,9 @@ class GameCard {
   final String name;
   final int damage;
   final int health;
+
+  /// Card tier (Basic -> Advanced -> Expert)
+  final CardTier tier;
 
   /// LEGACY: 1-5 tick value (kept for migration, will be removed)
   final int tick;
@@ -61,6 +67,7 @@ class GameCard {
     required this.name,
     required this.damage,
     required this.health,
+    this.tier = CardTier.basic, // Default to Basic tier
     this.tick = 3, // Legacy default
     this.moveSpeed = 1, // Default: normal speed (1 tile per turn)
     // TYC3 AP fields - most units have 1 AP
@@ -85,6 +92,7 @@ class GameCard {
       name: name,
       damage: damage,
       health: health,
+      tier: tier,
       tick: tick,
       moveSpeed: moveSpeed,
       maxAP: maxAP,
@@ -106,6 +114,7 @@ class GameCard {
     String? name,
     int? damage,
     int? health,
+    CardTier? tier,
     int? tick,
     int? moveSpeed,
     int? maxAP,
@@ -124,6 +133,7 @@ class GameCard {
       name: name ?? this.name,
       damage: damage ?? this.damage,
       health: health ?? this.health,
+      tier: tier ?? this.tier,
       tick: tick ?? this.tick,
       moveSpeed: moveSpeed ?? this.moveSpeed,
       maxAP: maxAP ?? this.maxAP,
@@ -146,6 +156,7 @@ class GameCard {
       name: name,
       damage: damage,
       health: health,
+      tier: tier,
       tick: tick,
       moveSpeed: moveSpeed,
       maxAP: maxAP,
@@ -247,6 +258,7 @@ class GameCard {
     'name': name,
     'damage': damage,
     'health': health,
+    'tier': tier.name,
     'tick': tick,
     'moveSpeed': moveSpeed,
     'maxAP': maxAP,
@@ -264,6 +276,18 @@ class GameCard {
     'isDecoy': isDecoy,
   };
 
+  /// Parse CardTier from string
+  static CardTier _parseTier(String? tierStr) {
+    switch (tierStr) {
+      case 'advanced':
+        return CardTier.advanced;
+      case 'expert':
+        return CardTier.expert;
+      default:
+        return CardTier.basic;
+    }
+  }
+
   /// Create from JSON
   factory GameCard.fromJson(Map<String, dynamic> json) {
     final card = GameCard(
@@ -271,6 +295,7 @@ class GameCard {
       name: json['name'] as String,
       damage: json['damage'] as int,
       health: json['health'] as int,
+      tier: _parseTier(json['tier'] as String?),
       tick: json['tick'] as int? ?? 3,
       moveSpeed: json['moveSpeed'] as int? ?? 1,
       maxAP: json['maxAP'] as int? ?? 1,

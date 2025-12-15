@@ -13,6 +13,7 @@ import 'test_match_screen.dart';
 import '../data/hero_library.dart';
 import 'campaign_deck_screen.dart';
 import 'progression_screen.dart';
+import 'card_upgrade_screen.dart';
 import '../services/campaign_persistence_service.dart';
 import '../data/napoleon_progression.dart';
 
@@ -142,6 +143,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
   static const String _buildingSupplyDepotId = 'building_supply_depot';
   static const String _buildingOfficersAcademyId = 'building_officers_academy';
   static const String _buildingWarCollegeId = 'building_war_college';
+  static const String _buildingMedicCorpsId = 'building_medic_corps';
 
   final Random _random = Random();
 
@@ -149,6 +151,28 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
     if (discountPercent <= 0) return cost;
     final discounted = (cost * (100 - discountPercent)) / 100.0;
     return discounted.round().clamp(0, cost);
+  }
+
+  /// 1/5 chance to permanently destroy a random card from deck
+  /// Returns a RewardEvent if a card was destroyed, null otherwise
+  RewardEvent? _tryRandomCardDeath() {
+    if (_campaign.deck.isEmpty) return null;
+
+    // 1 in 5 chance (20%)
+    if (_random.nextInt(5) != 0) return null;
+
+    final idx = _random.nextInt(_campaign.deck.length);
+    final card = _campaign.deck[idx];
+    setState(() {
+      _campaign.destroyCardPermanently(card.id);
+    });
+    _saveCampaign();
+    return RewardEvent(
+      title: 'Casualty',
+      message: '${card.name} was lost during the wait.',
+      icon: Icons.dangerous,
+      iconColor: Colors.red,
+    );
   }
 
   RewardEvent _applyReturnPenalty() {
@@ -344,6 +368,12 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
     );
 
     rewardEvents.add(_applyReturnPenalty());
+
+    // 1/5 chance to lose a card permanently
+    final cardDeath = _tryRandomCardDeath();
+    if (cardDeath != null) {
+      rewardEvents.add(cardDeath);
+    }
 
     setState(() {
       _campaign.completeEncounter();
@@ -969,6 +999,8 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
         return 'Officers Academy';
       case _buildingWarCollegeId:
         return 'War College';
+      case _buildingMedicCorpsId:
+        return 'Medic Corps';
       default:
         return id;
     }
@@ -984,6 +1016,8 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
         return 'Provides a rare unit card on a longer supply schedule.';
       case _buildingWarCollegeId:
         return 'Provides an epic unit card on a longer supply schedule.';
+      case _buildingMedicCorpsId:
+        return 'Provides a Medic card (tier based on current Act).';
       default:
         return '';
     }
@@ -997,6 +1031,8 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
         return 110;
       case _buildingWarCollegeId:
         return 160;
+      case _buildingMedicCorpsId:
+        return 80;
       default:
         return 0;
     }
@@ -1047,6 +1083,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
       _buildingSupplyDepotId => 1,
       _buildingOfficersAcademyId => 3,
       _buildingWarCollegeId => 4,
+      _buildingMedicCorpsId => 2,
       _ => 1,
     };
   }
@@ -1056,20 +1093,6 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
     final base = _buildingBaseSupplyEveryEncounters(building);
     // Ensure supply time is at least 1 encounter
     return (base + modifier).clamp(1, 99);
-  }
-
-  String _buildingCurrentSupplyTimeText(HomeTownBuilding building) {
-    if (building.id == _buildingSupplyDepotId) {
-      return '';
-    }
-    final base = _buildingBaseSupplyEveryEncounters(building);
-    final modifier = _distanceSupplyModifierEncounters();
-    final total = (base + modifier).clamp(1, 99);
-    if (modifier == 0) {
-      return 'Current supply time: every $total encounter${total == 1 ? "" : "s"}';
-    }
-    final sign = modifier > 0 ? '+' : '-';
-    return 'Current supply time: $base $sign ${modifier.abs()} = $total encounter${total == 1 ? "" : "s"}';
   }
 
   String _buildingProducingStatusText(HomeTownBuilding building) {
@@ -1092,10 +1115,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
     );
     final d = producing.first;
     final producingRemaining = _campaign.encountersUntilDeliveryProduced(d);
-    if (producingRemaining == 1) {
-      return 'Producing: ${d.card.name} (ready in 1 encounter)';
-    }
-    return 'Producing: ${d.card.name} (ready in $producingRemaining encounters)';
+    return 'Production: ${d.card.name} - $producingRemaining encounter${producingRemaining == 1 ? '' : 's'}';
   }
 
   String _buildingTravelingStatusText(HomeTownBuilding building) {
@@ -1119,12 +1139,9 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
     final d = traveling.first;
     final remaining = _campaign.encountersUntilDeliveryArrives(d);
     if (remaining <= 0) {
-      return 'Traveling: ${d.card.name} (arriving now)';
+      return 'Traveling: ${d.card.name} - arriving now';
     }
-    if (remaining == 1) {
-      return 'Traveling: ${d.card.name} (arrives in 1 encounter)';
-    }
-    return 'Traveling: ${d.card.name} (arrives in $remaining encounters)';
+    return 'Traveling: ${d.card.name} - $remaining encounter${remaining == 1 ? '' : 's'}';
   }
 
   bool _canCollectBuilding(HomeTownBuilding building) {
@@ -1562,7 +1579,10 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
     if (!_canCollectBuilding(building)) return null;
 
     if (building.id == _buildingTrainingGroundsId) {
-      final candidates = ShopInventory.getCardsForAct(_campaign.act);
+      // Training Grounds produces only common cards (rarity 1)
+      final candidates = ShopInventory.getCardsForAct(
+        _campaign.act,
+      ).where((c) => c.rarity == 1).toList();
       if (candidates.isNotEmpty) {
         candidates.shuffle(_random);
         final card = candidates.first;
@@ -1699,6 +1719,57 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
         return event;
       }
       return null;
+    }
+
+    if (building.id == _buildingMedicCorpsId) {
+      // Produce medic card based on current act
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final GameCard card;
+      switch (_campaign.act) {
+        case 2:
+          card = advancedMedic(timestamp);
+          break;
+        case 3:
+          card = expertMedic(timestamp);
+          break;
+        default:
+          card = basicMedic(timestamp);
+      }
+      final productionDuration = _campaign.supplyProductionDurationForCard(
+        card,
+      );
+      final travelDuration = _campaign.currentTravelDurationEncounters();
+      _logSupply(
+        'Production start: building=${building.id} prod=$productionDuration travel=$travelDuration lastCollected=${building.lastCollectedEncounter} now=${_campaign.encounterNumber} card=${card.id}:${card.name}',
+      );
+      PendingCardDelivery? created;
+      setState(() {
+        created = _campaign.enqueueCardDelivery(
+          sourceBuildingId: building.id,
+          card: card,
+        );
+        building.lastCollectedEncounter = _campaign.encounterNumber;
+      });
+      await _saveCampaign();
+      final remaining = created == null
+          ? 0
+          : _campaign.encountersUntilDeliveryArrives(created!);
+      final event = RewardEvent(
+        title: 'Medic Corps',
+        message:
+            'Production started: ${card.name} (ETA: $remaining encounters)',
+        icon: Icons.healing,
+        iconColor: Colors.greenAccent,
+      );
+      if (showDialog) {
+        await _showHomeTownDeliveryDialog(
+          title: event.title,
+          message: event.message,
+          icon: event.icon,
+          iconColor: event.iconColor,
+        );
+      }
+      return event;
     }
 
     return null;
@@ -1856,6 +1927,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
           _buildingSupplyDepotId,
           _buildingOfficersAcademyId,
           _buildingWarCollegeId,
+          _buildingMedicCorpsId,
         ].where((id) => !alreadyBuilt.contains(id)).toList();
 
         return AlertDialog(
@@ -1882,11 +1954,6 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
                         _homeTownBuildDiscountPercent,
                       );
                       final canAfford = _campaign.gold >= effectiveCost;
-
-                      final previewBuilding = HomeTownBuilding(id: id);
-                      final supplyText = _buildingCurrentSupplyTimeText(
-                        previewBuilding,
-                      );
 
                       String producesText = _homeTownBuildingDescription(id);
                       if (id == _buildingSupplyDepotId) {
@@ -1915,6 +1982,13 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
                             ? ''
                             : '\nExamples: ${examples.join(", ")}';
                         producesText = 'Produces: Epic unit card$exampleText';
+                      } else if (id == _buildingMedicCorpsId) {
+                        final medicName = switch (_campaign.act) {
+                          2 => 'Advanced Medic',
+                          3 => 'Expert Medic',
+                          _ => 'Field Medic',
+                        };
+                        producesText = 'Produces: $medicName (healer unit)';
                       }
 
                       return Card(
@@ -1925,10 +1999,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
                             style: const TextStyle(color: Colors.white),
                           ),
                           subtitle: Text(
-                            [
-                              producesText,
-                              supplyText,
-                            ].where((s) => s.trim().isNotEmpty).join('\n'),
+                            producesText,
                             style: const TextStyle(color: Colors.white70),
                           ),
                           trailing: ElevatedButton(
@@ -2198,7 +2269,6 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
                             [
                               _homeTownBuildingDescription(b.id),
                               _buildingProducingStatusText(b),
-                              _buildingCurrentSupplyTimeText(b),
                               _buildingTravelingStatusText(b),
                             ].where((s) => s.trim().isNotEmpty).join('\n'),
                             style: const TextStyle(color: Colors.white70),
@@ -3049,6 +3119,23 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
   }
 
   void _startNextAct() {
+    final fromAct = _campaign.act;
+    // Show upgrade screen before advancing to next act
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => CardUpgradeScreen(
+          campaign: _campaign,
+          fromAct: fromAct,
+          onComplete: () {
+            Navigator.of(context).pop();
+            _completeActTransition();
+          },
+        ),
+      ),
+    );
+  }
+
+  void _completeActTransition() {
     setState(() {
       _campaign.nextAct();
       // Re-initialize generator for the new act
@@ -5096,70 +5183,132 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
   void _openItemsView() {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF2D2D2D),
-        title: const Text('Items', style: TextStyle(color: Colors.white)),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: _campaign.consumables.isEmpty
-              ? const Text(
-                  'No items collected yet.',
-                  style: TextStyle(color: Colors.white70),
-                )
-              : ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: _campaign.consumables.keys.length,
-                  itemBuilder: (context, index) {
-                    final itemId = _campaign.consumables.keys.elementAt(index);
-                    final count = _campaign.consumables[itemId] ?? 0;
-                    if (count <= 0) return const SizedBox.shrink();
-                    final all = ShopInventory.getAllConsumables();
-                    final item = all.firstWhere(
-                      (c) => c.id == itemId,
-                      orElse: () => all.first,
-                    );
-                    return ListTile(
-                      leading: const Icon(
-                        Icons.local_hospital,
-                        color: Colors.greenAccent,
-                      ),
-                      title: Text(
-                        item.name,
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                      subtitle: Text(
-                        item.description,
-                        style: TextStyle(color: Colors.grey[400], fontSize: 12),
-                      ),
-                      trailing: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: const Color(0xFF2D2D2D),
+          title: const Text('Items', style: TextStyle(color: Colors.white)),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: _campaign.consumables.isEmpty
+                ? const Text(
+                    'No items collected yet.',
+                    style: TextStyle(color: Colors.white70),
+                  )
+                : ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: _campaign.consumables.keys.length,
+                    itemBuilder: (context, index) {
+                      final itemId = _campaign.consumables.keys.elementAt(
+                        index,
+                      );
+                      final count = _campaign.consumables[itemId] ?? 0;
+                      if (count <= 0) return const SizedBox.shrink();
+                      final all = ShopInventory.getAllConsumables();
+                      final item = all.firstWhere(
+                        (c) => c.id == itemId,
+                        orElse: () => all.first,
+                      );
+
+                      // Determine if item is usable
+                      bool isUsable = true;
+                      if (itemId == 'heal_potion' ||
+                          itemId == 'large_heal_potion') {
+                        isUsable = _campaign.health < _campaign.maxHealth;
+                      }
+
+                      return ListTile(
+                        leading: const Icon(
+                          Icons.local_hospital,
+                          color: Colors.greenAccent,
                         ),
-                        decoration: BoxDecoration(
-                          color: Colors.green[800],
-                          borderRadius: BorderRadius.circular(12),
+                        title: Text(
+                          item.name,
+                          style: const TextStyle(color: Colors.white),
                         ),
-                        child: Text(
-                          '×$count',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
+                        subtitle: Text(
+                          item.description,
+                          style: TextStyle(
+                            color: Colors.grey[400],
+                            fontSize: 12,
                           ),
                         ),
-                      ),
-                    );
-                  },
-                ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            TextButton(
+                              onPressed: isUsable
+                                  ? () {
+                                      _useConsumableItem(itemId);
+                                      setDialogState(() {});
+                                      setState(() {});
+                                    }
+                                  : null,
+                              style: TextButton.styleFrom(
+                                foregroundColor: isUsable
+                                    ? Colors.green
+                                    : Colors.grey,
+                              ),
+                              child: const Text('Use'),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.green[800],
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                '×$count',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
           ),
-        ],
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
       ),
     );
+  }
+
+  void _useConsumableItem(String itemId) {
+    final count = _campaign.consumables[itemId] ?? 0;
+    if (count <= 0) return;
+
+    // Consume the item
+    _campaign.consumables[itemId] = count - 1;
+    if (_campaign.consumables[itemId] == 0) {
+      _campaign.consumables.remove(itemId);
+    }
+
+    // Apply the effect
+    if (itemId == 'heal_potion') {
+      _campaign.heal(15);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Healed 15 HP!')));
+    } else if (itemId == 'large_heal_potion') {
+      _campaign.heal(30);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Healed 30 HP!')));
+    }
+
+    _saveCampaign();
   }
 
   void _showDeckView() {

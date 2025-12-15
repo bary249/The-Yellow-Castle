@@ -2534,10 +2534,12 @@ class MatchManager {
     _currentMatch!.lastCombatResult = SyncedCombatResult(
       id: '${DateTime.now().millisecondsSinceEpoch}_${attacker.id}_${target.id}',
       isBaseAttack: false,
+      isHeal: false,
       attackerName: attacker.name,
       targetName: target.name,
       targetId: target.id,
       damageDealt: result.damageDealt,
+      healAmount: 0,
       retaliationDamage: result.retaliationDamage,
       targetDied: result.targetDied,
       attackerDied: result.attackerDied,
@@ -2771,9 +2773,11 @@ class MatchManager {
     _currentMatch!.lastCombatResult = SyncedCombatResult(
       id: '${DateTime.now().millisecondsSinceEpoch}_${attacker.id}_base',
       isBaseAttack: true,
+      isHeal: false,
       attackerName: attacker.name,
       targetName: '${targetPlayer.name}\'s Base',
       damageDealt: damage,
+      healAmount: 0,
       retaliationDamage: 0,
       targetDied: targetPlayer.isDefeated,
       attackerDied: false,
@@ -2797,6 +2801,151 @@ class MatchManager {
     }
 
     return damage;
+  }
+
+  int _getMedicHealAmount(GameCard card) {
+    for (final a in card.abilities) {
+      if (a.startsWith('medic_')) {
+        return int.tryParse(a.split('_').last) ?? 0;
+      }
+    }
+    return 0;
+  }
+
+  bool _isMedic(GameCard card) => _getMedicHealAmount(card) > 0;
+
+  /// TYC3: Get all heal targets reachable with current AP (move + heal).
+  /// For now, medics can only heal friendly units on the SAME TILE.
+  List<({GameCard target, int row, int col, int moveCost})>
+  getReachableHealTargets(GameCard card, int fromRow, int fromCol) {
+    if (_currentMatch == null) return [];
+    if (!useTurnBasedSystem) return [];
+    if (!_isMedic(card)) return [];
+
+    final targets = <({GameCard target, int row, int col, int moveCost})>[];
+
+    // Get all positions we can reach (including current position with 0 move cost)
+    final positions = [
+      (row: fromRow, col: fromCol, apCost: 0),
+      ...getReachableTiles(card, fromRow, fromCol),
+    ];
+
+    for (final pos in positions) {
+      final apAfterMove = card.currentAP - pos.apCost;
+      if (apAfterMove < card.attackAPCost) continue;
+
+      final tile = _currentMatch!.board.getTile(pos.row, pos.col);
+      final friendlyInjured = tile.cards
+          .where(
+            (c) =>
+                c.isAlive &&
+                c.ownerId == card.ownerId &&
+                c.id != card.id &&
+                c.currentHealth < c.health,
+          )
+          .toList();
+
+      for (final t in friendlyInjured) {
+        if (!targets.any((e) => e.target.id == t.id)) {
+          targets.add((
+            target: t,
+            row: pos.row,
+            col: pos.col,
+            moveCost: pos.apCost,
+          ));
+        }
+      }
+    }
+
+    return targets;
+  }
+
+  /// TYC3: Heal a friendly unit with a medic card.
+  /// Returns the synced result (for UI + online sync), or null if invalid.
+  SyncedCombatResult? healCardTYC3(
+    GameCard healer,
+    GameCard target,
+    int healerRow,
+    int healerCol,
+    int targetRow,
+    int targetCol,
+  ) {
+    if (_currentMatch == null) return null;
+    if (!useTurnBasedSystem) return null;
+
+    final healAmount = _getMedicHealAmount(healer);
+    if (healAmount <= 0) {
+      _log('❌ Heal failed: ${healer.name} is not a medic');
+      return null;
+    }
+    if (!healer.canAttack()) {
+      _log('❌ Heal failed: Not enough AP');
+      return null;
+    }
+    if (!target.isAlive) {
+      _log('❌ Heal failed: Target is dead');
+      return null;
+    }
+    if (target.ownerId != healer.ownerId) {
+      _log('❌ Heal failed: Cannot heal enemy units');
+      return null;
+    }
+
+    // Must be on the same tile.
+    if (healerRow != targetRow || healerCol != targetCol) {
+      _log('❌ Heal failed: Medic must be on the same tile as target');
+      return null;
+    }
+
+    // Spend AP (reuse attack AP for heal action).
+    if (!healer.spendAttackAP()) {
+      _log('❌ Heal failed: Not enough AP');
+      return null;
+    }
+
+    final before = target.currentHealth;
+    target.currentHealth = (target.currentHealth + healAmount).clamp(
+      0,
+      target.health,
+    );
+    final after = target.currentHealth;
+    final actualHeal = after - before;
+
+    final healerOwner = healer.ownerId == _currentMatch!.player.id
+        ? 'Player'
+        : 'Opponent';
+    _log(
+      '🩺 [$healerOwner] ${healer.name} heals ${target.name} for $actualHeal (HP: $before → $after)',
+    );
+    _log('   AP remaining: ${healer.currentAP}/${healer.maxAP}');
+
+    final result = SyncedCombatResult(
+      id: '${DateTime.now().millisecondsSinceEpoch}_${healer.id}_${target.id}_heal',
+      isBaseAttack: false,
+      isHeal: true,
+      attackerName: healer.name,
+      targetName: target.name,
+      targetId: target.id,
+      damageDealt: 0,
+      healAmount: actualHeal,
+      retaliationDamage: 0,
+      targetDied: false,
+      attackerDied: false,
+      targetHpBefore: before,
+      targetHpAfter: after,
+      attackerHpBefore: healer.currentHealth,
+      attackerHpAfter: healer.currentHealth,
+      laneCol: targetCol,
+      attackerOwnerId: healer.ownerId ?? '',
+      attackerId: healer.id,
+      attackerRow: healerRow,
+      attackerCol: healerCol,
+      targetRow: targetRow,
+      targetCol: targetCol,
+    );
+
+    _currentMatch!.lastCombatResult = result;
+    return result;
   }
 
   void _log(String message) {

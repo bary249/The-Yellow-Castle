@@ -164,18 +164,54 @@ class ShopInventory {
     switch (act) {
       case 1:
         return [
-          napoleonGrenadier(100 + timestamp % 1000),
-          napoleonCuirassier(101 + timestamp % 1000),
-          napoleonVoltigeur(102 + timestamp % 1000),
-          napoleonHussar(103 + timestamp % 1000),
-          napoleonFusilier(104 + timestamp % 1000),
-          napoleonFieldCannon(105 + timestamp % 1000),
-          napoleonLineInfantry(106 + timestamp % 1000),
+          // Common (rarity 1)
+          napoleonVoltigeur(100 + timestamp % 1000),
+          napoleonFusilier(101 + timestamp % 1000),
+          napoleonFieldCannon(102 + timestamp % 1000),
+          napoleonLineInfantry(103 + timestamp % 1000),
+          napoleonSapper(104 + timestamp % 1000),
+          napoleonDrummerBoy(105 + timestamp % 1000),
+          // Rare (rarity 2)
+          napoleonGrenadier(110 + timestamp % 1000),
+          napoleonCuirassier(111 + timestamp % 1000),
+          napoleonHussar(112 + timestamp % 1000),
+          napoleonYoungGuard(113 + timestamp % 1000),
+          napoleonChasseur(114 + timestamp % 1000),
+          napoleonHorseArtillery(115 + timestamp % 1000),
+          // Epic (rarity 3)
+          napoleonOldGuard(120 + timestamp % 1000),
+          napoleonMarshalNey(121 + timestamp % 1000),
+          napoleonPolishLancer(122 + timestamp % 1000),
+        ];
+      case 2:
+        return [
+          // Common (rarity 1)
+          napoleonVoltigeur(100 + timestamp % 1000),
+          napoleonFusilier(101 + timestamp % 1000),
+          napoleonFieldCannon(102 + timestamp % 1000),
+          napoleonSapper(103 + timestamp % 1000),
+          // Rare (rarity 2)
+          napoleonGrenadier(110 + timestamp % 1000),
+          napoleonCuirassier(111 + timestamp % 1000),
+          napoleonHussar(112 + timestamp % 1000),
+          napoleonHorseArtillery(113 + timestamp % 1000),
+          // Epic (rarity 3)
+          napoleonOldGuard(120 + timestamp % 1000),
+          napoleonGrandBattery(121 + timestamp % 1000),
         ];
       default:
         return [
-          napoleonGrenadier(100 + timestamp % 1000),
-          napoleonCuirassier(101 + timestamp % 1000),
+          // Common (rarity 1)
+          napoleonVoltigeur(100 + timestamp % 1000),
+          napoleonFusilier(101 + timestamp % 1000),
+          napoleonFieldCannon(102 + timestamp % 1000),
+          // Rare (rarity 2)
+          napoleonGrenadier(110 + timestamp % 1000),
+          napoleonCuirassier(111 + timestamp % 1000),
+          napoleonHussar(112 + timestamp % 1000),
+          // Epic (rarity 3)
+          napoleonOldGuard(120 + timestamp % 1000),
+          napoleonMarshalNey(121 + timestamp % 1000),
         ];
     }
   }

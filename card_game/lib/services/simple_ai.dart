@@ -246,6 +246,56 @@ class SimpleAI {
         }
       }
     }
+
+    // 4. HEAL (Medics heal friendly injured units on same tile)
+    final medics = <({GameCard card, int row, int col})>[];
+    for (int row = 0; row < 3; row++) {
+      for (int col = 0; col < 3; col++) {
+        final tile = match.board.getTile(row, col);
+        for (final card in tile.cards) {
+          if (card.isAlive &&
+              card.canAttack() &&
+              card.ownerId == activePlayer.id &&
+              card.abilities.any((a) => a.startsWith('medic_'))) {
+            medics.add((card: card, row: row, col: col));
+          }
+        }
+      }
+    }
+
+    for (final entry in medics) {
+      final medic = entry.card;
+      final row = entry.row;
+      final col = entry.col;
+
+      if (!medic.canAttack()) continue;
+
+      // Find heal targets on the same tile
+      final healTargets = matchManager.getReachableHealTargets(medic, row, col);
+      if (healTargets.isNotEmpty) {
+        // Prioritize most injured units
+        healTargets.sort((a, b) {
+          final missingA = a.target.health - a.target.currentHealth;
+          final missingB = b.target.health - b.target.currentHealth;
+          return missingB - missingA;
+        });
+
+        final target = healTargets.first;
+        final result = matchManager.healCardTYC3(
+          medic,
+          target.target,
+          row,
+          col,
+          target.row,
+          target.col,
+        );
+        if (result != null) {
+          await logAndWait(
+            '${medic.name} healed ${target.target.name} for ${result.healAmount} HP',
+          );
+        }
+      }
+    }
   }
 
   /// Generate tile-based AI placements

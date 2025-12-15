@@ -202,6 +202,14 @@ class Deck {
       // Scout
       case 'Scout':
         return scoutUnit(index);
+
+      // Medics
+      case 'Field Medic':
+        return basicMedic(index);
+      case 'Advanced Medic':
+        return advancedMedic(index);
+      case 'Expert Medic':
+        return expertMedic(index);
       // Common cards
       case 'Desert Quick Strike':
         return desertQuickStrike(index);

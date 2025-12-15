@@ -24,10 +24,274 @@ class _CampaignDeckScreenState extends State<CampaignDeckScreen>
   String? _selectedElementFilter;
   late TabController _tabController;
 
+  final Set<String> _selectedAttackTypeFilters = {};
+  final Set<int> _selectedRarityFilters = {};
+  final Set<String> _selectedAbilityFilters = {};
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+  }
+
+  List<GameCard> _applyFilters(List<GameCard> cards) {
+    Iterable<GameCard> filtered = cards;
+
+    if (_selectedElementFilter != null) {
+      filtered = filtered.where((c) => c.element == _selectedElementFilter);
+    }
+
+    if (_selectedAttackTypeFilters.isNotEmpty) {
+      filtered = filtered.where(
+        (c) => _selectedAttackTypeFilters.contains(_attackTypeFilterKey(c)),
+      );
+    }
+
+    if (_selectedRarityFilters.isNotEmpty) {
+      filtered = filtered.where(
+        (c) => _selectedRarityFilters.contains(c.rarity),
+      );
+    }
+
+    if (_selectedAbilityFilters.isNotEmpty) {
+      filtered = filtered.where(
+        (c) => _selectedAbilityFilters.every((a) => c.abilities.contains(a)),
+      );
+    }
+
+    return filtered.toList();
+  }
+
+  String _attackTypeFilterKey(GameCard card) {
+    if (card.isLongRange ||
+        card.attackRange >= 2 ||
+        card.abilities.contains('long_range') ||
+        card.abilities.contains('far_attack')) {
+      return 'far_attack';
+    }
+    if (card.isRanged) return 'ranged';
+    return 'melee';
+  }
+
+  List<String> _allAbilitiesForFilters() {
+    final allCards = <GameCard>[
+      ...widget.campaign.deck,
+      ...widget.campaign.inventory,
+      ...widget.campaign.destroyedDeckCards,
+    ];
+    final abilities = <String>{};
+    for (final c in allCards) {
+      abilities.addAll(c.abilities);
+    }
+    final list = abilities.toList()..sort();
+    return list;
+  }
+
+  Future<void> _showAdvancedFiltersSheet() async {
+    final allAbilities = _allAbilitiesForFilters();
+    final selectedAttackTypes = Set<String>.from(_selectedAttackTypeFilters);
+    final selectedRarities = Set<int>.from(_selectedRarityFilters);
+    final selectedAbilities = Set<String>.from(_selectedAbilityFilters);
+
+    final result = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: const Color(0xFF1F1F1F),
+      isScrollControlled: true,
+      builder: (context) {
+        return SafeArea(
+          child: StatefulBuilder(
+            builder: (context, setModalState) {
+              Widget sectionTitle(String title) {
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  child: Text(
+                    title,
+                    style: TextStyle(
+                      color: Colors.amber[300],
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                );
+              }
+
+              return Padding(
+                padding: EdgeInsets.only(
+                  bottom: MediaQuery.of(context).viewInsets.bottom,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                      child: Row(
+                        children: [
+                          const Text(
+                            'Filters',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const Spacer(),
+                          TextButton(
+                            onPressed: () {
+                              setModalState(() {
+                                selectedAttackTypes.clear();
+                                selectedRarities.clear();
+                                selectedAbilities.clear();
+                              });
+                            },
+                            child: const Text('Clear'),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    sectionTitle('Attack Type'),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Wrap(
+                        spacing: 8,
+                        children: [
+                          FilterChip(
+                            label: const Text('Melee'),
+                            selected: selectedAttackTypes.contains('melee'),
+                            onSelected: (v) => setModalState(() {
+                              v
+                                  ? selectedAttackTypes.add('melee')
+                                  : selectedAttackTypes.remove('melee');
+                            }),
+                          ),
+                          FilterChip(
+                            label: const Text('Ranged'),
+                            selected: selectedAttackTypes.contains('ranged'),
+                            onSelected: (v) => setModalState(() {
+                              v
+                                  ? selectedAttackTypes.add('ranged')
+                                  : selectedAttackTypes.remove('ranged');
+                            }),
+                          ),
+                          FilterChip(
+                            label: const Text('Far Attack'),
+                            selected: selectedAttackTypes.contains(
+                              'far_attack',
+                            ),
+                            onSelected: (v) => setModalState(() {
+                              v
+                                  ? selectedAttackTypes.add('far_attack')
+                                  : selectedAttackTypes.remove('far_attack');
+                            }),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    sectionTitle('Rarity'),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Wrap(
+                        spacing: 8,
+                        children: [
+                          FilterChip(
+                            label: const Text('R1'),
+                            selected: selectedRarities.contains(1),
+                            onSelected: (v) => setModalState(() {
+                              v
+                                  ? selectedRarities.add(1)
+                                  : selectedRarities.remove(1);
+                            }),
+                          ),
+                          FilterChip(
+                            label: const Text('R2'),
+                            selected: selectedRarities.contains(2),
+                            onSelected: (v) => setModalState(() {
+                              v
+                                  ? selectedRarities.add(2)
+                                  : selectedRarities.remove(2);
+                            }),
+                          ),
+                          FilterChip(
+                            label: const Text('R3'),
+                            selected: selectedRarities.contains(3),
+                            onSelected: (v) => setModalState(() {
+                              v
+                                  ? selectedRarities.add(3)
+                                  : selectedRarities.remove(3);
+                            }),
+                          ),
+                          FilterChip(
+                            label: const Text('R4'),
+                            selected: selectedRarities.contains(4),
+                            onSelected: (v) => setModalState(() {
+                              v
+                                  ? selectedRarities.add(4)
+                                  : selectedRarities.remove(4);
+                            }),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    sectionTitle('Abilities'),
+                    Flexible(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                        child: Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: allAbilities.map((a) {
+                            return FilterChip(
+                              label: Text(a),
+                              selected: selectedAbilities.contains(a),
+                              onSelected: (v) => setModalState(() {
+                                v
+                                    ? selectedAbilities.add(a)
+                                    : selectedAbilities.remove(a);
+                              }),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ),
+
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: () => Navigator.of(context).pop(true),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.amber,
+                            foregroundColor: Colors.black,
+                          ),
+                          child: const Text('Apply'),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
+
+    if (result == true) {
+      setState(() {
+        _selectedAttackTypeFilters
+          ..clear()
+          ..addAll(selectedAttackTypes);
+        _selectedRarityFilters
+          ..clear()
+          ..addAll(selectedRarities);
+        _selectedAbilityFilters
+          ..clear()
+          ..addAll(selectedAbilities);
+      });
+    }
   }
 
   @override
@@ -64,6 +328,10 @@ class _CampaignDeckScreenState extends State<CampaignDeckScreen>
           _buildFilterButton('Woods', Colors.green),
           _buildFilterButton('Lake', Colors.blue),
           _buildFilterButton('Desert', Colors.orange),
+          IconButton(
+            icon: const Icon(Icons.filter_list),
+            onPressed: _showAdvancedFiltersSheet,
+          ),
           if (_selectedElementFilter != null)
             IconButton(
               icon: const Icon(Icons.clear),
@@ -99,11 +367,7 @@ class _CampaignDeckScreenState extends State<CampaignDeckScreen>
   }
 
   Widget _buildDeckTab() {
-    final filteredCards = _selectedElementFilter == null
-        ? widget.campaign.deck
-        : widget.campaign.deck
-              .where((c) => c.element == _selectedElementFilter)
-              .toList();
+    final filteredCards = _applyFilters(widget.campaign.deck);
 
     filteredCards.sort((a, b) => a.name.compareTo(b.name));
 
@@ -132,11 +396,7 @@ class _CampaignDeckScreenState extends State<CampaignDeckScreen>
   }
 
   Widget _buildInventoryTab() {
-    final filteredCards = _selectedElementFilter == null
-        ? widget.campaign.inventory
-        : widget.campaign.inventory
-              .where((c) => c.element == _selectedElementFilter)
-              .toList();
+    final filteredCards = _applyFilters(widget.campaign.inventory);
 
     final pendingDeliveries = widget.campaign.pendingCardDeliveries;
 
@@ -289,11 +549,7 @@ class _CampaignDeckScreenState extends State<CampaignDeckScreen>
   }
 
   Widget _buildDeceasedTab() {
-    final filteredCards = _selectedElementFilter == null
-        ? widget.campaign.destroyedDeckCards
-        : widget.campaign.destroyedDeckCards
-              .where((c) => c.element == _selectedElementFilter)
-              .toList();
+    final filteredCards = _applyFilters(widget.campaign.destroyedDeckCards);
 
     if (filteredCards.isEmpty) {
       return Center(

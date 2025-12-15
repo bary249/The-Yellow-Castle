@@ -11,10 +11,12 @@ import 'turn_snapshot.dart';
 class SyncedCombatResult {
   final String id; // Unique ID to detect new results
   final bool isBaseAttack; // true if attacking base, false if attacking card
+  final bool isHeal; // true if this result is a heal action
   final String attackerName;
   final String? targetName; // null for base attacks
   final String? targetId; // optional: ID of target card (for UI targeting)
   final int damageDealt;
+  final int healAmount;
   final int retaliationDamage;
   final bool targetDied;
   final bool attackerDied;
@@ -35,10 +37,12 @@ class SyncedCombatResult {
   SyncedCombatResult({
     required this.id,
     required this.isBaseAttack,
+    this.isHeal = false,
     required this.attackerName,
     this.targetName,
     this.targetId,
     required this.damageDealt,
+    this.healAmount = 0,
     this.retaliationDamage = 0,
     this.targetDied = false,
     this.attackerDied = false,
@@ -58,10 +62,12 @@ class SyncedCombatResult {
   Map<String, dynamic> toJson() => {
     'id': id,
     'isBaseAttack': isBaseAttack,
+    'isHeal': isHeal,
     'attackerName': attackerName,
     'targetName': targetName,
     'targetId': targetId,
     'damageDealt': damageDealt,
+    'healAmount': healAmount,
     'retaliationDamage': retaliationDamage,
     'targetDied': targetDied,
     'attackerDied': attackerDied,
@@ -82,10 +88,12 @@ class SyncedCombatResult {
     return SyncedCombatResult(
       id: json['id'] as String,
       isBaseAttack: json['isBaseAttack'] as bool,
+      isHeal: json['isHeal'] as bool? ?? false,
       attackerName: json['attackerName'] as String,
       targetName: json['targetName'] as String?,
       targetId: json['targetId'] as String?,
       damageDealt: json['damageDealt'] as int,
+      healAmount: json['healAmount'] as int? ?? 0,
       retaliationDamage: json['retaliationDamage'] as int? ?? 0,
       targetDied: json['targetDied'] as bool? ?? false,
       attackerDied: json['attackerDied'] as bool? ?? false,

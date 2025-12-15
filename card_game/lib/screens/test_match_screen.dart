@@ -1127,7 +1127,22 @@ class _TestMatchScreenState extends State<TestMatchScreen>
     }
   }
 
-  /// TYC3: Select a card on the board for action (move/attack)
+  /// Check if a card is a medic (has medic_X ability)
+  bool _isMedic(GameCard card) {
+    return card.abilities.any((a) => a.startsWith('medic_'));
+  }
+
+  /// Get the heal amount for a medic card
+  int _getMedicHealAmount(GameCard card) {
+    for (final a in card.abilities) {
+      if (a.startsWith('medic_')) {
+        return int.tryParse(a.split('_').last) ?? 0;
+      }
+    }
+    return 0;
+  }
+
+  /// TYC3: Select a card on the board for action (move/attack/heal)
   void _selectCardForAction(GameCard card, int row, int col) {
     // Check if it's player's turn
     if (!_matchManager.isPlayerTurn) return;
@@ -1148,12 +1163,22 @@ class _TestMatchScreenState extends State<TestMatchScreen>
         _selectedCardCol = col;
 
         if (card.currentAP > 0) {
-          final reachableTargets = _matchManager.getReachableAttackTargets(
-            card,
-            row,
-            col,
-          );
-          _validTargets = reachableTargets.map((t) => t.target).toList();
+          // Medics get heal targets instead of attack targets
+          if (_isMedic(card)) {
+            final healTargets = _matchManager.getReachableHealTargets(
+              card,
+              row,
+              col,
+            );
+            _validTargets = healTargets.map((t) => t.target).toList();
+          } else {
+            final reachableTargets = _matchManager.getReachableAttackTargets(
+              card,
+              row,
+              col,
+            );
+            _validTargets = reachableTargets.map((t) => t.target).toList();
+          }
         } else {
           _validTargets = [];
         }
@@ -1179,6 +1204,211 @@ class _TestMatchScreenState extends State<TestMatchScreen>
       targetRow: targetRow,
       targetCol: targetCol,
     );
+  }
+
+  /// TYC3: Perform heal on a friendly target
+  void _healTargetTYC3(GameCard target, int targetRow, int targetCol) {
+    if (_selectedCardForAction == null ||
+        _selectedCardRow == null ||
+        _selectedCardCol == null)
+      return;
+
+    final healer = _selectedCardForAction!;
+
+    // Show heal preview dialog
+    _showHealPreviewDialog(
+      healer: healer,
+      target: target,
+      healerRow: _selectedCardRow!,
+      healerCol: _selectedCardCol!,
+      targetRow: targetRow,
+      targetCol: targetCol,
+    );
+  }
+
+  /// Show heal preview dialog with predicted outcome
+  Future<void> _showHealPreviewDialog({
+    required GameCard healer,
+    required GameCard target,
+    required int healerRow,
+    required int healerCol,
+    required int targetRow,
+    required int targetCol,
+  }) async {
+    final healAmount = _getMedicHealAmount(healer);
+    final targetHpAfter = (target.currentHealth + healAmount).clamp(
+      0,
+      target.health,
+    );
+    final actualHeal = targetHpAfter - target.currentHealth;
+    final laneName = _getLaneName(healerCol);
+
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Column(
+          children: [
+            const Text('Heal Preview', textAlign: TextAlign.center),
+            Text(
+              '$laneName Lane',
+              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Healer info
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.green[50],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.green, width: 2),
+              ),
+              child: Column(
+                children: [
+                  Text(
+                    healer.name,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.healing, color: Colors.green, size: 20),
+                      const SizedBox(width: 4),
+                      Text(
+                        '+$actualHeal HP',
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.green,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Icon(Icons.arrow_downward, size: 24, color: Colors.green),
+            const SizedBox(height: 8),
+            // Target info
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.blue[50],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.blue, width: 2),
+              ),
+              child: Column(
+                children: [
+                  Text(
+                    target.name,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.favorite, color: Colors.red, size: 16),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${target.currentHealth}',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      const Text(' → '),
+                      Text(
+                        '$targetHpAfter',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.green,
+                        ),
+                      ),
+                      Text(' / ${target.health}'),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.pop(context);
+              _executeHealTYC3(
+                healer,
+                target,
+                healerRow,
+                healerCol,
+                targetRow,
+                targetCol,
+              );
+            },
+            icon: const Icon(Icons.healing),
+            label: const Text('Heal'),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Execute heal action
+  void _executeHealTYC3(
+    GameCard healer,
+    GameCard target,
+    int healerRow,
+    int healerCol,
+    int targetRow,
+    int targetCol,
+  ) {
+    final result = _matchManager.healCardTYC3(
+      healer,
+      target,
+      healerRow,
+      healerCol,
+      targetRow,
+      targetCol,
+    );
+
+    if (result != null) {
+      // Sync state for online mode
+      _syncOnlineState();
+
+      // Show brief heal result
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${healer.name} healed ${target.name} for ${result.healAmount} HP!',
+          ),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Heal failed'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+
+    _clearTYC3Selection();
+    setState(() {});
   }
 
   /// Get lane name from column index
@@ -2326,15 +2556,21 @@ class _TestMatchScreenState extends State<TestMatchScreen>
   }
 
   /// Show combat result dialog from synced PvP state
-  /// This is called when opponent attacks and we receive the result via Firebase
+  /// This is called when opponent attacks/heals and we receive the result via Firebase
   Future<void> _showSyncedCombatResultDialog(SyncedCombatResult result) async {
     final laneName = _getLaneName(result.laneCol);
-    final isOpponentAttacking = result.attackerOwnerId != _playerId;
+    final isOpponentAction = result.attackerOwnerId != _playerId;
+
+    // Handle heal results differently
+    if (result.isHeal) {
+      await _showSyncedHealResultDialog(result, laneName, isOpponentAction);
+      return;
+    }
 
     // Determine dialog style based on who is attacking
-    final titleText = isOpponentAttacking ? 'Enemy Attack!' : 'Your Attack';
-    final bgColor = isOpponentAttacking ? Colors.red[50] : Colors.blue[50];
-    final accentColor = isOpponentAttacking ? Colors.red : Colors.blue;
+    final titleText = isOpponentAction ? 'Enemy Attack!' : 'Your Attack';
+    final bgColor = isOpponentAction ? Colors.red[50] : Colors.blue[50];
+    final accentColor = isOpponentAction ? Colors.red : Colors.blue;
 
     final match = _matchManager.currentMatch;
     if (match != null &&
@@ -2430,7 +2666,7 @@ class _TestMatchScreenState extends State<TestMatchScreen>
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
-                      color: isOpponentAttacking ? Colors.blue : Colors.red,
+                      color: isOpponentAction ? Colors.blue : Colors.red,
                     ),
                   ),
                   if (result.isBaseAttack && result.targetHpAfter != null) ...[
@@ -2531,6 +2767,104 @@ class _TestMatchScreenState extends State<TestMatchScreen>
     );
 
     // Brief pause after dialog closes
+    await Future.delayed(const Duration(milliseconds: 200));
+  }
+
+  /// Show heal result dialog from synced PvP state
+  Future<void> _showSyncedHealResultDialog(
+    SyncedCombatResult result,
+    String laneName,
+    bool isOpponentAction,
+  ) async {
+    final titleText = isOpponentAction ? 'Enemy Heal' : 'Your Heal';
+    final bgColor = Colors.green[50];
+    const accentColor = Colors.green;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) => AlertDialog(
+        title: Column(
+          children: [
+            Text(titleText, textAlign: TextAlign.center),
+            Text(
+              '$laneName Lane',
+              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+            ),
+          ],
+        ),
+        backgroundColor: bgColor,
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: accentColor.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: accentColor, width: 2),
+              ),
+              child: Column(
+                children: [
+                  Text(
+                    result.attackerName,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.healing, color: accentColor, size: 20),
+                      const SizedBox(width: 4),
+                      Text(
+                        '+${result.healAmount} HP',
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: accentColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    result.targetName ?? '',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                  if (result.targetHpAfter != null) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.favorite, color: Colors.red, size: 16),
+                        const SizedBox(width: 4),
+                        Text(
+                          'HP: ${result.targetHpBefore} → ${result.targetHpAfter}',
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context),
+            style: ElevatedButton.styleFrom(backgroundColor: accentColor),
+            child: const Text('OK', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
     await Future.delayed(const Duration(milliseconds: 200));
   }
 
@@ -3018,9 +3352,13 @@ class _TestMatchScreenState extends State<TestMatchScreen>
       return;
     }
 
-    // If we have a card selected and this is a valid target, attack it
+    // If we have a card selected and this is a valid target, attack or heal it
     if (_selectedCardForAction != null && _validTargets.contains(card)) {
-      _attackTargetTYC3(card, row, col);
+      if (_isMedic(_selectedCardForAction!)) {
+        _healTargetTYC3(card, row, col);
+      } else {
+        _attackTargetTYC3(card, row, col);
+      }
       return;
     }
 
@@ -3754,7 +4092,6 @@ class _TestMatchScreenState extends State<TestMatchScreen>
         return 'Powerful regeneration over time.';
       case 'cleave':
         return 'Hits BOTH enemies on the same tile with full damage.';
-      // conceal_back removed - not valid in TYC3
       case 'stealth_pass':
         return 'Can move through enemies in the middle lane.';
       case 'paratrooper':
@@ -3766,7 +4103,11 @@ class _TestMatchScreenState extends State<TestMatchScreen>
       case 'flanking':
         return 'Can move to adjacent lanes (left/right).';
       default:
-        return ability; // Return raw ability name if unknown
+        if (ability.startsWith('medic_')) {
+          final amount = ability.split('_').last;
+          return 'Heals a friendly unit on the same tile for $amount HP.';
+        }
+        return ability;
     }
   }
 
@@ -3840,7 +4181,6 @@ class _TestMatchScreenState extends State<TestMatchScreen>
         return 'Regenerate';
       case 'cleave':
         return 'Cleave';
-      // conceal_back removed - not valid in TYC3
       case 'stealth_pass':
         return 'Stealth';
       case 'paratrooper':
@@ -3848,6 +4188,9 @@ class _TestMatchScreenState extends State<TestMatchScreen>
       case 'flanking':
         return 'Flanking';
       default:
+        if (ability.startsWith('medic_')) {
+          return 'Medic ${ability.split('_').last}';
+        }
         // Convert snake_case to Title Case
         return ability
             .split('_')

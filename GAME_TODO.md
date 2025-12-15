@@ -78,9 +78,21 @@
 - [x] Create Item Shop UI and logic (consumables + relics)
 - [x] Implement shop inventory generation (rarity by act)
 - [x] Create Rest Site UI (heal option)
-- [ ] Implement card upgrade system
+- [x] Implement card upgrade system (B→A at Act 1→2, A→E at Act 2→3)
+  - Added `CardTier` enum to `GameCard` model
+  - Created `CardUpgradeScreen` shown between acts after boss win
+  - Upgrades apply to all cards of same type in deck + reserves
+  - Upgrade costs: 25g for B→A (+1 dmg, +2 hp), 50g for A→E (+1 dmg, +2 hp)
 - [x] Implement card removal system (Discharge Papers consumable)
 - [ ] Test all shop/rest functionality
+
+### Phase 6b: Medic System & Random Death
+- [x] Add Medic cards (Basic/Advanced/Expert with medic_5/10/15 heal ability)
+- [x] Implement heal action in TYC3 combat (spend AP, target friendly on same tile)
+- [x] Add Medic Corps building (produces act-appropriate medic cards)
+- [x] Add AI heal logic for medic units
+- [x] Add 1/5 chance card death on Wait/Return encounters
+- [x] Fix building rarity production (Training Grounds=common, Officers Academy=rare, War College=epic)
 
 ### Phase 7: Act Achievements (Monuments)
 - [ ] Create `Achievement` model

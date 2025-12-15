@@ -42,6 +42,54 @@ GameCard scoutUnit(int index) => GameCard(
   rarity: 1, // Common
 );
 
+GameCard basicMedic(int index) => GameCard(
+  id: 'medic_basic_$index',
+  name: 'Field Medic',
+  damage: 0,
+  health: 1,
+  tick: 3,
+  moveSpeed: 1,
+  maxAP: 1,
+  apPerTurn: 1,
+  attackAPCost: 1,
+  element: null,
+  abilities: const ['medic_5'],
+  cost: 1,
+  rarity: 1,
+);
+
+GameCard advancedMedic(int index) => GameCard(
+  id: 'medic_advanced_$index',
+  name: 'Advanced Medic',
+  damage: 0,
+  health: 1,
+  tick: 3,
+  moveSpeed: 1,
+  maxAP: 1,
+  apPerTurn: 1,
+  attackAPCost: 1,
+  element: null,
+  abilities: const ['medic_10'],
+  cost: 2,
+  rarity: 2,
+);
+
+GameCard expertMedic(int index) => GameCard(
+  id: 'medic_expert_$index',
+  name: 'Expert Medic',
+  damage: 0,
+  health: 1,
+  tick: 3,
+  moveSpeed: 1,
+  maxAP: 1,
+  apPerTurn: 1,
+  attackAPCost: 1,
+  element: null,
+  abilities: const ['medic_15'],
+  cost: 3,
+  rarity: 3,
+);
+
 // ============================================================================
 // COMMON CARDS (Rarity 1) - Unlimited copies available
 // Consolidated into Neutral Classes per user request
@@ -993,6 +1041,10 @@ List<GameCard> buildStarterCardPool() {
   // 1 Epic card
   cards.add(lakeShieldTotem(0));
 
+  // Add 1 Medic to all decks (keep total at 25 by removing last added card)
+  cards.removeLast();
+  cards.add(basicMedic(0));
+
   assert(cards.length == 25);
   return cards;
 }
@@ -1216,6 +1268,10 @@ List<GameCard> buildNapoleonStarterDeck() {
     cards.add(napoleonCuirassier(i));
   }
 
+  // Add 1 Medic to all decks (keep total at 25 by removing one card)
+  cards.removeLast();
+  cards.add(basicMedic(0));
+
   assert(cards.length == 25, 'Napoleon starter deck must have 25 cards');
   return cards;
 }
@@ -1271,6 +1327,10 @@ List<GameCard> buildSaladinStarterDeck() {
     cards.add(desertCannon(i).copyWith(name: 'Siege Catapult'));
   }
 
+  // Add 1 Medic to all decks (keep total at 25 by removing one card)
+  cards.removeLast();
+  cards.add(basicMedic(0));
+
   assert(cards.length == 25, 'Saladin starter deck must have 25 cards');
   return cards;
 }
@@ -1323,6 +1383,10 @@ List<GameCard> buildNelsonStarterDeck() {
   for (int i = 0; i < 3; i++) {
     cards.add(lakeCannon(i).copyWith(name: 'Ship Cannon'));
   }
+
+  // Add 1 Medic to all decks (keep total at 25 by removing one card)
+  cards.removeLast();
+  cards.add(basicMedic(0));
 
   assert(cards.length == 25, 'Nelson starter deck must have 25 cards');
   return cards;
@@ -1754,6 +1818,12 @@ List<GameCard> buildAct1EnemyDeck() {
   for (int i = 0; i < 2; i++) {
     cards.add(austrianOfficer(i));
   }
+
+  // Add 1 Medic to all decks (keep total at 25 by removing one card)
+  if (cards.isNotEmpty) {
+    cards.removeLast();
+  }
+  cards.add(basicMedic(0));
 
   // Pad to 25 if needed
   while (cards.length < 25) {
