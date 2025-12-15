@@ -1129,15 +1129,19 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
     final km = _campaign.distanceHomeToHeroKm();
     final distanceText = km != null ? '${km.toStringAsFixed(0)} km' : 'unknown';
 
-    String statusText;
-    if (phase == 'Producing') {
-      statusText =
-          'Production: $prodRemaining encounter${prodRemaining == 1 ? '' : 's'} remaining';
-    } else {
-      final travelRemaining = eta;
-      statusText =
-          'En route: $travelRemaining encounter${travelRemaining == 1 ? '' : 's'} to arrival';
-    }
+    // Production time (based on rarity)
+    final totalProdTime = delivery.productionDurationEncounters;
+    final prodDone = prodRemaining <= 0;
+
+    // Travel time (based on distance)
+    final travelDuration = _campaign.currentTravelDurationEncounters();
+    final travelRemaining = prodDone ? eta : travelDuration;
+    final travelDone = prodDone && eta <= 0;
+
+    // Total ETA
+    final totalEta = eta;
+
+    String enc(int n) => n == 1 ? '1 encounter' : '$n encounters';
 
     await showDialog<void>(
       context: navigator.context,
@@ -1170,53 +1174,66 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
               style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.bold,
+                fontSize: 15,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 4),
             Text(
-              'From: $buildingName',
-              style: const TextStyle(color: Colors.white70),
-            ),
-            Text(
-              'To: Hero (current position)',
-              style: const TextStyle(color: Colors.white70),
+              'From: $buildingName → To: Hero',
+              style: const TextStyle(color: Colors.white70, fontSize: 12),
             ),
             Text(
               'Distance: $distanceText',
-              style: const TextStyle(color: Colors.white70),
+              style: const TextStyle(color: Colors.white70, fontSize: 12),
             ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: phase == 'Producing'
-                    ? Colors.orange.withValues(alpha: 0.2)
-                    : Colors.green.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    phase == 'Producing' ? Icons.build : Icons.directions,
-                    color: phase == 'Producing'
-                        ? Colors.orangeAccent
-                        : Colors.greenAccent,
-                    size: 18,
+            const SizedBox(height: 16),
+
+            // Production row
+            _buildTimelineRow(
+              icon: Icons.build,
+              label: 'Production',
+              duration: enc(totalProdTime),
+              status: prodDone ? 'Complete' : '$prodRemaining left',
+              isComplete: prodDone,
+              isActive: !prodDone,
+            ),
+            const SizedBox(height: 8),
+
+            // Travel row
+            _buildTimelineRow(
+              icon: Icons.directions,
+              label: 'Travel',
+              duration: enc(travelDuration),
+              status: travelDone
+                  ? 'Arrived'
+                  : prodDone
+                  ? '$travelRemaining left'
+                  : 'Waiting',
+              isComplete: travelDone,
+              isActive: prodDone && !travelDone,
+            ),
+
+            const SizedBox(height: 16),
+            const Divider(color: Colors.white24),
+            const SizedBox(height: 8),
+
+            // Total ETA
+            Row(
+              children: [
+                const Icon(Icons.schedule, color: Colors.white, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  'Total ETA: ',
+                  style: const TextStyle(color: Colors.white70),
+                ),
+                Text(
+                  totalEta <= 0 ? 'Arriving now!' : enc(totalEta),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      statusText,
-                      style: TextStyle(
-                        color: phase == 'Producing'
-                            ? Colors.orangeAccent
-                            : Colors.greenAccent,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ],
         ),
@@ -1224,6 +1241,83 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTimelineRow({
+    required IconData icon,
+    required String label,
+    required String duration,
+    required String status,
+    required bool isComplete,
+    required bool isActive,
+  }) {
+    final Color color = isComplete
+        ? Colors.greenAccent
+        : isActive
+        ? Colors.orangeAccent
+        : Colors.white38;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: isActive
+            ? Colors.orange.withValues(alpha: 0.15)
+            : isComplete
+            ? Colors.green.withValues(alpha: 0.1)
+            : Colors.white.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+          color: isActive
+              ? Colors.orangeAccent.withValues(alpha: 0.5)
+              : Colors.transparent,
+          width: 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 18),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: color,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
+                ),
+                Text(
+                  duration,
+                  style: const TextStyle(color: Colors.white54, fontSize: 11),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: isComplete
+                  ? Colors.green.withValues(alpha: 0.3)
+                  : isActive
+                  ? Colors.orange.withValues(alpha: 0.3)
+                  : Colors.white.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              status,
+              style: TextStyle(
+                color: color,
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
         ],
       ),
