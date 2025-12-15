@@ -215,6 +215,14 @@ class CampaignState {
   /// Currently 0 or 1.
   int supplyDistancePenaltyReduction;
 
+  /// Count of battle encounters completed (battle, elite, boss only).
+  /// Used for boss availability threshold.
+  int battleEncounterCount;
+
+  /// Campaign end node location (for boss distance check).
+  double? campaignEndLat;
+  double? campaignEndLng;
+
   CampaignState({
     required this.id,
     required this.leaderId,
@@ -256,6 +264,9 @@ class CampaignState {
     Map<String, int>? gatedReserveCards,
     this.recoveryEncountersRemaining = 0,
     this.supplyDistancePenaltyReduction = 0,
+    this.battleEncounterCount = 0,
+    this.campaignEndLat,
+    this.campaignEndLng,
     DateTime? lastUpdated,
   }) : inventory = inventory ?? [],
        gatedReserveCards = gatedReserveCards ?? <String, int>{},
@@ -382,10 +393,44 @@ class CampaignState {
   }
 
   static const int bossEncounterThreshold = 7;
-  bool get isBossTime => encounterNumber >= bossEncounterThreshold;
+  static const double bossDistanceThresholdKm = 100.0;
+
+  /// Boss is available when enough BATTLE encounters completed AND hero is close to end node.
+  bool get isBossTime {
+    if (battleEncounterCount < bossEncounterThreshold) return false;
+    // Also check distance to campaign end node
+    final distKm = distanceToEndNodeKm();
+    if (distKm == null) return true; // No end node set, allow boss
+    return distKm <= bossDistanceThresholdKm;
+  }
+
   bool get isOver => isVictory || health <= 0;
-  int get encountersUntilBoss => (bossEncounterThreshold - encounterNumber)
+
+  int get battlesUntilBoss => (bossEncounterThreshold - battleEncounterCount)
       .clamp(0, bossEncounterThreshold);
+
+  double? distanceToEndNodeKm() {
+    final heroLat = lastTravelLat;
+    final heroLng = lastTravelLng;
+    final endLat = campaignEndLat;
+    final endLng = campaignEndLng;
+    if (heroLat == null ||
+        heroLng == null ||
+        endLat == null ||
+        endLng == null) {
+      return null;
+    }
+    return _haversineKm(
+      lat1: heroLat,
+      lng1: heroLng,
+      lat2: endLat,
+      lng2: endLng,
+    );
+  }
+
+  void incrementBattleEncounterCount() {
+    battleEncounterCount++;
+  }
 
   // Relic Effects Helpers
   bool hasRelic(String relicId) => relics.contains(relicId);
@@ -757,6 +802,9 @@ class CampaignState {
     'gatedReserveCards': gatedReserveCards,
     'recoveryEncountersRemaining': recoveryEncountersRemaining,
     'supplyDistancePenaltyReduction': supplyDistancePenaltyReduction,
+    'battleEncounterCount': battleEncounterCount,
+    'campaignEndLat': campaignEndLat,
+    'campaignEndLng': campaignEndLng,
     'lastUpdated': lastUpdated.toIso8601String(),
   };
 
@@ -851,6 +899,9 @@ class CampaignState {
         (json['recoveryEncountersRemaining'] as num?)?.toInt() ?? 0,
     supplyDistancePenaltyReduction:
         (json['supplyDistancePenaltyReduction'] as num?)?.toInt() ?? 0,
+    battleEncounterCount: (json['battleEncounterCount'] as num?)?.toInt() ?? 0,
+    campaignEndLat: (json['campaignEndLat'] as num?)?.toDouble(),
+    campaignEndLng: (json['campaignEndLng'] as num?)?.toDouble(),
     lastUpdated: json['lastUpdated'] != null
         ? DateTime.parse(json['lastUpdated'] as String)
         : null,

@@ -700,6 +700,10 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
     _campaign.homeTownLng = 7.264;
     _campaign.homeTownLevel = _campaign.homeTownLevel.clamp(1, 99);
 
+    // Campaign end node: Milan (boss location threshold check)
+    _campaign.campaignEndLat = 45.4642;
+    _campaign.campaignEndLng = 9.1900;
+
     _ensureHomeTownStarterBuildings();
   }
 
@@ -2703,6 +2707,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
               _campaign.setPendingDefenseEncounter(pendingDefense);
             }
           }
+          _campaign.incrementBattleEncounterCount();
           _campaign.completeEncounter();
           _generateNewChoices();
         });
@@ -2858,6 +2863,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
         final int reward =
             (encounter.goldReward ?? 50) + _campaign.goldPerBattleBonus;
         setState(() {
+          _campaign.incrementBattleEncounterCount();
           _campaign.addGold(reward);
         });
 
@@ -4554,7 +4560,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
                     Text(
                       _campaign.isBossTime
                           ? '👑 Boss available'
-                          : '${_campaign.encountersUntilBoss} encounters until boss',
+                          : '${_campaign.battlesUntilBoss} battles until boss',
                       style: TextStyle(
                         color: _campaign.isBossTime
                             ? Colors.red[300]
