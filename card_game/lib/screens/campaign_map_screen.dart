@@ -833,6 +833,97 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     );
   }
 
+  Future<void> _showEncounterRewardDialog({
+    required String title,
+    required String message,
+    required IconData icon,
+    required Color iconColor,
+  }) async {
+    final navigator = Navigator.of(context);
+    if (!mounted) return;
+    await showDialog<void>(
+      context: navigator.context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF2D2D2D),
+        title: Row(
+          children: [
+            Icon(icon, color: iconColor),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(title, style: const TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+        content: Text(message, style: const TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _applyEncounterOffer(Encounter encounter) async {
+    final type = encounter.offerType;
+    final id = encounter.offerId;
+    if (type == null || id == null || id.isEmpty) return;
+    final amount = encounter.offerAmount ?? 1;
+
+    String message = '';
+    IconData icon = Icons.card_giftcard;
+    Color iconColor = Colors.amber;
+
+    if (type == 'consumable') {
+      setState(() {
+        _campaign.addConsumable(id, count: amount);
+      });
+      final all = ShopInventory.getAllConsumables();
+      final item = all.where((e) => e.id == id).toList();
+      final name = item.isNotEmpty ? item.first.name : id;
+      message = 'Received: $name ×$amount';
+      icon = Icons.local_hospital;
+      iconColor = Colors.greenAccent;
+    } else if (type == 'relic') {
+      if (!_campaign.hasRelic(id)) {
+        setState(() {
+          _campaign.addRelic(id);
+        });
+      }
+      final all = ShopInventory.getAllRelics();
+      final item = all.where((e) => e.id == id).toList();
+      final name = item.isNotEmpty ? item.first.name : id;
+      message = 'Received: $name';
+      icon = Icons.auto_awesome;
+      iconColor = Colors.purpleAccent;
+    } else if (type == 'building') {
+      final alreadyBuilt = _campaign.homeTownBuildings.any((b) => b.id == id);
+      if (!alreadyBuilt) {
+        setState(() {
+          _campaign.homeTownBuildings = [
+            ..._campaign.homeTownBuildings,
+            HomeTownBuilding(id: id),
+          ];
+        });
+      }
+      message = 'Offered: ${_homeTownBuildingName(id)}';
+      icon = Icons.apartment;
+      iconColor = Colors.tealAccent;
+    } else {
+      return;
+    }
+
+    await _saveCampaign();
+    await _showEncounterRewardDialog(
+      title: 'Reward',
+      message: message,
+      icon: icon,
+      iconColor: iconColor,
+    );
+  }
+
   Future<void> _collectBuilding(HomeTownBuilding building) async {
     if (!_canCollectBuilding(building)) return;
 
@@ -1341,6 +1432,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                 _generateNewChoices();
               });
               await _saveCampaign();
+              await _applyEncounterOffer(encounter);
               await _maybeDiscoverMapRelicAfterEncounter(encounter);
             },
             child: const Text('Claim'),
@@ -1431,6 +1523,8 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
         setState(() {
           _campaign.addGold(reward);
         });
+
+        await _applyEncounterOffer(encounter);
 
         // Show card reward selection
         if (mounted) {
@@ -2539,8 +2633,24 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
   }
 
   void _triggerEvent(Encounter encounter) {
-    // Simple event: Find random item or gold
-    final isGold = DateTime.now().millisecondsSinceEpoch % 2 == 0;
+    final offerType = encounter.offerType;
+    final offerId = encounter.offerId;
+    final offerAmount = encounter.offerAmount ?? 1;
+
+    String rewardLine = 'You found supplies.';
+    if (offerType == 'consumable' && offerId != null) {
+      final all = ShopInventory.getAllConsumables();
+      final item = all.where((e) => e.id == offerId).toList();
+      final name = item.isNotEmpty ? item.first.name : offerId;
+      rewardLine = 'Offer: $name ×$offerAmount';
+    } else if (offerType == 'relic' && offerId != null) {
+      final all = ShopInventory.getAllRelics();
+      final item = all.where((e) => e.id == offerId).toList();
+      final name = item.isNotEmpty ? item.first.name : offerId;
+      rewardLine = 'Offer: $name';
+    } else if (offerType == 'building' && offerId != null) {
+      rewardLine = 'Offer: ${_homeTownBuildingName(offerId)}';
+    }
 
     showDialog(
       context: context,
@@ -2558,9 +2668,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
             Text(encounter.description),
             const SizedBox(height: 16),
             Text(
-              isGold
-                  ? 'You found a lost purse!'
-                  : 'A local merchant gives you a gift.',
+              rewardLine,
               style: const TextStyle(fontStyle: FontStyle.italic),
             ),
           ],
@@ -2570,22 +2678,11 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
             onPressed: () async {
               Navigator.pop(context);
               setState(() {
-                if (isGold) {
-                  _campaign.addGold(30);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Gained 30 Gold!')),
-                  );
-                } else {
-                  // Give a consumable
-                  _campaign.heal(10);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Healed 10 HP!')),
-                  );
-                }
                 _campaign.completeEncounter();
                 _generateNewChoices();
               });
               await _saveCampaign();
+              await _applyEncounterOffer(encounter);
               await _maybeDiscoverMapRelicAfterEncounter(encounter);
             },
             child: const Text('Continue'),

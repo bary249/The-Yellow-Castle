@@ -14,6 +14,10 @@ class Encounter {
   final int? goldReward;
   final String? eventId;
 
+  final String? offerType;
+  final String? offerId;
+  final int? offerAmount;
+
   const Encounter({
     required this.id,
     required this.type,
@@ -22,6 +26,9 @@ class Encounter {
     this.difficulty,
     this.goldReward,
     this.eventId,
+    this.offerType,
+    this.offerId,
+    this.offerAmount,
   });
 
   Map<String, dynamic> toJson() => {
@@ -32,6 +39,9 @@ class Encounter {
     'difficulty': difficulty?.name,
     'goldReward': goldReward,
     'eventId': eventId,
+    'offerType': offerType,
+    'offerId': offerId,
+    'offerAmount': offerAmount,
   };
 
   factory Encounter.fromJson(Map<String, dynamic> json) => Encounter(
@@ -44,6 +54,9 @@ class Encounter {
         : null,
     goldReward: json['goldReward'] as int?,
     eventId: json['eventId'] as String?,
+    offerType: json['offerType'] as String?,
+    offerId: json['offerId'] as String?,
+    offerAmount: (json['offerAmount'] as num?)?.toInt(),
   );
 }
 
@@ -407,6 +420,25 @@ class EncounterGenerator {
   EncounterGenerator({required this.act, int? seed})
     : _random = seed != null ? Random(seed) : Random();
 
+  String _randomConsumableOfferId() {
+    const ids = <String>['heal_potion', 'large_heal_potion', 'remove_card'];
+    return ids[_random.nextInt(ids.length)];
+  }
+
+  String _randomRelicOfferId() {
+    const ids = <String>['relic_gold_purse', 'relic_armor', 'relic_morale'];
+    return ids[_random.nextInt(ids.length)];
+  }
+
+  String _randomBuildingOfferId() {
+    const ids = <String>[
+      'building_supply_depot',
+      'building_officers_academy',
+      'building_war_college',
+    ];
+    return ids[_random.nextInt(ids.length)];
+  }
+
   List<Encounter> generateChoices(int encounterNumber) {
     final choices = <Encounter>[];
 
@@ -489,6 +521,9 @@ class EncounterGenerator {
       description: elite.$2,
       difficulty: BattleDifficulty.elite,
       goldReward: 25 + (act * 10),
+      offerType: 'relic',
+      offerId: _randomRelicOfferId(),
+      offerAmount: 1,
     );
   }
 
@@ -583,6 +618,9 @@ class EncounterGenerator {
       description: battle.$2,
       difficulty: difficulty,
       goldReward: 10 + (act * 5) + (encounterNumber * 2),
+      offerType: 'consumable',
+      offerId: _randomConsumableOfferId(),
+      offerAmount: 1,
     );
   }
 
@@ -643,6 +681,9 @@ class EncounterGenerator {
       type: EncounterType.event,
       title: event.$1,
       description: event.$2,
+      offerType: 'building',
+      offerId: _randomBuildingOfferId(),
+      offerAmount: 1,
     );
   }
 
@@ -666,6 +707,9 @@ class EncounterGenerator {
       title: 'Hidden Cache',
       description: 'A hidden stash of supplies left by a previous army.',
       goldReward: 50 + (act * 20),
+      offerType: 'consumable',
+      offerId: 'large_heal_potion',
+      offerAmount: 1,
     );
   }
 }
