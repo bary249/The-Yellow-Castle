@@ -37,4 +37,4 @@ Changes to Story mode:
 35. ✅ Always show wich card is being produced in the home town, in the home town building.
 36. ✅ If a player losses or retreats form an enoucnter or boss fight, they should have more enocunter possbilites in order to get stronger via gold and items or supply chain.
 37. ✅ Make sure merchants and "shop" encounters are placed closer to the current hero location, or in betweren the hero and the next cluster of encounters.   
-38. never give buildings as enconuter rewards, Builidings can only be biult in home twoen by the player or buy legacy progression. Give relics/items that effect supply time.
+38. ✅ never give buildings as enconuter rewards, Builidings can only be biult in home twoen by the player or buy legacy progression. Give relics/items that effect supply time.

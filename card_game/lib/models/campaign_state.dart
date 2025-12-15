@@ -707,15 +707,6 @@ class EncounterGenerator {
     return ids[_random.nextInt(ids.length)];
   }
 
-  String _randomBuildingOfferId() {
-    const ids = <String>[
-      'building_supply_depot',
-      'building_officers_academy',
-      'building_war_college',
-    ];
-    return ids[_random.nextInt(ids.length)];
-  }
-
   List<Encounter> generateChoices(int encounterNumber) {
     final choices = <Encounter>[];
 
@@ -987,13 +978,14 @@ class EncounterGenerator {
       ('Mysterious Traveler', 'A cloaked figure offers a deal.'),
     ];
     final event = eventTitles[_random.nextInt(eventTitles.length)];
+    final bool isRelic = _random.nextBool();
     return Encounter(
       id: 'event_$index',
       type: EncounterType.event,
       title: event.$1,
       description: event.$2,
-      offerType: 'building',
-      offerId: _randomBuildingOfferId(),
+      offerType: isRelic ? 'relic' : 'consumable',
+      offerId: isRelic ? _randomRelicOfferId() : _randomConsumableOfferId(),
       offerAmount: 1,
     );
   }

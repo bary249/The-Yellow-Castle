@@ -1154,19 +1154,6 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
       message = 'Received: $name';
       icon = Icons.auto_awesome;
       iconColor = Colors.purpleAccent;
-    } else if (type == 'building') {
-      final alreadyBuilt = _campaign.homeTownBuildings.any((b) => b.id == id);
-      if (!alreadyBuilt) {
-        setState(() {
-          _campaign.homeTownBuildings = [
-            ..._campaign.homeTownBuildings,
-            HomeTownBuilding(id: id),
-          ];
-        });
-      }
-      message = 'Offered: ${_homeTownBuildingName(id)}';
-      icon = Icons.apartment;
-      iconColor = Colors.tealAccent;
     } else {
       return null;
     }
@@ -1207,9 +1194,6 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
       final name = item.isNotEmpty ? item.first.name : id;
       return 'Offer: $name';
     }
-    if (type == 'building') {
-      return 'Offer: ${_homeTownBuildingName(id)}';
-    }
     return 'Offer: $id';
   }
 
@@ -1219,8 +1203,6 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
         return Icons.local_hospital;
       case 'relic':
         return Icons.auto_awesome;
-      case 'building':
-        return Icons.apartment;
       default:
         return Icons.card_giftcard;
     }
@@ -1232,8 +1214,6 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
         return Colors.greenAccent;
       case 'relic':
         return Colors.purpleAccent;
-      case 'building':
-        return Colors.tealAccent;
       default:
         return Colors.amber;
     }
@@ -3564,8 +3544,6 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
       final item = all.where((e) => e.id == offerId).toList();
       final name = item.isNotEmpty ? item.first.name : offerId;
       rewardLine = 'Offer: $name';
-    } else if (offerType == 'building' && offerId != null) {
-      rewardLine = 'Offer: ${_homeTownBuildingName(offerId)}';
     }
 
     showDialog(
