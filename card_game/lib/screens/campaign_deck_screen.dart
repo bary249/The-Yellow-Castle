@@ -249,108 +249,133 @@ class _CampaignDeckScreenState extends State<CampaignDeckScreen>
   }
 
   Widget _buildCardItem(GameCard card, {bool inDeck = true}) {
+    final isGated = !inDeck && widget.campaign.isCardGated(card.id);
+
     return GestureDetector(
       onTap: () => _showCardDetails(card, inDeck: inDeck),
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.grey[800],
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: _getElementColor(card.element), width: 2),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.3),
-              blurRadius: 4,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Top bar (Cost + Element)
-            Container(
-              padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                color: _getElementColor(card.element).withOpacity(0.2),
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(6),
-                ),
+      child: Stack(
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.grey[800],
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: isGated ? Colors.orange : _getElementColor(card.element),
+                width: 2,
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Icon(Icons.bolt, size: 14, color: Colors.amber[300]),
-                  Icon(
-                    _getElementIcon(card.element),
-                    size: 14,
-                    color: _getElementColor(card.element),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.3),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Top bar (Cost + Element)
+                Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: _getElementColor(card.element).withOpacity(0.2),
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(6),
+                    ),
                   ),
-                ],
-              ),
-            ),
-
-            // Image / Icon placeholder
-            Expanded(
-              child: Center(
-                child: Icon(
-                  _getTypeIcon(card),
-                  size: 32,
-                  color: Colors.white70,
-                ),
-              ),
-            ),
-
-            // Name
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: Text(
-                card.name,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                ),
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-
-            // Abilities (Icons)
-            if (card.abilities.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 4),
-                child: Wrap(
-                  alignment: WrapAlignment.center,
-                  spacing: 2,
-                  runSpacing: 2,
-                  children: card.abilities.take(3).map((a) {
-                    return Icon(
-                      _getAbilityIcon(a),
-                      size: 10,
-                      color: Colors.amber[300],
-                    );
-                  }).toList(),
-                ),
-              ),
-
-            // Stats
-            Padding(
-              padding: const EdgeInsets.all(4),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _buildStat(
-                    Icons.local_fire_department,
-                    '${card.damage}',
-                    Colors.orange,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Icon(Icons.bolt, size: 14, color: Colors.amber[300]),
+                      Icon(
+                        _getElementIcon(card.element),
+                        size: 14,
+                        color: _getElementColor(card.element),
+                      ),
+                    ],
                   ),
-                  _buildStat(Icons.favorite, '${card.health}', Colors.red),
-                ],
+                ),
+
+                // Image / Icon placeholder
+                Expanded(
+                  child: Center(
+                    child: Icon(
+                      _getTypeIcon(card),
+                      size: 32,
+                      color: Colors.white70,
+                    ),
+                  ),
+                ),
+
+                // Name
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Text(
+                    card.name,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+
+                // Abilities (Icons)
+                if (card.abilities.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 2,
+                      horizontal: 4,
+                    ),
+                    child: Wrap(
+                      alignment: WrapAlignment.center,
+                      spacing: 2,
+                      runSpacing: 2,
+                      children: card.abilities.take(3).map((a) {
+                        return Icon(
+                          _getAbilityIcon(a),
+                          size: 10,
+                          color: Colors.amber[300],
+                        );
+                      }).toList(),
+                    ),
+                  ),
+
+                // Stats
+                Padding(
+                  padding: const EdgeInsets.all(4),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      _buildStat(
+                        Icons.local_fire_department,
+                        '${card.damage}',
+                        Colors.orange,
+                      ),
+                      _buildStat(Icons.favorite, '${card.health}', Colors.red),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (isGated)
+            Positioned(
+              top: 4,
+              right: 4,
+              child: Container(
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  color: Colors.orange[800],
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Icon(Icons.lock, color: Colors.white, size: 12),
               ),
             ),
-          ],
-        ),
+        ],
       ),
     );
   }
@@ -598,31 +623,108 @@ class _CampaignDeckScreenState extends State<CampaignDeckScreen>
                           setState(() {});
                         },
                       )
-                    : ElevatedButton.icon(
-                        icon: const Icon(Icons.add),
-                        label: const Text('Add to Deck'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green[700],
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                        onPressed: () {
-                          widget.campaign.addCardFromInventory(card.id);
-                          Navigator.pop(context);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Added ${card.name} to deck'),
-                              backgroundColor: Colors.green,
-                            ),
-                          );
-                          setState(() {});
-                        },
-                      ),
+                    : _buildReserveActionButton(card),
               ),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  static const int _gatedCardUnlockCost = 15;
+
+  Widget _buildReserveActionButton(GameCard card) {
+    final isGated = widget.campaign.isCardGated(card.id);
+
+    if (!isGated) {
+      return ElevatedButton.icon(
+        icon: const Icon(Icons.add),
+        label: const Text('Add to Deck'),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.green[700],
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 12),
+        ),
+        onPressed: () {
+          widget.campaign.addCardFromInventory(card.id);
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Added ${card.name} to deck'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          setState(() {});
+        },
+      );
+    }
+
+    final remaining = widget.campaign.encountersUntilCardUnlocked(card.id);
+    final canAfford = widget.campaign.gold >= _gatedCardUnlockCost;
+
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Colors.orange[900]?.withValues(alpha: 0.3),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.orange[700]!),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.lock, color: Colors.orange, size: 18),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  remaining == 1
+                      ? 'Locked – available in 1 encounter'
+                      : 'Locked – available in $remaining encounters',
+                  style: const TextStyle(color: Colors.orange, fontSize: 12),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.monetization_on, size: 16),
+                label: Text('Pay $_gatedCardUnlockCost Gold'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: canAfford
+                      ? Colors.amber[700]
+                      : Colors.grey[700],
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                ),
+                onPressed: canAfford
+                    ? () {
+                        widget.campaign.unlockGatedCardWithGold(
+                          card.id,
+                          _gatedCardUnlockCost,
+                        );
+                        widget.campaign.addCardFromInventory(card.id);
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              'Paid $_gatedCardUnlockCost Gold – ${card.name} added to deck',
+                            ),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                        setState(() {});
+                      }
+                    : null,
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 

@@ -186,6 +186,11 @@ class CampaignState {
   List<TravelPoint> travelHistory;
   List<TravelPoint> visitedNodes;
 
+  /// Maps card ID to the encounter number when it becomes freely available.
+  /// Cards gated by random events can be restored immediately for gold or
+  /// for free once encounterNumber >= the gated value.
+  Map<String, int> gatedReserveCards;
+
   CampaignState({
     required this.id,
     required this.leaderId,
@@ -224,8 +229,10 @@ class CampaignState {
     this.lastTravelLng,
     List<TravelPoint>? travelHistory,
     List<TravelPoint>? visitedNodes,
+    Map<String, int>? gatedReserveCards,
     DateTime? lastUpdated,
   }) : inventory = inventory ?? [],
+       gatedReserveCards = gatedReserveCards ?? <String, int>{},
        pendingCardDeliveries = pendingCardDeliveries ?? <PendingCardDelivery>[],
        destroyedDeckCards = destroyedDeckCards ?? [],
        relics = relics ?? [],
@@ -432,6 +439,43 @@ class CampaignState {
     inventory = [...inventory, card];
   }
 
+  /// Move card from deck to reserves with a gate (requires gold or wait).
+  void removeCardWithGate(String cardId) {
+    final card = deck.firstWhere(
+      (c) => c.id == cardId,
+      orElse: () => deck.first,
+    );
+    deck = deck.where((c) => c.id != cardId).toList();
+    inventory = [...inventory, card];
+    // Gate unlocks after 1 encounter.
+    gatedReserveCards[cardId] = encounterNumber + 1;
+  }
+
+  bool isCardGated(String cardId) {
+    final gate = gatedReserveCards[cardId];
+    if (gate == null) return false;
+    return encounterNumber < gate;
+  }
+
+  int encountersUntilCardUnlocked(String cardId) {
+    final gate = gatedReserveCards[cardId];
+    if (gate == null) return 0;
+    return (gate - encounterNumber).clamp(0, 999999);
+  }
+
+  /// Pay gold to unlock a gated card immediately.
+  bool unlockGatedCardWithGold(String cardId, int cost) {
+    if (gold < cost) return false;
+    gold -= cost;
+    gatedReserveCards.remove(cardId);
+    return true;
+  }
+
+  /// Remove gate if encounter threshold passed.
+  void clearExpiredGates() {
+    gatedReserveCards.removeWhere((_, gate) => encounterNumber >= gate);
+  }
+
   void destroyCardPermanently(String cardId) {
     GameCard? removed;
     for (final c in deck) {
@@ -532,6 +576,7 @@ class CampaignState {
     'lastTravelLng': lastTravelLng,
     'travelHistory': travelHistory.map((p) => p.toJson()).toList(),
     'visitedNodes': visitedNodes.map((p) => p.toJson()).toList(),
+    'gatedReserveCards': gatedReserveCards,
     'lastUpdated': lastUpdated.toIso8601String(),
   };
 
@@ -619,6 +664,9 @@ class CampaignState {
             ?.map((e) => TravelPoint.fromJson(e as Map<String, dynamic>))
             .toList() ??
         <TravelPoint>[],
+    gatedReserveCards: (json['gatedReserveCards'] as Map?)?.map(
+      (key, value) => MapEntry(key as String, (value as num).toInt()),
+    ),
     lastUpdated: json['lastUpdated'] != null
         ? DateTime.parse(json['lastUpdated'] as String)
         : null,

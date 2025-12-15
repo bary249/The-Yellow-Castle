@@ -106,7 +106,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     final idx = rng.nextInt(_campaign.deck.length);
     final card = _campaign.deck[idx];
     setState(() {
-      _campaign.removeCard(card.id);
+      _campaign.removeCardWithGate(card.id);
     });
     _saveCampaign();
     return RewardEvent(
@@ -1515,7 +1515,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     final idx = rng.nextInt(_campaign.deck.length);
     final card = _campaign.deck[idx];
     setState(() {
-      _campaign.removeCard(card.id);
+      _campaign.removeCardWithGate(card.id);
     });
     _saveCampaign();
     return RewardEvent(
