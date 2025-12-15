@@ -642,15 +642,16 @@ class CampaignState {
   }
 
   /// Move card from deck to reserves with a gate (requires gold or wait).
-  void removeCardWithGate(String cardId) {
+  /// [gateEncounters] defaults to 1 but can be higher for harsher penalties.
+  void removeCardWithGate(String cardId, {int gateEncounters = 1}) {
     final card = deck.firstWhere(
       (c) => c.id == cardId,
       orElse: () => deck.first,
     );
     deck = deck.where((c) => c.id != cardId).toList();
     inventory = [...inventory, card];
-    // Gate unlocks after 1 encounter.
-    gatedReserveCards[cardId] = encounterNumber + 1;
+    // Gate unlocks after N encounters.
+    gatedReserveCards[cardId] = encounterNumber + gateEncounters;
   }
 
   bool isCardGated(String cardId) {

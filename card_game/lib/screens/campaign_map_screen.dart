@@ -155,8 +155,18 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
         (seedLat * 1000003) ^ seedLng ^ (_campaign.encounterNumber * 31);
     final rng = Random(seed);
 
+    // Distance-based scaling: penalties are harsher the further from home
+    final distanceKm = _distanceToHomeTownKm() ?? 0.0;
+    // Scale factor: 1.0 at home, up to 3.0 at 300km+
+    final distanceScale = 1.0 + (distanceKm / 150.0).clamp(0.0, 2.0);
+    final distanceNote = distanceKm > 50
+        ? ' (${distanceKm.toStringAsFixed(0)}km from base)'
+        : '';
+
     if (rng.nextBool() || _campaign.deck.isEmpty) {
-      final goldLoss = 10 + rng.nextInt(11); // 10-20
+      // Gold loss scales with distance: 10-20 base, up to 30-60 at max distance
+      final baseGoldLoss = 10 + rng.nextInt(11); // 10-20
+      final goldLoss = (baseGoldLoss * distanceScale).round();
       final actualLoss = goldLoss.clamp(0, _campaign.gold);
       setState(() {
         _campaign.spendGold(actualLoss);
@@ -164,22 +174,24 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
       _saveCampaign();
       return RewardEvent(
         title: 'Backtrack Cost',
-        message: 'Lost -$actualLoss Gold while retreating',
+        message: 'Lost -$actualLoss Gold while retreating$distanceNote',
         icon: Icons.money_off,
         iconColor: Colors.redAccent,
       );
     }
 
+    // Card penalty: at long distances, card is gated for longer
+    final gateEncounters = distanceKm > 200 ? 3 : (distanceKm > 100 ? 2 : 1);
     final idx = rng.nextInt(_campaign.deck.length);
     final card = _campaign.deck[idx];
     setState(() {
-      _campaign.removeCardWithGate(card.id);
+      _campaign.removeCardWithGate(card.id, gateEncounters: gateEncounters);
     });
     _saveCampaign();
     return RewardEvent(
       title: 'Backtrack Cost',
       message:
-          '${card.name} is moved to Reserves during the retreat (available after 1 encounter)',
+          '${card.name} is moved to Reserves during the retreat (available after $gateEncounters encounter${gateEncounters > 1 ? 's' : ''})$distanceNote',
       icon: Icons.sick,
       iconColor: Colors.orangeAccent,
     );
