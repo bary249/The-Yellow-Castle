@@ -1029,9 +1029,13 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     if (pending.isNotEmpty) {
       final d = pending.first;
       final remaining = _campaign.encountersUntilDeliveryArrives(d);
-      if (remaining <= 0) return 'Arriving now';
-      if (remaining == 1) return 'Arrives in 1 encounter';
-      return 'Arrives in $remaining encounters';
+      if (remaining <= 0) {
+        return 'Producing: ${d.card.name} (arriving now)';
+      }
+      if (remaining == 1) {
+        return 'Producing: ${d.card.name} (arrives in 1 encounter)';
+      }
+      return 'Producing: ${d.card.name} (arrives in $remaining encounters)';
     }
 
     final interval = _buildingSupplyEveryEncounters(building);
