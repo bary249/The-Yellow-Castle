@@ -3433,6 +3433,67 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     final townLng = _campaign.homeTownLng;
     final townName = _campaign.homeTownName ?? 'Home Town';
 
+    // Build full route points: Home Town -> travel history.
+    final routePoints = <LatLng>[];
+    if (townLat != null && townLng != null) {
+      routePoints.add(LatLng(townLat, townLng));
+    }
+    routePoints.addAll(travelPoints);
+
+    // Build per-segment polylines and number labels.
+    final routeShadowPolylines = <Polyline>[];
+    final routeColorPolylines = <Polyline>[];
+    final routeNumberMarkers = <Marker>[];
+    if (routePoints.length >= 2) {
+      final baseHsl = HSLColor.fromColor(Colors.tealAccent);
+      for (int i = 0; i < routePoints.length - 1; i++) {
+        final a = routePoints[i];
+        final b = routePoints[i + 1];
+        final hue = (baseHsl.hue + (i * 18)) % 360;
+        final color = baseHsl.withHue(hue).toColor().withValues(alpha: 0.85);
+
+        routeShadowPolylines.add(
+          Polyline(
+            points: [a, b],
+            strokeWidth: 7,
+            color: Colors.black.withValues(alpha: 0.55),
+          ),
+        );
+        routeColorPolylines.add(
+          Polyline(points: [a, b], strokeWidth: 4, color: color),
+        );
+
+        // Number label placed at segment midpoint.
+        final mid = LatLng(
+          (a.latitude + b.latitude) / 2,
+          (a.longitude + b.longitude) / 2,
+        );
+        routeNumberMarkers.add(
+          Marker(
+            point: mid,
+            width: 26,
+            height: 26,
+            child: Container(
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.95),
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.black, width: 1.5),
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                '${i + 1}',
+                style: const TextStyle(
+                  color: Colors.black,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+    }
+
     final markers = <Marker>[];
     if (townLat != null && townLng != null) {
       final pos = LatLng(townLat, townLng);
@@ -3474,6 +3535,46 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                     ),
                   ),
                 ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Hero marker: last travel position (fallback to Home Town).
+    LatLng? heroPos;
+    if (_campaign.lastTravelLat != null && _campaign.lastTravelLng != null) {
+      heroPos = LatLng(_campaign.lastTravelLat!, _campaign.lastTravelLng!);
+    } else if (townLat != null && townLng != null) {
+      heroPos = LatLng(townLat, townLng);
+    }
+    if (heroPos != null) {
+      markers.add(
+        Marker(
+          point: heroPos,
+          width: 62,
+          height: 62,
+          child: IgnorePointer(
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.cyanAccent.withValues(alpha: 0.9),
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 2),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.35),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: const Center(
+                child: Icon(
+                  Icons.person_pin_circle,
+                  color: Colors.black,
+                  size: 34,
+                ),
               ),
             ),
           ),
@@ -3547,21 +3648,12 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                   urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                   userAgentPackageName: 'card_game',
                 ),
-                if (travelPoints.length >= 2)
-                  PolylineLayer(
-                    polylines: [
-                      Polyline(
-                        points: travelPoints,
-                        strokeWidth: 7,
-                        color: Colors.black.withValues(alpha: 0.55),
-                      ),
-                      Polyline(
-                        points: travelPoints,
-                        strokeWidth: 4,
-                        color: Colors.tealAccent.withValues(alpha: 0.85),
-                      ),
-                    ],
-                  ),
+                if (routeShadowPolylines.isNotEmpty)
+                  PolylineLayer(polylines: routeShadowPolylines),
+                if (routeColorPolylines.isNotEmpty)
+                  PolylineLayer(polylines: routeColorPolylines),
+                if (routeNumberMarkers.isNotEmpty)
+                  MarkerLayer(markers: routeNumberMarkers),
                 MarkerLayer(markers: markers),
                 RichAttributionWidget(
                   attributions: [
