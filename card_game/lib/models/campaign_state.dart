@@ -346,7 +346,8 @@ class CampaignState {
         ? 3
         : 4;
 
-    final relicReduction = isRelicActive('relic_supply_routes') ? 1 : 0;
+    // Each supply routes relic copy reduces penalty by 1
+    final relicReduction = relicCount('relic_supply_routes');
     final totalReduction = supplyDistancePenaltyReduction + relicReduction;
     return baseModifier - totalReduction;
   }
@@ -437,17 +438,22 @@ class CampaignState {
 
   bool isRelicActive(String relicId) => activeRelics.contains(relicId);
 
+  /// Count how many copies of a relic the player has.
+  int relicCount(String relicId) => relics.where((r) => r == relicId).length;
+
   int get goldPerBattleBonus {
     int bonus = 0;
-    if (activeRelics.contains('relic_gold_purse')) bonus += 10;
-    if (activeRelics.contains('legendary_relic_gold_purse')) bonus += 20;
+    // Each copy stacks
+    bonus += relicCount('relic_gold_purse') * 10;
+    bonus += relicCount('legendary_relic_gold_purse') * 20;
     return bonus;
   }
 
   int get globalDamageBonus {
     int bonus = 0;
-    if (activeRelics.contains('relic_morale')) bonus += 1;
-    if (activeRelics.contains('legendary_relic_morale')) bonus += 2;
+    // Each copy stacks
+    bonus += relicCount('relic_morale') * 1;
+    bonus += relicCount('legendary_relic_morale') * 2;
     return bonus;
   }
 
@@ -477,22 +483,21 @@ class CampaignState {
   }
 
   void addRelic(String relicId) {
-    if (!relics.contains(relicId)) {
-      relics.add(relicId);
-      if (!activeRelics.contains(relicId)) {
-        activeRelics.add(relicId);
-      }
+    // Allow duplicate relics - each copy stacks
+    relics.add(relicId);
+    if (!activeRelics.contains(relicId)) {
+      activeRelics.add(relicId);
+    }
 
-      // Immediate effects
-      if (relicId == 'relic_armor') {
-        maxHealth += 10;
-        health += 10; // Heal the amount increased
-      }
+    // Immediate effects (applied each time relic is acquired)
+    if (relicId == 'relic_armor') {
+      maxHealth += 10;
+      health += 10; // Heal the amount increased
+    }
 
-      if (relicId == 'legendary_relic_armor') {
-        maxHealth += 20;
-        health += 20;
-      }
+    if (relicId == 'legendary_relic_armor') {
+      maxHealth += 20;
+      health += 20;
     }
   }
 

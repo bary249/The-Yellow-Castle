@@ -1399,11 +1399,10 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
       icon = Icons.local_hospital;
       iconColor = Colors.greenAccent;
     } else if (type == 'relic') {
-      if (!_campaign.hasRelic(id)) {
-        setState(() {
-          _campaign.addRelic(id);
-        });
-      }
+      // Allow duplicate relics - each copy stacks
+      setState(() {
+        _campaign.addRelic(id);
+      });
       final all = ShopInventory.getAllRelics();
       final item = all.where((e) => e.id == id).toList();
       final name = item.isNotEmpty ? item.first.name : id;
