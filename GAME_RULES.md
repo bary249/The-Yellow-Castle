@@ -75,6 +75,10 @@
 - Some encounters grant an additional **pre-determined offer** (consumable/relic/building) on completion.
 - Encounter selection can show you this offer before you commit to traveling there.
 
+- Boss pacing (Campaign/Story Mode):
+  - The boss becomes **available after 7 encounters** in the current act.
+  - The boss encounter is **not forced**; when available, it appears as one of the selectable encounter options alongside regular encounters.
+
 - Shop encounters can allow you to **repair** previously destroyed cards for a gold cost.
 - After encounters, you can optionally visit your Home Town before choosing the next destination.
 
@@ -91,6 +95,11 @@
 - After encounters in Story Mode, a short story/dispatch dialog can appear.
 
 - Home Town building deliveries can arrive automatically when ready (no manual collect required), and will show a delivery dialog.
+
+- Home Town can offer a paid action to hurry logistics:
+  - **Hurry Supply** costs **100 gold**.
+  - It reduces all in-flight supply deliveries to arrive in **1 encounter**.
+  - It also reduces any building cooldowns (without an in-flight delivery) to be ready in **1 encounter**.
 
 - Campaign mode also has **consumables** (e.g. healing, remove-card) that are stored in the campaign inventory and can be equipped/used between encounters.
 

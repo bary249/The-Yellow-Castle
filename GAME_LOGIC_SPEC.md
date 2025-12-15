@@ -118,6 +118,9 @@ This document captures the **implemented and intended logic** of the game, mappe
 - When a Home Town building delivers a reward, the UI can show a dialog to confirm what arrived.
 - Encounters can include a **pre-determined offer** (e.g. consumable/relic/building) that is generated with the encounter and awarded on completion.
 - Encounter selection UI can display the offer before the player chooses a node.
+- Campaign boss pacing:
+  - The boss becomes **available after 7 encounters** in the current act.
+  - The boss encounter is **not forced**; when available, it appears as one of the selectable encounter options alongside regular encounters.
 - Shop encounters can offer **repairs** for previously destroyed campaign deck cards (for a gold cost).
 - After an encounter completes, the player can optionally visit the Home Town before selecting the next destination.
 - Home Town UI can display distance from town and a per-building supply-time breakdown.
@@ -127,6 +130,10 @@ This document captures the **implemented and intended logic** of the game, mappe
 - Campaign tracks the player's travel history and can render the traveled route on the real map.
 - After encounters, Story Mode can show a short blocking story/dispatch dialog generated from encounter type/title and current travel location.
 - Home Town building deliveries can be auto-collected when they become ready (based on encounter count + distance penalty), while still showing delivery dialogs.
+- Home Town can offer a paid action to hurry logistics:
+  - **Hurry Supply** costs **100 gold**.
+  - It reduces all in-flight supply deliveries to arrive in **1 encounter**.
+  - It also reduces any building cooldowns (without an in-flight delivery) to be ready in **1 encounter**.
 
 **Implemented campaign bonuses:**
 - **Gold per battle bonus**: `CampaignState.goldPerBattleBonus` (e.g. `relic_gold_purse` => +10 gold per battle reward).
