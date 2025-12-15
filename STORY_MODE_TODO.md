@@ -6,7 +6,7 @@ Changes to Story mode:
 4. ✅ The Home Town buildings are buildings that provide gold/cards/items/relics.
 5. ✅ We want cards to have persistent "destruction" throughout the campaign run - meaning cards that get destroyed in battle are gone.
 6. ✅ The buildings in the home town that provide cards, have a "supply time" to them, that considers each encounter as an iteration.
-7. Every campaign home town starts with basic common cards training grounds, that provide cards each encounter.
+7. ✅ Every campaign home town starts with basic common cards training grounds, that provide cards each encounter.
 8. The advanced buildable buildings provide cards in higher rarity, but slower supply time.
 9. The distance of the hero from the home town (base node) also affects supply time.
 10. Hero Progression nodes should also have perks for the home town, that can be unlocked as the hero progresses.

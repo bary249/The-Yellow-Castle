@@ -111,6 +111,7 @@ This document captures the **implemented and intended logic** of the game, mappe
   - In Story Mode, player cards destroyed during a battle are removed from `CampaignState.deck` for the rest of the run.
 
 - Home Town buildings can have a **supply time** measured in **encounters** (cooldown between collects).
+- Story Mode starts with a basic **Training Grounds** building in the Home Town.
 
 **Implemented campaign bonuses:**
 - **Gold per battle bonus**: `CampaignState.goldPerBattleBonus` (e.g. `relic_gold_purse` => +10 gold per battle reward).

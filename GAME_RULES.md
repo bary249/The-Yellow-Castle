@@ -67,6 +67,7 @@
 - Story Mode can also apply **persistent deck changes**: cards destroyed during battle are removed from your campaign deck for the rest of the run.
 
 - Home Town buildings can have a **supply time** measured in **encounters** (cooldown between collects).
+- Story Mode starts with a basic **Training Grounds** building in the Home Town.
 
 - Campaign mode also has **consumables** (e.g. healing, remove-card) that are stored in the campaign inventory and can be equipped/used between encounters.
 
