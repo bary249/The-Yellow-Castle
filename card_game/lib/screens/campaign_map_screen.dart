@@ -3841,33 +3841,85 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
                     Positioned(
                       bottom: 16,
                       left: 16,
-                      child: Row(
-                        children: [
-                          FloatingActionButton.extended(
-                            onPressed: _waitOneEncounter,
-                            backgroundColor: Colors.blueGrey[700],
-                            icon: const Icon(
-                              Icons.hourglass_bottom,
-                              color: Colors.white,
-                            ),
-                            label: const Text(
-                              'Wait',
-                              style: TextStyle(color: Colors.white),
-                            ),
-                          ),
-                          if (_campaign.visitedNodes.length >= 2) ...[
-                            const SizedBox(width: 12),
-                            FloatingActionButton.extended(
-                              onPressed: _returnToPreviousNode,
-                              backgroundColor: Colors.orange[700],
-                              icon: const Icon(Icons.undo, color: Colors.white),
-                              label: const Text(
-                                'Return',
-                                style: TextStyle(color: Colors.white),
+                      child: Builder(
+                        builder: (context) {
+                          final modifier = _distanceSupplyModifierEncounters();
+                          final km = _distanceToHomeTownKm();
+                          final travel = _campaign
+                              .currentTravelDurationEncounters();
+
+                          final Color bannerColor = modifier > 0
+                              ? (Colors.red[300] ?? Colors.red)
+                              : modifier < 0
+                              ? Colors.greenAccent
+                              : Colors.white70;
+
+                          final String modifierText = modifier > 0
+                              ? '+$modifier'
+                              : modifier.toString();
+                          final String kmText = km == null
+                              ? ''
+                              : ' • ${km.toStringAsFixed(0)}km';
+
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: 0.55),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: Colors.white.withValues(alpha: 0.12),
+                                  ),
+                                ),
+                                child: Text(
+                                  'Supply modifier: $modifierText (Travel $travel enc)$kmText',
+                                  style: TextStyle(
+                                    color: bannerColor,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
                               ),
-                            ),
-                          ],
-                        ],
+                              const SizedBox(height: 10),
+                              Row(
+                                children: [
+                                  FloatingActionButton.extended(
+                                    onPressed: _waitOneEncounter,
+                                    backgroundColor: Colors.blueGrey[700],
+                                    icon: const Icon(
+                                      Icons.hourglass_bottom,
+                                      color: Colors.white,
+                                    ),
+                                    label: const Text(
+                                      'Wait',
+                                      style: TextStyle(color: Colors.white),
+                                    ),
+                                  ),
+                                  if (_campaign.visitedNodes.length >= 2) ...[
+                                    const SizedBox(width: 12),
+                                    FloatingActionButton.extended(
+                                      onPressed: _returnToPreviousNode,
+                                      backgroundColor: Colors.orange[700],
+                                      icon: const Icon(
+                                        Icons.undo,
+                                        color: Colors.white,
+                                      ),
+                                      label: const Text(
+                                        'Return',
+                                        style: TextStyle(color: Colors.white),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ],
+                          );
+                        },
                       ),
                     ),
                   ],
