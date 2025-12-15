@@ -23,6 +23,8 @@ Changes to Story mode:
 21. ✅ We need to see where are hero is in the map, which will be the place of the last encounter/shop etc.
 22. ✅ make sure we show the player the path they hasve passed (like in Ticket to ride kind of style), also after the first encounter ( route should be from home town base to first encounter.), also color each path iteration in a slightly different color, and add the iteration number on it.
 23. ✅ Remove the "Would you like to visit home town" after every encounter.
-24. The player should not press "collect" in order ot receive the new cards, they should automatically be added ot the player card invetntory , and they should have a dialog that alerts about it when they are added.
+24. ✅ The player should not press "collect" in order ot receive the new cards, they should automatically be added ot the player card invetntory , and they should have a dialog that alerts about it when they are added.
 25. Change deck "Inventory" to "Reserves" 
-26. After every enocunter, show the colleccted rewards in a calebretory dialog, andals
+26. After every enocunter, show the colleccted rewards in a calebretory dialog, andalso , with the story dialog, add a random reward/punsihment. around new cards (merceneries decided to join you), remove cards (a unit fell ill), found or lost gold etc.
+27. Remove the 3 card selection after every encounter and before first encounter.
+28. Keep the first item selection, phrase as "what you choose to take on you journey"

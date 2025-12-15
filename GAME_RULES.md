@@ -90,6 +90,8 @@
 
 - After encounters in Story Mode, a short story/dispatch dialog can appear.
 
+- Home Town building deliveries can arrive automatically when ready (no manual collect required), and will show a delivery dialog.
+
 - Campaign mode also has **consumables** (e.g. healing, remove-card) that are stored in the campaign inventory and can be equipped/used between encounters.
 
 ---

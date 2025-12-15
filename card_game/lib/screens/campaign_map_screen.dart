@@ -1095,6 +1095,19 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     }
   }
 
+  Future<void> _autoCollectHomeTownDeliveries() async {
+    if (!mounted) return;
+
+    final buildings = _campaign.homeTownBuildings;
+    if (buildings.isEmpty) return;
+
+    for (final b in buildings) {
+      if (!_canCollectBuilding(b)) continue;
+      await _collectBuilding(b);
+      if (!mounted) return;
+    }
+  }
+
   Future<void> _showBuildBuildingDialog() async {
     final alreadyBuilt = _campaign.homeTownBuildings.map((b) => b.id).toSet();
 
@@ -1183,6 +1196,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
   Future<void> _openHomeTown() async {
     final navigator = Navigator.of(context);
     await _refreshHomeTownProgressionPerks();
+    await _autoCollectHomeTownDeliveries();
     if (!mounted) return;
     await showModalBottomSheet<void>(
       context: navigator.context,
@@ -1361,7 +1375,6 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                   else
                     ...buildings.map((b) {
                       final canCollect = _canCollectBuilding(b);
-                      final label = canCollect ? 'Collect' : 'Waiting';
 
                       return Card(
                         color: Colors.grey[850],
@@ -1375,18 +1388,11 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                             '${_homeTownBuildingDescription(b.id)}\n${_buildingSupplyBreakdownText(b)}\n${_buildingSupplyStatusText(b)}',
                             style: const TextStyle(color: Colors.white70),
                           ),
-                          trailing: ElevatedButton(
-                            onPressed: canCollect
-                                ? () async {
-                                    await _collectBuilding(b);
-                                    setSheetState(() {});
-                                  }
-                                : null,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.green[700],
-                              foregroundColor: Colors.white,
-                            ),
-                            child: Text(label),
+                          trailing: Icon(
+                            canCollect ? Icons.local_shipping : Icons.schedule,
+                            color: canCollect
+                                ? Colors.greenAccent
+                                : Colors.white54,
                           ),
                         ),
                       );
@@ -1468,10 +1474,6 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
       grid[2][col] = pickFrom(normalizedPlayerTerrains);
     }
     return grid;
-  }
-
-  Future<void> _maybeOfferVisitHomeTownAfterEncounter() async {
-    return;
   }
 
   String _locationLabelForCurrentTravel() {
@@ -1723,7 +1725,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
               await _applyEncounterOffer(encounter);
               await _maybeDiscoverMapRelicAfterEncounter(encounter);
               await _showStoryAfterEncounter(encounter);
-              await _maybeOfferVisitHomeTownAfterEncounter();
+              await _autoCollectHomeTownDeliveries();
             },
             child: const Text('Claim'),
           ),
@@ -1872,7 +1874,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
         });
         await _saveCampaign();
         await _showStoryAfterEncounter(encounter);
-        await _maybeOfferVisitHomeTownAfterEncounter();
+        await _autoCollectHomeTownDeliveries();
       } else {
         if (_campaign.health <= 0) {
           await _showGameOver();
@@ -2699,7 +2701,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                       });
                       _saveCampaign();
                       await _showStoryAfterEncounter(encounter);
-                      await _maybeOfferVisitHomeTownAfterEncounter();
+                      await _autoCollectHomeTownDeliveries();
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.grey[700],
@@ -3060,7 +3062,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
               );
               await _saveCampaign();
               await _showStoryAfterEncounter(encounter);
-              await _maybeOfferVisitHomeTownAfterEncounter();
+              await _autoCollectHomeTownDeliveries();
             },
             child: Text('Rest (+$healAmount HP)'),
           ),
@@ -3122,7 +3124,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
               await _applyEncounterOffer(encounter);
               await _maybeDiscoverMapRelicAfterEncounter(encounter);
               await _showStoryAfterEncounter(encounter);
-              await _maybeOfferVisitHomeTownAfterEncounter();
+              await _autoCollectHomeTownDeliveries();
             },
             child: const Text('Continue'),
           ),

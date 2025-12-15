@@ -126,6 +126,7 @@ This document captures the **implemented and intended logic** of the game, mappe
 - Defense encounters grant a temporary **+1 damage and +1 HP** to all player cards for that match.
 - Campaign tracks the player's travel history and can render the traveled route on the real map.
 - After encounters, Story Mode can show a short blocking story/dispatch dialog generated from encounter type/title and current travel location.
+- Home Town building deliveries can be auto-collected when they become ready (based on encounter count + distance penalty), while still showing delivery dialogs.
 
 **Implemented campaign bonuses:**
 - **Gold per battle bonus**: `CampaignState.goldPerBattleBonus` (e.g. `relic_gold_purse` => +10 gold per battle reward).
