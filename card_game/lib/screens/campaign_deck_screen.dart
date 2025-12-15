@@ -27,7 +27,7 @@ class _CampaignDeckScreenState extends State<CampaignDeckScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
   }
 
   @override
@@ -55,7 +55,7 @@ class _CampaignDeckScreenState extends State<CampaignDeckScreen>
               ),
             ),
             Text(
-              '${widget.campaign.deck.length} Cards | ${widget.campaign.inventory.length} in Reserves',
+              '${widget.campaign.deck.length} Cards | ${widget.campaign.inventory.length} Reserves | ${widget.campaign.destroyedDeckCards.length} Fallen',
               style: TextStyle(fontSize: 12, color: Colors.grey[400]),
             ),
           ],
@@ -84,12 +84,16 @@ class _CampaignDeckScreenState extends State<CampaignDeckScreen>
               icon: const Icon(Icons.inventory_2),
               text: 'Reserves (${widget.campaign.inventory.length})',
             ),
+            Tab(
+              icon: const Icon(Icons.sentiment_very_dissatisfied),
+              text: 'Fallen (${widget.campaign.destroyedDeckCards.length})',
+            ),
           ],
         ),
       ),
       body: TabBarView(
         controller: _tabController,
-        children: [_buildDeckTab(), _buildInventoryTab()],
+        children: [_buildDeckTab(), _buildInventoryTab(), _buildDeceasedTab()],
       ),
     );
   }
@@ -230,6 +234,223 @@ class _CampaignDeckScreenState extends State<CampaignDeckScreen>
           ),
         ],
       ],
+    );
+  }
+
+  Widget _buildDeceasedTab() {
+    final filteredCards = _selectedElementFilter == null
+        ? widget.campaign.destroyedDeckCards
+        : widget.campaign.destroyedDeckCards
+              .where((c) => c.element == _selectedElementFilter)
+              .toList();
+
+    if (filteredCards.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.sentiment_satisfied_alt,
+              size: 64,
+              color: Colors.grey[600],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'No fallen soldiers',
+              style: TextStyle(color: Colors.grey[500], fontSize: 16),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Units destroyed in battle appear here',
+              style: TextStyle(color: Colors.grey[600], fontSize: 12),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return GridView.builder(
+      padding: const EdgeInsets.all(16),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        childAspectRatio: 0.7,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+      ),
+      itemCount: filteredCards.length,
+      itemBuilder: (context, index) {
+        return _buildDeceasedCardItem(filteredCards[index]);
+      },
+    );
+  }
+
+  Widget _buildDeceasedCardItem(GameCard card) {
+    return GestureDetector(
+      onTap: () => _showDeceasedCardDetails(card),
+      child: Stack(
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.grey[900],
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.red[900]!, width: 2),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.3),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Opacity(
+              opacity: 0.6,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: Colors.red[900]?.withOpacity(0.3),
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(6),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Icon(Icons.bolt, size: 14, color: Colors.grey[600]),
+                        Icon(
+                          _getElementIcon(card.element),
+                          size: 14,
+                          color: Colors.grey[600],
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: Center(
+                      child: Icon(
+                        _getTypeIcon(card),
+                        size: 32,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Text(
+                      card.name,
+                      style: TextStyle(
+                        color: Colors.grey[500],
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        _buildStat(
+                          Icons.local_fire_department,
+                          '${card.damage}',
+                          Colors.grey,
+                        ),
+                        _buildStat(
+                          Icons.favorite,
+                          '${card.health}',
+                          Colors.grey,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Positioned(
+            top: 4,
+            right: 4,
+            child: Container(
+              padding: const EdgeInsets.all(2),
+              decoration: BoxDecoration(
+                color: Colors.red[900],
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: const Icon(
+                Icons.sentiment_very_dissatisfied,
+                color: Colors.white,
+                size: 12,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDeceasedCardDetails(GameCard card) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF2D2D2D),
+        title: Row(
+          children: [
+            Icon(Icons.sentiment_very_dissatisfied, color: Colors.red[400]),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                card.name,
+                style: const TextStyle(color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'This unit was lost in battle.',
+              style: TextStyle(color: Colors.grey[400]),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _buildDetailStat(
+                  'ATK',
+                  '${card.damage}',
+                  Icons.local_fire_department,
+                  Colors.orange,
+                ),
+                _buildDetailStat(
+                  'HP',
+                  '${card.health}',
+                  Icons.favorite,
+                  Colors.red,
+                ),
+                _buildDetailStat(
+                  'AP',
+                  '${card.maxAP}',
+                  Icons.bolt,
+                  Colors.blue,
+                ),
+              ],
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
     );
   }
 
