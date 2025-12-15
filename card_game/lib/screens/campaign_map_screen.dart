@@ -1120,9 +1120,15 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
           .encountersUntilDeliveryProduced(a)
           .compareTo(_campaign.encountersUntilDeliveryProduced(b)),
     );
-    final d = producing.first;
-    final producingRemaining = _campaign.encountersUntilDeliveryProduced(d);
-    return 'Production: ${d.card.name} - $producingRemaining encounter${producingRemaining == 1 ? '' : 's'}';
+
+    final lines = <String>[];
+    for (final d in producing) {
+      final producingRemaining = _campaign.encountersUntilDeliveryProduced(d);
+      lines.add(
+        'Production: ${d.card.name} - $producingRemaining encounter${producingRemaining == 1 ? '' : 's'}',
+      );
+    }
+    return lines.join('\n');
   }
 
   String _buildingTravelingStatusText(HomeTownBuilding building) {
@@ -1143,12 +1149,19 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
           .encountersUntilDeliveryArrives(a)
           .compareTo(_campaign.encountersUntilDeliveryArrives(b)),
     );
-    final d = traveling.first;
-    final remaining = _campaign.encountersUntilDeliveryArrives(d);
-    if (remaining <= 0) {
-      return 'Traveling: ${d.card.name} - arriving now';
+
+    final lines = <String>[];
+    for (final d in traveling) {
+      final remaining = _campaign.encountersUntilDeliveryArrives(d);
+      if (remaining <= 0) {
+        lines.add('Traveling: ${d.card.name} - arriving now');
+      } else {
+        lines.add(
+          'Traveling: ${d.card.name} - $remaining encounter${remaining == 1 ? '' : 's'}',
+        );
+      }
     }
-    return 'Traveling: ${d.card.name} - $remaining encounter${remaining == 1 ? '' : 's'}';
+    return lines.join('\n');
   }
 
   bool _canCollectBuilding(HomeTownBuilding building) {
