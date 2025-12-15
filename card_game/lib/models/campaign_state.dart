@@ -14,6 +14,9 @@ class Encounter {
   final int? goldReward;
   final String? eventId;
 
+  final bool isConquerableCity;
+  final bool isDefense;
+
   final String? offerType;
   final String? offerId;
   final int? offerAmount;
@@ -26,6 +29,8 @@ class Encounter {
     this.difficulty,
     this.goldReward,
     this.eventId,
+    this.isConquerableCity = false,
+    this.isDefense = false,
     this.offerType,
     this.offerId,
     this.offerAmount,
@@ -39,6 +44,8 @@ class Encounter {
     'difficulty': difficulty?.name,
     'goldReward': goldReward,
     'eventId': eventId,
+    'isConquerableCity': isConquerableCity,
+    'isDefense': isDefense,
     'offerType': offerType,
     'offerId': offerId,
     'offerAmount': offerAmount,
@@ -54,6 +61,8 @@ class Encounter {
         : null,
     goldReward: json['goldReward'] as int?,
     eventId: json['eventId'] as String?,
+    isConquerableCity: json['isConquerableCity'] as bool? ?? false,
+    isDefense: json['isDefense'] as bool? ?? false,
     offerType: json['offerType'] as String?,
     offerId: json['offerId'] as String?,
     offerAmount: (json['offerAmount'] as num?)?.toInt(),
@@ -108,6 +117,9 @@ class CampaignState {
   DateTime? completedAt;
   bool isVictory;
   List<Encounter> currentChoices;
+  Encounter? pendingDefenseEncounter;
+  double? pendingDefenseLat;
+  double? pendingDefenseLng;
   DateTime lastUpdated;
 
   String? homeTownName;
@@ -144,6 +156,9 @@ class CampaignState {
     this.completedAt,
     this.isVictory = false,
     this.currentChoices = const [],
+    this.pendingDefenseEncounter,
+    this.pendingDefenseLat,
+    this.pendingDefenseLng,
     this.homeTownName,
     this.homeTownLat,
     this.homeTownLng,
@@ -346,6 +361,26 @@ class CampaignState {
     encounterNumber++;
   }
 
+  void setPendingDefenseEncounter(Encounter encounter) {
+    pendingDefenseEncounter = encounter;
+  }
+
+  void setPendingDefenseEncounterAtLocation(
+    Encounter encounter, {
+    required double lat,
+    required double lng,
+  }) {
+    pendingDefenseEncounter = encounter;
+    pendingDefenseLat = lat;
+    pendingDefenseLng = lng;
+  }
+
+  void clearPendingDefenseEncounter() {
+    pendingDefenseEncounter = null;
+    pendingDefenseLat = null;
+    pendingDefenseLng = null;
+  }
+
   Map<String, dynamic> toJson() => {
     'id': id,
     'leaderId': leaderId,
@@ -368,6 +403,9 @@ class CampaignState {
     'completedAt': completedAt?.toIso8601String(),
     'isVictory': isVictory,
     'currentChoices': currentChoices.map((e) => e.toJson()).toList(),
+    'pendingDefenseEncounter': pendingDefenseEncounter?.toJson(),
+    'pendingDefenseLat': pendingDefenseLat,
+    'pendingDefenseLng': pendingDefenseLng,
     'homeTownName': homeTownName,
     'homeTownLat': homeTownLat,
     'homeTownLng': homeTownLng,
@@ -423,6 +461,13 @@ class CampaignState {
             ?.map((e) => Encounter.fromJson(e as Map<String, dynamic>))
             .toList() ??
         [],
+    pendingDefenseEncounter: json['pendingDefenseEncounter'] != null
+        ? Encounter.fromJson(
+            json['pendingDefenseEncounter'] as Map<String, dynamic>,
+          )
+        : null,
+    pendingDefenseLat: (json['pendingDefenseLat'] as num?)?.toDouble(),
+    pendingDefenseLng: (json['pendingDefenseLng'] as num?)?.toDouble(),
     homeTownName: json['homeTownName'] as String?,
     homeTownLat: (json['homeTownLat'] as num?)?.toDouble(),
     homeTownLng: (json['homeTownLng'] as num?)?.toDouble(),
@@ -606,6 +651,9 @@ class EncounterGenerator {
               ? BattleDifficulty.normal
               : BattleDifficulty.hard);
 
+    final bool isCityBattle =
+        encounterNumber >= 1 && _random.nextDouble() < 0.18;
+
     final List<(String, String)> battleTitles;
 
     switch (act) {
@@ -641,13 +689,19 @@ class EncounterGenerator {
     }
 
     final battle = battleTitles[_random.nextInt(battleTitles.length)];
+
+    final title = isCityBattle ? 'Conquer City: ${battle.$1}' : battle.$1;
+    final description = isCityBattle
+        ? '${battle.$2} This city can be conquered.'
+        : battle.$2;
     return Encounter(
       id: 'battle_${encounterNumber}_$index',
       type: EncounterType.battle,
-      title: battle.$1,
-      description: battle.$2,
+      title: title,
+      description: description,
       difficulty: difficulty,
       goldReward: 10 + (act * 5) + (encounterNumber * 2),
+      isConquerableCity: isCityBattle,
       offerType: 'consumable',
       offerId: _randomConsumableOfferId(),
       offerAmount: 1,

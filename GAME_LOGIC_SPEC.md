@@ -122,6 +122,8 @@ This document captures the **implemented and intended logic** of the game, mappe
 - After an encounter completes, the player can optionally visit the Home Town before selecting the next destination.
 - Home Town UI can display distance from town and a per-building supply-time breakdown.
 - In Story Mode, the encounter location can be used to generate deterministic board terrains for the enemy base and middle row.
+- Some Story Mode battles can be **conquerable cities**. Winning a conquerable city can create a temporary **Defense** encounter option.
+- Defense encounters grant a temporary **+1 damage and +1 HP** to all player cards for that match.
 
 **Implemented campaign bonuses:**
 - **Gold per battle bonus**: `CampaignState.goldPerBattleBonus` (e.g. `relic_gold_purse` => +10 gold per battle reward).

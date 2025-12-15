@@ -38,6 +38,8 @@ class TestMatchScreen extends StatefulWidget {
   final int? playerCurrentHealth; // Starting HP for campaign mode
   final int
   playerDamageBonus; // Flat damage bonus applied to all player deck cards
+  final int
+  playerCardHealthBonus; // Flat HP bonus applied to all player deck cards
   final int extraStartingDraw;
   final int artilleryDamageBonus;
   final int heroAbilityDamageBoost;
@@ -54,6 +56,7 @@ class TestMatchScreen extends StatefulWidget {
     this.customDeck,
     this.playerCurrentHealth,
     this.playerDamageBonus = 0,
+    this.playerCardHealthBonus = 0,
     this.extraStartingDraw = 0,
     this.artilleryDamageBonus = 0,
     this.heroAbilityDamageBoost = 0,
@@ -4497,7 +4500,9 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     // Apply campaign bonuses to the selected deck.
     // This is applied only for the current match; it does not mutate saved/campaign deck state.
     final bool hasDeckBonuses =
-        widget.playerDamageBonus != 0 || widget.artilleryDamageBonus != 0;
+        widget.playerDamageBonus != 0 ||
+        widget.artilleryDamageBonus != 0 ||
+        widget.playerCardHealthBonus != 0;
     final Deck effectivePlayerDeck = hasDeckBonuses
         ? (widget.forceCampaignDeck
               ? Deck(
@@ -4509,9 +4514,12 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                         : 0;
                     final totalBonus =
                         widget.playerDamageBonus + artilleryBonus;
-                    return totalBonus != 0
-                        ? c.copyWith(damage: c.damage + totalBonus)
-                        : c;
+                    final newDamage = c.damage + totalBonus;
+                    final newHealth = c.health + widget.playerCardHealthBonus;
+                    if (totalBonus == 0 && widget.playerCardHealthBonus == 0) {
+                      return c;
+                    }
+                    return c.copyWith(damage: newDamage, health: newHealth);
                   }).toList(),
                   skipValidation: true,
                 )
@@ -4524,9 +4532,12 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                         : 0;
                     final totalBonus =
                         widget.playerDamageBonus + artilleryBonus;
-                    return totalBonus != 0
-                        ? c.copyWith(damage: c.damage + totalBonus)
-                        : c;
+                    final newDamage = c.damage + totalBonus;
+                    final newHealth = c.health + widget.playerCardHealthBonus;
+                    if (totalBonus == 0 && widget.playerCardHealthBonus == 0) {
+                      return c;
+                    }
+                    return c.copyWith(damage: newDamage, health: newHealth);
                   }).toList(),
                 ))
         : playerDeck;

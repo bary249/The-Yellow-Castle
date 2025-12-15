@@ -1402,14 +1402,32 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
   }
 
   void _generateNewChoices() {
+    final pendingDefense = _campaign.pendingDefenseEncounter;
+
     if (_campaign.isBossTime) {
       // Time for the boss!
-      _campaign.currentChoices = [_generator.generateBoss()];
-    } else {
-      _campaign.currentChoices = _generator.generateChoices(
-        _campaign.encounterNumber,
-      );
+      final boss = _generator.generateBoss();
+      final choices = <Encounter>[boss];
+      if (pendingDefense != null) {
+        choices.add(pendingDefense);
+      }
+      _campaign.currentChoices = choices;
+      return;
     }
+
+    final choices = _generator.generateChoices(_campaign.encounterNumber);
+    if (pendingDefense != null) {
+      final alreadyIncluded = choices.any((e) => e.id == pendingDefense.id);
+      if (!alreadyIncluded) {
+        if (choices.isEmpty) {
+          choices.add(pendingDefense);
+        } else {
+          // Replace the last choice so we keep the same number of options.
+          choices[choices.length - 1] = pendingDefense;
+        }
+      }
+    }
+    _campaign.currentChoices = choices;
   }
 
   List<List<String>>? _terrainGridForCurrentEncounterLocation({
@@ -1694,6 +1712,9 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
       playerTerrains: HeroLibrary.napoleon().terrainAffinities,
     );
 
+    final int defenseDamageBonus = encounter.isDefense ? 1 : 0;
+    final int defenseHealthBonus = encounter.isDefense ? 1 : 0;
+
     if (!mounted) return;
     final navigator = Navigator.of(context);
     final result = await navigator.push<Map<String, dynamic>>(
@@ -1705,7 +1726,8 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
           enemyDeck: enemyDeck,
           customDeck: _campaign.deck,
           predefinedTerrainsOverride: predefinedTerrainsOverride,
-          playerDamageBonus: _campaign.globalDamageBonus,
+          playerDamageBonus: _campaign.globalDamageBonus + defenseDamageBonus,
+          playerCardHealthBonus: defenseHealthBonus,
           extraStartingDraw: mods.extraStartingDraw,
           artilleryDamageBonus: mods.artilleryDamageBonus,
           heroAbilityDamageBoost: mods.heroAbilityDamageBoost,
@@ -1746,7 +1768,43 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
           await _showCardRewardDialog();
         }
 
+        Encounter? pendingDefense;
+        double? pendingDefenseLat;
+        double? pendingDefenseLng;
+        if (encounter.isDefense) {
+          // Completed defense encounter.
+          pendingDefense = null;
+        } else if (encounter.isConquerableCity &&
+            _campaign.pendingDefenseEncounter == null) {
+          pendingDefenseLat = _campaign.lastTravelLat;
+          pendingDefenseLng = _campaign.lastTravelLng;
+          pendingDefense = Encounter(
+            id: 'defense_${encounter.id}',
+            type: EncounterType.battle,
+            title:
+                'Defense: ${encounter.title.replaceFirst("Conquer City: ", "")}',
+            description:
+                'The enemy attempts to retake the city. Hold your ground.',
+            difficulty: BattleDifficulty.easy,
+            goldReward: 8,
+            isDefense: true,
+          );
+        }
+
         setState(() {
+          if (encounter.isDefense) {
+            _campaign.clearPendingDefenseEncounter();
+          } else if (pendingDefense != null) {
+            if (pendingDefenseLat != null && pendingDefenseLng != null) {
+              _campaign.setPendingDefenseEncounterAtLocation(
+                pendingDefense,
+                lat: pendingDefenseLat,
+                lng: pendingDefenseLng,
+              );
+            } else {
+              _campaign.setPendingDefenseEncounter(pendingDefense);
+            }
+          }
           _campaign.completeEncounter();
           _generateNewChoices();
         });
@@ -3319,7 +3377,15 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
 
     for (int i = 0; i < choices.length; i++) {
       final encounter = choices[i];
-      final LatLng pos = locations[i % locations.length];
+      LatLng pos = locations[i % locations.length];
+      if (encounter.isDefense &&
+          _campaign.pendingDefenseLat != null &&
+          _campaign.pendingDefenseLng != null) {
+        pos = LatLng(
+          _campaign.pendingDefenseLat!,
+          _campaign.pendingDefenseLng!,
+        );
+      }
 
       markers.add(
         Marker(
