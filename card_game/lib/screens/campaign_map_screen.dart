@@ -2086,11 +2086,27 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
         continue;
       }
 
+      // Check if this building currently has a unit in production
+      final hasProducingUnit = _campaign.pendingCardDeliveries.any(
+        (d) =>
+            d.sourceBuildingId == b.id &&
+            _campaign.encountersUntilDeliveryProduced(d) > 0,
+      );
+
+      // Check if this building has a unit traveling (finished production)
+      final hasTravelingUnit = _campaign.pendingCardDeliveries.any(
+        (d) =>
+            d.sourceBuildingId == b.id &&
+            _campaign.encountersUntilDeliveryProduced(d) <= 0,
+      );
+
       // If a delivery just arrived for this building, start the next cycle
-      // immediately (no “stale” encounter), even if the distance-based interval
+      // immediately (no "stale" encounter), even if the distance-based interval
       // increased since the previous cycle started.
+      // Also start new production if: no unit producing AND (has traveling unit OR can collect)
       final canStartNow =
-          _canCollectBuilding(b) || arrivedBuildingIds.contains(b.id);
+          arrivedBuildingIds.contains(b.id) ||
+          (!hasProducingUnit && (hasTravelingUnit || _canCollectBuilding(b)));
       if (!canStartNow) continue;
 
       final event = await _collectBuilding(b, showDialog: showDialogs);
@@ -2518,14 +2534,40 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
                   else
                     ...buildings.map((b) {
                       final canCollect = _canCollectBuilding(b);
+                      final prodTime = _buildingBaseSupplyEveryEncounters(b);
+                      final isProductionBuilding =
+                          b.id != _buildingSupplyDepotId;
+
+                      // Get currently producing card for this building (if any)
+                      final producingDelivery = _campaign.pendingCardDeliveries
+                          .where((d) => d.sourceBuildingId == b.id)
+                          .toList();
+                      final currentCard = producingDelivery.isNotEmpty
+                          ? producingDelivery.first.card
+                          : null;
 
                       return Card(
                         color: Colors.grey[850],
                         margin: const EdgeInsets.symmetric(vertical: 6),
                         child: ListTile(
-                          title: Text(
-                            _homeTownBuildingName(b.id),
-                            style: const TextStyle(color: Colors.white),
+                          onTap: isProductionBuilding && currentCard != null
+                              ? () => _showCardDetailsDialog(currentCard)
+                              : null,
+                          title: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  _homeTownBuildingName(b.id),
+                                  style: const TextStyle(color: Colors.white),
+                                ),
+                              ),
+                              if (isProductionBuilding && currentCard != null)
+                                const Icon(
+                                  Icons.info_outline,
+                                  color: Colors.white38,
+                                  size: 16,
+                                ),
+                            ],
                           ),
                           subtitle: Text(
                             [
@@ -2535,12 +2577,32 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
                             ].where((s) => s.trim().isNotEmpty).join('\n'),
                             style: const TextStyle(color: Colors.white70),
                           ),
-                          trailing: Icon(
-                            canCollect ? Icons.local_shipping : Icons.schedule,
-                            color: canCollect
-                                ? Colors.greenAccent
-                                : Colors.white54,
-                          ),
+                          trailing: isProductionBuilding
+                              ? Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      canCollect
+                                          ? Icons.local_shipping
+                                          : Icons.schedule,
+                                      color: canCollect
+                                          ? Colors.greenAccent
+                                          : Colors.white54,
+                                      size: 20,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '${prodTime}e',
+                                      style: TextStyle(
+                                        color: canCollect
+                                            ? Colors.greenAccent
+                                            : Colors.white54,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                )
+                              : Icon(Icons.attach_money, color: Colors.amber),
                         ),
                       );
                     }),
