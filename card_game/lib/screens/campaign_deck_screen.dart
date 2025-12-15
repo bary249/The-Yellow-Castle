@@ -55,7 +55,7 @@ class _CampaignDeckScreenState extends State<CampaignDeckScreen>
               ),
             ),
             Text(
-              '${widget.campaign.deck.length} Cards | ${widget.campaign.inventory.length} in Inventory',
+              '${widget.campaign.deck.length} Cards | ${widget.campaign.inventory.length} in Reserves',
               style: TextStyle(fontSize: 12, color: Colors.grey[400]),
             ),
           ],
@@ -82,7 +82,7 @@ class _CampaignDeckScreenState extends State<CampaignDeckScreen>
             ),
             Tab(
               icon: const Icon(Icons.inventory_2),
-              text: 'Inventory (${widget.campaign.inventory.length})',
+              text: 'Reserves (${widget.campaign.inventory.length})',
             ),
           ],
         ),
@@ -144,7 +144,7 @@ class _CampaignDeckScreenState extends State<CampaignDeckScreen>
             Icon(Icons.inventory_2_outlined, size: 64, color: Colors.grey[600]),
             const SizedBox(height: 16),
             Text(
-              'Inventory is empty',
+              'Reserves are empty',
               style: TextStyle(color: Colors.grey[500], fontSize: 16),
             ),
             const SizedBox(height: 8),

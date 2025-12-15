@@ -332,12 +332,12 @@ class _CampaignInventoryScreenState extends State<CampaignInventoryScreen>
       appBar: AppBar(
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
-        title: const Text('Inventory'),
+        title: const Text('Reserves'),
         bottom: TabBar(
           controller: _tabController,
           tabs: const [
             Tab(text: 'Active'),
-            Tab(text: 'Inventory'),
+            Tab(text: 'Reserves'),
           ],
         ),
       ),

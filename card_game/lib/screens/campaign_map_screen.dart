@@ -3837,7 +3837,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                           ),
                           SizedBox(width: 4),
                           Text(
-                            'Inventory',
+                            'Reserves',
                             style: TextStyle(color: Colors.white, fontSize: 12),
                           ),
                         ],
