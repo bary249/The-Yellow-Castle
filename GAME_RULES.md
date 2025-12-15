@@ -79,6 +79,10 @@
   - The boss becomes **available after 7 encounters** in the current act.
   - The boss encounter is **not forced**; when available, it appears as one of the selectable encounter options alongside regular encounters.
 
+- Boss battles (Campaign/Story Mode):
+  - Boss encounters include a **unique boss unit card** in the enemy deck (named after the boss).
+  - Boss cards have **very strong stats** and **multiple abilities**.
+
 - Shop encounters can allow you to **repair** previously destroyed cards for a gold cost.
 - After encounters, you can optionally visit your Home Town before choosing the next destination.
 

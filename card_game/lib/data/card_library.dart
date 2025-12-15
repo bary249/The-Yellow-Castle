@@ -1658,6 +1658,57 @@ GameCard austrianOfficer(int index) => GameCard(
   rarity: 2,
 );
 
+// ------------------ BOSS UNITS (One per Act boss) ------------------
+
+GameCard bossGeneralBeaulieu(int index) => GameCard(
+  id: 'boss_beaulieu_$index',
+  name: 'General Beaulieu',
+  damage: 12,
+  health: 32,
+  tick: 3,
+  moveSpeed: 1,
+  maxAP: 2,
+  apPerTurn: 2,
+  attackAPCost: 1,
+  element: 'Woods',
+  abilities: const ['guard', 'shield_3', 'fury_3'],
+  cost: 0,
+  rarity: 4,
+);
+
+GameCard bossMuradBey(int index) => GameCard(
+  id: 'boss_murad_bey_$index',
+  name: 'Murad Bey',
+  damage: 13,
+  health: 28,
+  tick: 2,
+  moveSpeed: 2,
+  maxAP: 2,
+  apPerTurn: 2,
+  attackAPCost: 1,
+  element: 'Desert',
+  abilities: const ['cavalry', 'first_strike', 'fury_3'],
+  cost: 0,
+  rarity: 4,
+);
+
+GameCard bossCoalitionForces(int index) => GameCard(
+  id: 'boss_coalition_$index',
+  name: 'Coalition Forces',
+  damage: 10,
+  health: 34,
+  tick: 3,
+  moveSpeed: 0,
+  maxAP: 2,
+  apPerTurn: 2,
+  attackAPCost: 1,
+  attackRange: 2,
+  element: 'Lake',
+  abilities: const ['ranged', 'cleave', 'shield_2'],
+  cost: 0,
+  rarity: 4,
+);
+
 /// Build Act 1 enemy deck - Austrian forces in Italy
 /// Balanced deck for early campaign, slightly weaker than Napoleon's starter
 /// Every deck includes 1 Scout for reconnaissance.
@@ -1992,8 +2043,12 @@ List<GameCard> buildRandomizedAct2Deck(int difficulty) {
     cards.add(builder(cardIndex++));
   }
 
-  while (cards.length > 25) cards.removeLast();
-  while (cards.length < 25) cards.add(mamlukLightCavalry(cardIndex++));
+  while (cards.length > 25) {
+    cards.removeLast();
+  }
+  while (cards.length < 25) {
+    cards.add(mamlukLightCavalry(cardIndex++));
+  }
 
   cards.shuffle(random);
   return cards;
@@ -2159,8 +2214,12 @@ List<GameCard> buildRandomizedAct3Deck(int difficulty) {
     cards.add(builder(cardIndex++));
   }
 
-  while (cards.length > 25) cards.removeLast();
-  while (cards.length < 25) cards.add(russianLineInfantry(cardIndex++));
+  while (cards.length > 25) {
+    cards.removeLast();
+  }
+  while (cards.length < 25) {
+    cards.add(russianLineInfantry(cardIndex++));
+  }
 
   cards.shuffle(random);
   return cards;

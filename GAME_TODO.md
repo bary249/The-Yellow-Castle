@@ -38,12 +38,12 @@
   - Austrian Jäger (fast skirmisher), Austrian Infantry, Austrian Grenadier (shield_1)
   - Austrian Hussar, Austrian Cuirassier (shield_1), Austrian Cannon (ranged)
   - Austrian Officer (inspire_1)
-- [ ] Design Act 1 Boss: Austrian General (unique ability)
+- [x] Design Act 1 Boss: Austrian General (boss card: General Beaulieu)
 - [ ] Design Act 2 enemy deck (Mamluk forces) - 10-15 cards
-- [ ] Design Act 2 Boss: Mamluk Cavalry (unique ability)
+- [x] Design Act 2 Boss: Mamluk Cavalry (boss card: Murad Bey)
 - [ ] Design Act 3 enemy deck (Coalition forces) - 10-15 cards
-- [ ] Design Act 3 Boss: Coalition Forces (unique ability + enrage)
-- [ ] Code boss abilities into game logic
+- [x] Design Act 3 Boss: Coalition Forces (boss card: Coalition Forces)
+- [x] Wire boss battles to use boss cards (boss deck includes the act boss card)
 - [ ] Test all enemy cards and bosses
 
 ### Phase 3: Items System

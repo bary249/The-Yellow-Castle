@@ -121,6 +121,15 @@ This document captures the **implemented and intended logic** of the game, mappe
 - Campaign boss pacing:
   - The boss becomes **available after 7 encounters** in the current act.
   - The boss encounter is **not forced**; when available, it appears as one of the selectable encounter options alongside regular encounters.
+
+- Boss battle decks (Campaign/Story Mode):
+  - Boss encounters use an **explicit enemy deck** for the match.
+  - The enemy deck always includes the **act boss card** (a very strong unit named after the boss encounter title).
+  - Current act boss cards:
+    - Act 1: `General Beaulieu`
+    - Act 2: `Murad Bey`
+    - Act 3: `Coalition Forces`
+
 - Shop encounters can offer **repairs** for previously destroyed campaign deck cards (for a gold cost).
 - After an encounter completes, the player can optionally visit the Home Town before selecting the next destination.
 - Home Town UI can display distance from town and a per-building supply-time breakdown.

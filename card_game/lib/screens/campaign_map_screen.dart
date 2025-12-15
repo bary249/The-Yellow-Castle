@@ -2857,6 +2857,33 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
     final buffLabels = _campaignBuffLabelsForBattle(mods: mods);
     final buffsDialogLabels = _campaignBuffLabelsForBuffsDialog(mods: mods);
 
+    // Boss battles use a dedicated boss deck that always includes the act boss card.
+    final bossCard = switch (_campaign.act) {
+      2 => bossMuradBey(0),
+      3 => bossCoalitionForces(0),
+      _ => bossGeneralBeaulieu(0),
+    };
+
+    final baseEnemyCards = switch (_campaign.act) {
+      2 => buildRandomizedAct2Deck(5),
+      3 => buildRandomizedAct3Deck(5),
+      _ => buildRandomizedAct1Deck(5),
+    };
+
+    final enemyCards = <GameCard>[
+      bossCard,
+      ...baseEnemyCards,
+    ].where((c) => c.id != bossCard.id).toList();
+    while (enemyCards.length > 25) {
+      enemyCards.removeLast();
+    }
+
+    final enemyDeck = Deck(
+      id: 'boss_${encounter.id}',
+      name: encounter.title,
+      cards: enemyCards,
+    );
+
     final int bossOpponentBaseHP = 25 + (25 * _campaign.act);
 
     debugPrint(
@@ -2879,6 +2906,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
           selectedHero: HeroLibrary.napoleon(),
           forceCampaignDeck: true,
           campaignAct: _campaign.act,
+          enemyDeck: enemyDeck,
           customDeck: _campaign.deck,
           predefinedTerrainsOverride: predefinedTerrainsOverride,
           playerCurrentHealth: _campaign.health,
