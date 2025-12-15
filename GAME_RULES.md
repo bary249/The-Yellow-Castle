@@ -78,6 +78,8 @@
 - Shop encounters can allow you to **repair** previously destroyed cards for a gold cost.
 - After encounters, you can optionally visit your Home Town before choosing the next destination.
 
+- Home Town shows your distance from town and supply status for buildings.
+
 - Campaign mode also has **consumables** (e.g. healing, remove-card) that are stored in the campaign inventory and can be equipped/used between encounters.
 
 ---

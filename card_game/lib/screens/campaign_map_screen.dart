@@ -772,16 +772,48 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     return (basePenalty - reduction).clamp(0, basePenalty).toInt();
   }
 
-  int _buildingSupplyEveryEncounters(HomeTownBuilding building) {
-    final penalty = _distanceSupplyPenaltyEncounters();
-    final base = switch (building.id) {
+  double? _distanceToHomeTownKm() {
+    final townLat = _campaign.homeTownLat;
+    final townLng = _campaign.homeTownLng;
+    final travelLat = _campaign.lastTravelLat;
+    final travelLng = _campaign.lastTravelLng;
+    if (townLat == null ||
+        townLng == null ||
+        travelLat == null ||
+        travelLng == null) {
+      return null;
+    }
+    final distanceMeters = const Distance()(
+      LatLng(travelLat, travelLng),
+      LatLng(townLat, townLng),
+    );
+    return distanceMeters / 1000.0;
+  }
+
+  int _buildingBaseSupplyEveryEncounters(HomeTownBuilding building) {
+    return switch (building.id) {
       _buildingTrainingGroundsId => 1,
       _buildingSupplyDepotId => 1,
       _buildingOfficersAcademyId => 3,
       _buildingWarCollegeId => 4,
       _ => 1,
     };
+  }
+
+  int _buildingSupplyEveryEncounters(HomeTownBuilding building) {
+    final penalty = _distanceSupplyPenaltyEncounters();
+    final base = _buildingBaseSupplyEveryEncounters(building);
     return base + penalty;
+  }
+
+  String _buildingSupplyBreakdownText(HomeTownBuilding building) {
+    final base = _buildingBaseSupplyEveryEncounters(building);
+    final penalty = _distanceSupplyPenaltyEncounters();
+    final total = base + penalty;
+    if (penalty <= 0) {
+      return 'Supply: every $base encounter${base == 1 ? "" : "s"}';
+    }
+    return 'Supply: $base + $penalty = $total encounters';
   }
 
   String _buildingSupplyStatusText(HomeTownBuilding building) {
@@ -1158,6 +1190,8 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
           final cost = _homeTownUpgradeCost(level);
           final canUpgrade = _campaign.gold >= cost;
           final buildings = _campaign.homeTownBuildings;
+          final distanceKm = _distanceToHomeTownKm();
+          final supplyPenalty = _distanceSupplyPenaltyEncounters();
 
           return Container(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
@@ -1220,6 +1254,46 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                           '${_campaign.gold}',
                           style: const TextStyle(color: Colors.white),
                         ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.25),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.white24),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.place,
+                          color: Colors.white70,
+                          size: 18,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            distanceKm == null
+                                ? 'Distance: Unknown'
+                                : 'Distance: ${distanceKm.toStringAsFixed(0)} km',
+                            style: const TextStyle(color: Colors.white70),
+                          ),
+                        ),
+                        if (supplyPenalty > 0)
+                          Text(
+                            '+$supplyPenalty supply',
+                            style: const TextStyle(
+                              color: Colors.orangeAccent,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          )
+                        else
+                          const Text(
+                            'No penalty',
+                            style: TextStyle(color: Colors.greenAccent),
+                          ),
                       ],
                     ),
                   ),
@@ -1293,7 +1367,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                             style: const TextStyle(color: Colors.white),
                           ),
                           subtitle: Text(
-                            '${_homeTownBuildingDescription(b.id)}\n${_buildingSupplyStatusText(b)}',
+                            '${_homeTownBuildingDescription(b.id)}\n${_buildingSupplyBreakdownText(b)}\n${_buildingSupplyStatusText(b)}',
                             style: const TextStyle(color: Colors.white70),
                           ),
                           trailing: ElevatedButton(

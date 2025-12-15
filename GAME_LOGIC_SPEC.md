@@ -120,6 +120,7 @@ This document captures the **implemented and intended logic** of the game, mappe
 - Encounter selection UI can display the offer before the player chooses a node.
 - Shop encounters can offer **repairs** for previously destroyed campaign deck cards (for a gold cost).
 - After an encounter completes, the player can optionally visit the Home Town before selecting the next destination.
+- Home Town UI can display distance from town and a per-building supply-time breakdown.
 
 **Implemented campaign bonuses:**
 - **Gold per battle bonus**: `CampaignState.goldPerBattleBonus` (e.g. `relic_gold_purse` => +10 gold per battle reward).
