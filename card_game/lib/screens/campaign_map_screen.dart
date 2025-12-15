@@ -1147,7 +1147,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     final navigator = Navigator.of(context);
     await _refreshHomeTownProgressionPerks();
     if (!mounted) return;
-    showModalBottomSheet(
+    await showModalBottomSheet<void>(
       context: navigator.context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -1333,6 +1333,46 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     }
   }
 
+  Future<void> _maybeOfferVisitHomeTownAfterEncounter() async {
+    if (!_isNapoleonAct1MapEnabled) return;
+    if (!mounted) return;
+
+    final navigator = Navigator.of(context);
+    final goHomeTown = await showDialog<bool>(
+      context: navigator.context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF2D2D2D),
+        title: const Text(
+          'After-Action',
+          style: TextStyle(color: Colors.white),
+        ),
+        content: const Text(
+          'Do you want to visit your Home Town before choosing your next destination?',
+          style: TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Continue'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.teal,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Home Town'),
+          ),
+        ],
+      ),
+    );
+
+    if (goHomeTown == true) {
+      await _openHomeTown();
+    }
+  }
+
   void _onEncounterSelected(Encounter encounter) {
     switch (encounter.type) {
       case EncounterType.battle:
@@ -1484,6 +1524,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
               await _saveCampaign();
               await _applyEncounterOffer(encounter);
               await _maybeDiscoverMapRelicAfterEncounter(encounter);
+              await _maybeOfferVisitHomeTownAfterEncounter();
             },
             child: const Text('Claim'),
           ),
@@ -1585,7 +1626,8 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
           _campaign.completeEncounter();
           _generateNewChoices();
         });
-        _saveCampaign();
+        await _saveCampaign();
+        await _maybeOfferVisitHomeTownAfterEncounter();
       } else {
         if (_campaign.health <= 0) {
           await _showGameOver();
@@ -2405,6 +2447,8 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                         _campaign.completeEncounter();
                         _generateNewChoices();
                       });
+                      _saveCampaign();
+                      _maybeOfferVisitHomeTownAfterEncounter();
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.grey[700],
@@ -2764,6 +2808,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                 SnackBar(content: Text('Recovered $healAmount HP!')),
               );
               _saveCampaign();
+              _maybeOfferVisitHomeTownAfterEncounter();
             },
             child: Text('Rest (+$healAmount HP)'),
           ),
@@ -2824,6 +2869,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
               await _saveCampaign();
               await _applyEncounterOffer(encounter);
               await _maybeDiscoverMapRelicAfterEncounter(encounter);
+              await _maybeOfferVisitHomeTownAfterEncounter();
             },
             child: const Text('Continue'),
           ),
