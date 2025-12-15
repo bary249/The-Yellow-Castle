@@ -901,10 +901,6 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     await _persistence.saveCampaign(_campaign);
   }
 
-  int _homeTownUpgradeCost(int currentLevel) {
-    return 50 + (currentLevel - 1) * 50;
-  }
-
   String _homeTownBuildingName(String id) {
     switch (id) {
       case _buildingTrainingGroundsId:
@@ -1645,9 +1641,6 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
       builder: (context) => StatefulBuilder(
         builder: (context, setSheetState) {
           final name = _campaign.homeTownName ?? 'Home Town';
-          final level = _campaign.homeTownLevel;
-          final cost = _homeTownUpgradeCost(level);
-          final canUpgrade = _campaign.gold >= cost;
           final buildings = _campaign.homeTownBuildings;
           final distanceKm = _distanceToHomeTownKm();
           final supplyPenalty = _distanceSupplyPenaltyEncounters();
@@ -1694,15 +1687,6 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                     ),
                     child: Row(
                       children: [
-                        Expanded(
-                          child: Text(
-                            'Town Level: $level',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
                         const Icon(
                           Icons.monetization_on,
                           color: Colors.amber,
@@ -1754,28 +1738,6 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                             style: TextStyle(color: Colors.greenAccent),
                           ),
                       ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: canUpgrade
-                          ? () async {
-                              setState(() {
-                                _campaign.spendGold(cost);
-                                _campaign.homeTownLevel += 1;
-                              });
-                              setSheetState(() {});
-                              await _saveCampaign();
-                            }
-                          : null,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.amber[700],
-                        foregroundColor: Colors.black,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                      child: Text('Upgrade (Cost: $cost)'),
                     ),
                   ),
                   const SizedBox(height: 18),
