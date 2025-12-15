@@ -200,7 +200,10 @@ class _CampaignInventoryScreenState extends State<CampaignInventoryScreen>
                   spacing: 8,
                   children: [
                     TextButton(
-                      onPressed: () => _useActiveConsumable(id),
+                      onPressed: () async {
+                        await _useActiveConsumable(id);
+                        if (mounted) setState(() {});
+                      },
                       child: const Text('Use'),
                     ),
                     TextButton(
@@ -308,14 +311,29 @@ class _CampaignInventoryScreenState extends State<CampaignInventoryScreen>
                   _descForConsumable(id),
                   style: const TextStyle(color: Colors.white70),
                 ),
-                trailing: TextButton(
-                  onPressed: () {
-                    setState(() {
-                      widget.campaign.equipConsumable(id);
-                    });
-                    widget.onChanged();
-                  },
-                  child: const Text('Equip'),
+                trailing: Wrap(
+                  spacing: 8,
+                  children: [
+                    TextButton(
+                      onPressed: () async {
+                        setState(() {
+                          widget.campaign.equipConsumable(id);
+                        });
+                        await _useActiveConsumable(id);
+                        if (mounted) setState(() {});
+                      },
+                      child: const Text('Use'),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        setState(() {
+                          widget.campaign.equipConsumable(id);
+                        });
+                        widget.onChanged();
+                      },
+                      child: const Text('Equip'),
+                    ),
+                  ],
                 ),
               ),
             );

@@ -4595,6 +4595,10 @@ class _TestMatchScreenState extends State<TestMatchScreen>
     final player = _matchManager.currentMatch?.player;
     if (player == null || player.hand.isEmpty) return;
 
+    if (player.deck.remainingCards <= 0) {
+      return;
+    }
+
     // Mulligan is only for the local player
     final hand = player.hand;
     final selectedIndices = <int>{};
@@ -5206,7 +5210,14 @@ class _TestMatchScreenState extends State<TestMatchScreen>
 
     // Mulligan Phase - MUST happen before AI can play
     if (mounted) {
-      await _showMulliganDialog();
+      final player = _matchManager.currentMatch?.player;
+      final canMulligan =
+          player != null &&
+          player.hand.isNotEmpty &&
+          player.deck.remainingCards > 0;
+      if (canMulligan) {
+        await _showMulliganDialog();
+      }
     }
 
     // After mulligan, trigger AI turn if needed (single-player only, TYC3 mode)
