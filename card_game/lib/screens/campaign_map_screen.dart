@@ -197,6 +197,22 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
     );
   }
 
+  void _focusMapOnHero() {
+    final townLat = _campaign.homeTownLat;
+    final townLng = _campaign.homeTownLng;
+
+    LatLng? heroPos;
+    if (_campaign.lastTravelLat != null && _campaign.lastTravelLng != null) {
+      heroPos = LatLng(_campaign.lastTravelLat!, _campaign.lastTravelLng!);
+    } else if (townLat != null && townLng != null) {
+      heroPos = LatLng(townLat, townLng);
+    }
+    if (heroPos == null) return;
+
+    final zoom = _mapController.camera.zoom;
+    _mapController.move(heroPos, zoom);
+  }
+
   Future<void> _returnToPreviousNode() async {
     if (_campaign.visitedNodes.length < 2) return;
     if (!mounted) return;
@@ -3923,6 +3939,20 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
                         },
                       ),
                     ),
+                    if (widget.leaderId == 'napoleon' && _campaign.act == 1)
+                      Positioned(
+                        bottom: 16,
+                        right: 16,
+                        child: FloatingActionButton(
+                          heroTag: 'focus_hero',
+                          onPressed: _focusMapOnHero,
+                          backgroundColor: Colors.black.withValues(alpha: 0.75),
+                          child: const Icon(
+                            Icons.my_location,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),
