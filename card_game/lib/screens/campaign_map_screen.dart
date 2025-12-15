@@ -3948,13 +3948,30 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
                         color: Colors.grey[850],
                         margin: const EdgeInsets.only(bottom: 12),
                         child: ListTile(
+                          onTap:
+                              item.type == ShopItemType.card &&
+                                  item.card != null
+                              ? () => _showCardDetailsDialog(item.card!)
+                              : null,
                           leading: _getShopItemIcon(item),
-                          title: Text(
-                            item.name,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                            ),
+                          title: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  item.name,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                              if (item.type == ShopItemType.card)
+                                const Icon(
+                                  Icons.info_outline,
+                                  color: Colors.white38,
+                                  size: 18,
+                                ),
+                            ],
                           ),
                           subtitle: Text(
                             item.description,
@@ -4036,6 +4053,281 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
         ),
       ),
     );
+  }
+
+  /// Show detailed card information dialog
+  void _showCardDetailsDialog(GameCard card) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF2D2D2D),
+        title: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: _getElementColor(card.element ?? 'woods'),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.style, color: Colors.white, size: 24),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    card.name,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    card.element ?? 'Neutral',
+                    style: TextStyle(
+                      color: _getElementColor(card.element ?? 'woods'),
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Stats row
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.grey[800],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _buildStatColumn(
+                      Icons.flash_on,
+                      'DMG',
+                      '${card.damage}',
+                      Colors.redAccent,
+                    ),
+                    _buildStatColumn(
+                      Icons.favorite,
+                      'HP',
+                      '${card.health}',
+                      Colors.greenAccent,
+                    ),
+                    _buildStatColumn(
+                      Icons.speed,
+                      'AP',
+                      '${card.maxAP}',
+                      Colors.blueAccent,
+                    ),
+                    _buildStatColumn(
+                      Icons.gps_fixed,
+                      'Range',
+                      '${card.attackRange}',
+                      Colors.orangeAccent,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Rarity
+              Row(
+                children: [
+                  const Icon(Icons.star, color: Colors.amber, size: 18),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Rarity: ${_rarityName(card.rarity)}',
+                    style: const TextStyle(color: Colors.white70),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              // Abilities
+              if (card.abilities.isNotEmpty) ...[
+                const Text(
+                  'Abilities:',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ...card.abilities.map(
+                  (ability) => Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[700],
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          _getAbilityIcon(ability),
+                          color: _getAbilityColor(ability),
+                          size: 18,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _formatAbilityName(ability),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              Text(
+                                _getAbilityDescription(ability),
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ] else
+                const Text(
+                  'No special abilities',
+                  style: TextStyle(
+                    color: Colors.white54,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatColumn(
+    IconData icon,
+    String label,
+    String value,
+    Color color,
+  ) {
+    return Column(
+      children: [
+        Icon(icon, color: color, size: 20),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: TextStyle(
+            color: color,
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+          ),
+        ),
+        Text(
+          label,
+          style: const TextStyle(color: Colors.white54, fontSize: 10),
+        ),
+      ],
+    );
+  }
+
+  String _rarityName(int rarity) {
+    switch (rarity) {
+      case 1:
+        return 'Common';
+      case 2:
+        return 'Rare';
+      case 3:
+        return 'Epic';
+      case 4:
+        return 'Legendary';
+      default:
+        return 'Common';
+    }
+  }
+
+  String _formatAbilityName(String ability) {
+    // Convert snake_case or simple names to Title Case
+    if (ability.contains('_')) {
+      return ability
+          .split('_')
+          .map(
+            (w) => w.isNotEmpty ? '${w[0].toUpperCase()}${w.substring(1)}' : '',
+          )
+          .join(' ');
+    }
+    return ability.isNotEmpty
+        ? '${ability[0].toUpperCase()}${ability.substring(1)}'
+        : ability;
+  }
+
+  IconData _getAbilityIcon(String ability) {
+    if (ability.startsWith('medic')) return Icons.healing;
+    if (ability.contains('cannon')) return Icons.gps_fixed;
+    if (ability.contains('charge')) return Icons.flash_on;
+    if (ability.contains('shield')) return Icons.shield;
+    if (ability.contains('range')) return Icons.straighten;
+    if (ability.contains('heal')) return Icons.favorite;
+    return Icons.auto_awesome;
+  }
+
+  Color _getAbilityColor(String ability) {
+    if (ability.startsWith('medic')) return Colors.greenAccent;
+    if (ability.contains('cannon')) return Colors.orangeAccent;
+    if (ability.contains('charge')) return Colors.yellowAccent;
+    if (ability.contains('shield')) return Colors.blueAccent;
+    return Colors.purpleAccent;
+  }
+
+  String _getAbilityDescription(String ability) {
+    // Medic abilities
+    if (ability == 'medic_5') return 'Can heal friendly units for 5 HP';
+    if (ability == 'medic_10') return 'Can heal friendly units for 10 HP';
+    if (ability == 'medic_15') return 'Can heal friendly units for 15 HP';
+    if (ability.startsWith('medic_')) {
+      final amount = ability.replaceFirst('medic_', '');
+      return 'Can heal friendly units for $amount HP';
+    }
+
+    // Cannon ability
+    if (ability == 'cannon') return 'Artillery unit with extended attack range';
+
+    // Range abilities
+    if (ability.startsWith('range_')) {
+      final range = ability.replaceFirst('range_', '');
+      return 'Attack range of $range tiles';
+    }
+
+    // Other common abilities
+    if (ability == 'charge') return 'Can move and attack in the same turn';
+    if (ability == 'shield') return 'Reduces incoming damage';
+    if (ability == 'first_strike') return 'Attacks first in combat';
+    if (ability == 'counter') return 'Deals damage when attacked';
+
+    return 'Special ability';
   }
 
   Widget _getShopItemIcon(ShopItem item) {
