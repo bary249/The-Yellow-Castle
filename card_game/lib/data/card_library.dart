@@ -602,7 +602,7 @@ GameCard napoleonVoltigeur(int index) => GameCard(
   maxAP: 2, // TYC3: Fast unit
   apPerTurn: 2,
   attackAPCost: 1,
-  element: 'Woods',
+  element: null,
   abilities: const [],
   cost: 1,
   rarity: 1, // Common
@@ -620,7 +620,7 @@ GameCard napoleonFusilier(int index) => GameCard(
   maxAP: 1, // TYC3: Medium unit
   apPerTurn: 1,
   attackAPCost: 1,
-  element: 'Woods',
+  element: null,
   abilities: const [],
   cost: 2,
   rarity: 1, // Common
@@ -638,7 +638,7 @@ GameCard napoleonLineInfantry(int index) => GameCard(
   maxAP: 1, // TYC3: Medium unit
   apPerTurn: 1,
   attackAPCost: 1,
-  element: 'Woods',
+  element: null,
   abilities: const [],
   cost: 2,
   rarity: 1, // Common
@@ -657,7 +657,7 @@ GameCard napoleonFieldCannon(int index) => GameCard(
   apPerTurn: 1,
   attackAPCost: 1,
   attackRange: 2, // TYC3: Long range
-  element: 'Woods',
+  element: null,
   abilities: const ['ranged'], // No retaliation
   cost: 2,
   rarity: 1, // Common
@@ -675,7 +675,7 @@ GameCard napoleonSapper(int index) => GameCard(
   maxAP: 1, // TYC3: Medium unit
   apPerTurn: 1,
   attackAPCost: 1,
-  element: 'Woods',
+  element: null,
   abilities: const ['fortify_1'], // +1 shield to all allies in lane
   cost: 2,
   rarity: 1, // Common
@@ -693,7 +693,7 @@ GameCard napoleonDrummerBoy(int index) => GameCard(
   maxAP: 1, // TYC3: Support unit
   apPerTurn: 1,
   attackAPCost: 1,
-  element: 'Woods',
+  element: null,
   abilities: const ['inspire_1'], // +1 damage to all allies in lane
   cost: 1,
   rarity: 1, // Common
@@ -1613,7 +1613,7 @@ GameCard austrianJager(int index) => GameCard(
   maxAP: 2, // TYC3: Fast unit
   apPerTurn: 2,
   attackAPCost: 1,
-  element: 'Woods',
+  element: null,
   abilities: const [],
   cost: 1,
   rarity: 1,
@@ -1630,7 +1630,7 @@ GameCard austrianLineInfantry(int index) => GameCard(
   maxAP: 1, // TYC3: Medium unit
   apPerTurn: 1,
   attackAPCost: 1,
-  element: 'Woods',
+  element: null,
   abilities: const [],
   cost: 2,
   rarity: 1,
@@ -1699,7 +1699,7 @@ GameCard austrianArtillery(int index) => GameCard(
   apPerTurn: 1,
   attackAPCost: 1,
   attackRange: 2, // TYC3: Long range
-  element: 'Woods',
+  element: null,
   abilities: const ['ranged'],
   cost: 2,
   rarity: 1,
@@ -1957,7 +1957,7 @@ GameCard mamlukLightCavalry(int index) => GameCard(
   maxAP: 2,
   apPerTurn: 2,
   attackAPCost: 1,
-  element: 'Desert',
+  element: null,
   abilities: const [],
   cost: 1,
   rarity: 1,
@@ -1974,7 +1974,7 @@ GameCard bedouinRaider(int index) => GameCard(
   maxAP: 2,
   apPerTurn: 2,
   attackAPCost: 1,
-  element: 'Desert',
+  element: null,
   abilities: const ['first_strike'],
   cost: 2,
   rarity: 1,
@@ -2026,7 +2026,7 @@ GameCard camelGun(int index) => GameCard(
   apPerTurn: 1,
   attackAPCost: 1,
   attackRange: 2,
-  element: 'Desert',
+  element: null,
   abilities: const ['ranged'],
   cost: 2,
   rarity: 1,
@@ -2137,7 +2137,7 @@ GameCard russianLineInfantry(int index) => GameCard(
   maxAP: 1,
   apPerTurn: 1,
   attackAPCost: 1,
-  element: 'Lake', // Snow/Winter theme -> Lake/Ice
+  element: null,
   abilities: const [],
   cost: 2,
   rarity: 1,
@@ -2154,7 +2154,7 @@ GameCard cossackCavalry(int index) => GameCard(
   maxAP: 2,
   apPerTurn: 2,
   attackAPCost: 1,
-  element: 'Lake',
+  element: null,
   abilities: const ['first_strike'],
   cost: 2,
   rarity: 1,

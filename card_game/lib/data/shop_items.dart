@@ -41,7 +41,7 @@ class ShopInventory {
           id: 'card_${card.id}',
           name: card.name,
           description:
-              '${card.element} unit - DMG:${card.damage} HP:${card.health}',
+              '${card.element ?? "Neutral"} unit - DMG:${card.damage} HP:${card.health}',
           cost: _getCardCost(card),
           type: ShopItemType.card,
           card: card,

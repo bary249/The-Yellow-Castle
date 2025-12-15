@@ -4180,7 +4180,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: _getElementColor(card.element ?? 'woods'),
+                color: _getElementColor(card.element ?? 'neutral'),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Icon(Icons.style, color: Colors.white, size: 24),
@@ -4200,7 +4200,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
                   Text(
                     card.element ?? 'Neutral',
                     style: TextStyle(
-                      color: _getElementColor(card.element ?? 'woods'),
+                      color: _getElementColor(card.element ?? 'neutral'),
                       fontSize: 12,
                     ),
                   ),
@@ -4450,7 +4450,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
           width: 48,
           height: 48,
           decoration: BoxDecoration(
-            color: _getElementColor(item.card?.element ?? 'woods'),
+            color: _getElementColor(item.card?.element ?? 'neutral'),
             borderRadius: BorderRadius.circular(8),
           ),
           child: const Icon(Icons.style, color: Colors.white),
@@ -4480,6 +4480,8 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
 
   Color _getElementColor(String element) {
     switch (element.toLowerCase()) {
+      case 'neutral':
+        return Colors.grey[700]!;
       case 'woods':
         return Colors.green[700]!;
       case 'lake':
