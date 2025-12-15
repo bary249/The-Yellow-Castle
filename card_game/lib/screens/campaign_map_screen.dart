@@ -1471,43 +1471,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
   }
 
   Future<void> _maybeOfferVisitHomeTownAfterEncounter() async {
-    if (!_isNapoleonAct1MapEnabled) return;
-    if (!mounted) return;
-
-    final navigator = Navigator.of(context);
-    final goHomeTown = await showDialog<bool>(
-      context: navigator.context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF2D2D2D),
-        title: const Text(
-          'After-Action',
-          style: TextStyle(color: Colors.white),
-        ),
-        content: const Text(
-          'Do you want to visit your Home Town before choosing your next destination?',
-          style: TextStyle(color: Colors.white70),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Continue'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.teal,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Home Town'),
-          ),
-        ],
-      ),
-    );
-
-    if (goHomeTown == true) {
-      await _openHomeTown();
-    }
+    return;
   }
 
   String _locationLabelForCurrentTravel() {
