@@ -3083,8 +3083,8 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
           ],
         ),
         actions: [
-          TextButton(
-            onPressed: () {
+          ElevatedButton(
+            onPressed: () async {
               Navigator.pop(context);
               setState(() {
                 _campaign.heal(healAmount);
@@ -3094,9 +3094,9 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(content: Text('Recovered $healAmount HP!')),
               );
-              _saveCampaign();
-              _showStoryAfterEncounter(encounter);
-              _maybeOfferVisitHomeTownAfterEncounter();
+              await _saveCampaign();
+              await _showStoryAfterEncounter(encounter);
+              await _maybeOfferVisitHomeTownAfterEncounter();
             },
             child: Text('Rest (+$healAmount HP)'),
           ),
