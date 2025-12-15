@@ -31,6 +31,8 @@ class TestMatchScreen extends StatefulWidget {
   forceCampaignDeck; // If true, use hero's campaign deck instead of saved deck
   final Deck? enemyDeck; // Custom enemy deck (for campaign battles)
   final int campaignAct; // Current campaign act (1, 2, or 3)
+  final List<List<String>>?
+  predefinedTerrainsOverride; // Campaign: predefined terrain grid (player perspective)
   final List<GameCard>?
   customDeck; // Custom player deck (overrides default/saved)
   final int? playerCurrentHealth; // Starting HP for campaign mode
@@ -48,6 +50,7 @@ class TestMatchScreen extends StatefulWidget {
     this.forceCampaignDeck = false,
     this.enemyDeck,
     this.campaignAct = 1,
+    this.predefinedTerrainsOverride,
     this.customDeck,
     this.playerCurrentHealth,
     this.playerDamageBonus = 0,
@@ -4630,6 +4633,12 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
           ];
         }
         debugPrint('Using predefined terrains (mirrored: ${!_amPlayer1})');
+      }
+      if (!_isOnlineMode &&
+          terrainsToUse == null &&
+          widget.predefinedTerrainsOverride != null) {
+        terrainsToUse = widget.predefinedTerrainsOverride;
+        debugPrint('Using predefined terrains override (campaign)');
       }
 
       // Skip opponent shuffle if we have synced deck (already in correct order)

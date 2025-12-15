@@ -38,7 +38,14 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
   late EncounterGenerator _generator;
   bool _isLoading = true;
   final CampaignPersistenceService _persistence = CampaignPersistenceService();
+  final MapController _mapController = MapController();
 
+  static const List<String> _locationTerrainPool = [
+    'Woods',
+    'Lake',
+    'Desert',
+    'Marsh',
+  ];
   int _homeTownBuildDiscountPercent = 0;
   bool _homeTownReduceDistancePenalty = false;
 
@@ -51,8 +58,6 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
   static const String _buildingWarCollegeId = 'building_war_college';
 
   final Random _random = Random();
-
-  final MapController _mapController = MapController();
 
   int _applyDiscount(int cost, int discountPercent) {
     if (discountPercent <= 0) return cost;
@@ -1407,6 +1412,46 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     }
   }
 
+  List<List<String>>? _terrainGridForCurrentEncounterLocation({
+    required List<String> playerTerrains,
+  }) {
+    final lat = _campaign.lastTravelLat;
+    final lng = _campaign.lastTravelLng;
+    if (lat == null || lng == null) return null;
+
+    final seedLat = (lat.abs() * 1000).round();
+    final seedLng = (lng.abs() * 1000).round();
+    final seed = (seedLat * 1000003) ^ seedLng;
+    final rng = Random(seed);
+
+    String pickFrom(List<String> values) {
+      if (values.isEmpty) return _locationTerrainPool.first;
+      return values[rng.nextInt(values.length)];
+    }
+
+    // Enemy base and middle terrain are determined from location.
+    final enemyBaseTerrain = pickFrom(_locationTerrainPool);
+    var middleTerrain = pickFrom(_locationTerrainPool);
+    if (middleTerrain == enemyBaseTerrain && _locationTerrainPool.length > 1) {
+      middleTerrain = pickFrom(
+        _locationTerrainPool.where((t) => t != enemyBaseTerrain).toList(),
+      );
+    }
+
+    // Player base uses hero terrains (so heroes keep identity).
+    final normalizedPlayerTerrains = playerTerrains.isNotEmpty
+        ? playerTerrains
+        : const ['Woods'];
+
+    final grid = List.generate(3, (_) => List.filled(3, 'Woods'));
+    for (int col = 0; col < 3; col++) {
+      grid[0][col] = enemyBaseTerrain;
+      grid[1][col] = middleTerrain;
+      grid[2][col] = pickFrom(normalizedPlayerTerrains);
+    }
+    return grid;
+  }
+
   Future<void> _maybeOfferVisitHomeTownAfterEncounter() async {
     if (!_isNapoleonAct1MapEnabled) return;
     if (!mounted) return;
@@ -1645,6 +1690,10 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
       'CAMPAIGN BATTLE: act=${_campaign.act}, encounter=${_campaign.encounterNumber}, hp=${_campaign.health}/${_campaign.maxHealth}, activeRelics=${_campaign.activeRelics}, damageBonus=${_campaign.globalDamageBonus}, goldBonus=${_campaign.goldPerBattleBonus}, extraStartingDraw=${mods.extraStartingDraw}, artilleryDamageBonus=${mods.artilleryDamageBonus}, difficulty=${encounter.difficulty}',
     );
 
+    final predefinedTerrainsOverride = _terrainGridForCurrentEncounterLocation(
+      playerTerrains: HeroLibrary.napoleon().terrainAffinities,
+    );
+
     if (!mounted) return;
     final navigator = Navigator.of(context);
     final result = await navigator.push<Map<String, dynamic>>(
@@ -1655,6 +1704,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
           campaignAct: _campaign.act,
           enemyDeck: enemyDeck,
           customDeck: _campaign.deck,
+          predefinedTerrainsOverride: predefinedTerrainsOverride,
           playerDamageBonus: _campaign.globalDamageBonus,
           extraStartingDraw: mods.extraStartingDraw,
           artilleryDamageBonus: mods.artilleryDamageBonus,
@@ -1863,6 +1913,10 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
       'CAMPAIGN BOSS: act=${_campaign.act}, hp=${_campaign.health}/${_campaign.maxHealth}, activeRelics=${_campaign.activeRelics}, damageBonus=${_campaign.globalDamageBonus}, goldBonus=${_campaign.goldPerBattleBonus}, extraStartingDraw=${mods.extraStartingDraw}, artilleryDamageBonus=${mods.artilleryDamageBonus}, bossOpponentBaseHP=$bossOpponentBaseHP',
     );
 
+    final predefinedTerrainsOverride = _terrainGridForCurrentEncounterLocation(
+      playerTerrains: HeroLibrary.napoleon().terrainAffinities,
+    );
+
     if (!mounted) return;
     final navigator = Navigator.of(context);
     final result = await navigator.push<Map<String, dynamic>>(
@@ -1872,6 +1926,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
           forceCampaignDeck: true,
           campaignAct: _campaign.act,
           customDeck: _campaign.deck,
+          predefinedTerrainsOverride: predefinedTerrainsOverride,
           playerCurrentHealth: _campaign.health,
           playerDamageBonus: _campaign.globalDamageBonus,
           extraStartingDraw: mods.extraStartingDraw,

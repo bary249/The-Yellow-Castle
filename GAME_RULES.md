@@ -80,6 +80,8 @@
 
 - Home Town shows your distance from town and supply status for buildings.
 
+- In Story Mode, the encounter location can affect the middle and enemy base terrain.
+
 - Campaign mode also has **consumables** (e.g. healing, remove-card) that are stored in the campaign inventory and can be equipped/used between encounters.
 
 ---
