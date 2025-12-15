@@ -1363,6 +1363,40 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                       );
                       final canAfford = _campaign.gold >= effectiveCost;
 
+                      final previewBuilding = HomeTownBuilding(id: id);
+                      final supplyText = _buildingSupplyBreakdownText(
+                        previewBuilding,
+                      );
+
+                      String producesText = _homeTownBuildingDescription(id);
+                      if (id == _buildingSupplyDepotId) {
+                        producesText = 'Produces: +15 Gold';
+                      } else if (id == _buildingOfficersAcademyId) {
+                        final candidates = ShopInventory.getCardsForAct(
+                          _campaign.act,
+                        ).where((c) => c.rarity == 2).toList();
+                        final examples = candidates
+                            .take(3)
+                            .map((c) => c.name)
+                            .toList();
+                        final exampleText = examples.isEmpty
+                            ? ''
+                            : '\nExamples: ${examples.join(", ")}';
+                        producesText = 'Produces: Rare unit card$exampleText';
+                      } else if (id == _buildingWarCollegeId) {
+                        final candidates = ShopInventory.getCardsForAct(
+                          _campaign.act,
+                        ).where((c) => c.rarity == 3).toList();
+                        final examples = candidates
+                            .take(3)
+                            .map((c) => c.name)
+                            .toList();
+                        final exampleText = examples.isEmpty
+                            ? ''
+                            : '\nExamples: ${examples.join(", ")}';
+                        producesText = 'Produces: Epic unit card$exampleText';
+                      }
+
                       return Card(
                         color: Colors.grey[850],
                         child: ListTile(
@@ -1371,7 +1405,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                             style: const TextStyle(color: Colors.white),
                           ),
                           subtitle: Text(
-                            _homeTownBuildingDescription(id),
+                            '$producesText\n$supplyText',
                             style: const TextStyle(color: Colors.white70),
                           ),
                           trailing: ElevatedButton(
