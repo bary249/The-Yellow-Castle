@@ -947,6 +947,24 @@ class MatchManager {
 
     _log('\n--- CRYSTAL DAMAGE CHECK ---');
 
+    int laneDamageBonusForCards(Iterable<GameCard> cards) {
+      int damage = 0;
+      for (final card in cards) {
+        for (final ability in card.abilities) {
+          if (ability.startsWith('inspire_')) {
+            damage += int.tryParse(ability.split('_').last) ?? 0;
+          }
+          if (ability.startsWith('command_')) {
+            damage += int.tryParse(ability.split('_').last) ?? 0;
+          }
+          if (ability.startsWith('rally_')) {
+            damage += int.tryParse(ability.split('_').last) ?? 0;
+          }
+        }
+      }
+      return damage;
+    }
+
     for (final lane in _currentMatch!.lanes) {
       final laneName = lane.position.name.toUpperCase();
       final colIndex = lane.position.index;
@@ -959,9 +977,16 @@ class MatchManager {
         // Fog of war is now DYNAMIC - no permanent reveal needed
         if (opponentDefenders.isEmpty) {
           // Uncontested - deal full damage
+          final laneBonus = laneDamageBonusForCards(
+            lane.playerCards.allAliveCards,
+          );
           final totalDamage = playerAttackers.fold<int>(
             0,
-            (sum, card) => sum + card.damage,
+            (sum, card) =>
+                sum +
+                card.damage +
+                laneBonus +
+                (playerDamageBoost > 0 ? playerDamageBoost : 0),
           );
           _currentMatch!.opponent.takeCrystalDamage(totalDamage);
           _log('$laneName: 💥 $totalDamage UNCONTESTED crystal damage to AI!');
@@ -978,9 +1003,16 @@ class MatchManager {
           // Won combat at enemy base - survivors deal damage
           final survivors = lane.playerStack.aliveCards;
           if (survivors.isNotEmpty) {
+            final laneBonus = laneDamageBonusForCards(
+              lane.playerCards.allAliveCards,
+            );
             final totalDamage = survivors.fold<int>(
               0,
-              (sum, card) => sum + card.damage,
+              (sum, card) =>
+                  sum +
+                  card.damage +
+                  laneBonus +
+                  (playerDamageBoost > 0 ? playerDamageBoost : 0),
             );
             _currentMatch!.opponent.takeCrystalDamage(totalDamage);
             _log(
@@ -1008,9 +1040,12 @@ class MatchManager {
       if (opponentAttackers.isNotEmpty) {
         if (playerDefenders.isEmpty) {
           // Uncontested - deal full damage
+          final laneBonus = laneDamageBonusForCards(
+            lane.opponentCards.allAliveCards,
+          );
           final totalDamage = opponentAttackers.fold<int>(
             0,
-            (sum, card) => sum + card.damage,
+            (sum, card) => sum + card.damage + laneBonus,
           );
           _currentMatch!.player.takeCrystalDamage(totalDamage);
           _log(
@@ -1029,9 +1064,12 @@ class MatchManager {
           // Won combat at player base - survivors deal damage
           final survivors = lane.opponentStack.aliveCards;
           if (survivors.isNotEmpty) {
+            final laneBonus = laneDamageBonusForCards(
+              lane.opponentCards.allAliveCards,
+            );
             final totalDamage = survivors.fold<int>(
               0,
-              (sum, card) => sum + card.damage,
+              (sum, card) => sum + card.damage + laneBonus,
             );
             _currentMatch!.player.takeCrystalDamage(totalDamage);
             _log(
@@ -2388,6 +2426,12 @@ class MatchManager {
       '   Damage: ${result.damageDealt} → ${target.name} now ${target.currentHealth}/${target.health} HP',
     );
 
+    if (result.modifiers.isNotEmpty) {
+      for (final m in result.modifiers) {
+        _log('     $m');
+      }
+    }
+
     final attackerTile = _currentMatch!.board.getTile(attackerRow, attackerCol);
 
     if (result.targetDied) {
@@ -2444,11 +2488,17 @@ class MatchManager {
         }
       }
     }
-    if (result.retaliationDamage > 0) {
+    if (result.retaliationDamage > 0 ||
+        result.retaliationModifiers.isNotEmpty) {
       final retaliationNote = result.targetDied ? ' (before dying)' : '';
       _log(
         '   ↩️ Retaliation$retaliationNote: ${target.name} deals ${result.retaliationDamage} to ${attacker.name}',
       );
+      if (result.retaliationModifiers.isNotEmpty) {
+        for (final m in result.retaliationModifiers) {
+          _log('     $m');
+        }
+      }
     }
     if (result.thornsDamage > 0) {
       _log(
@@ -2681,6 +2731,10 @@ class MatchManager {
     // Apply lane buffs (Inspire, Command)
     final laneBuffs = calculateLaneBuffsTYC3(attackerCol, attacker.ownerId!);
     damage += laneBuffs.damage;
+
+    if (isPlayerAttacking && playerDamageBoost > 0) {
+      damage += playerDamageBoost;
+    }
 
     final targetPlayer = isPlayerAttacking
         ? _currentMatch!.opponent

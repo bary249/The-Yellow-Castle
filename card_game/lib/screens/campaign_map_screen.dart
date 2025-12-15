@@ -47,7 +47,8 @@ class CampaignMapScreen extends StatefulWidget {
   State<CampaignMapScreen> createState() => _CampaignMapScreenState();
 }
 
-class _CampaignMapScreenState extends State<CampaignMapScreen> {
+class _CampaignMapScreenState extends State<CampaignMapScreen>
+    with SingleTickerProviderStateMixin {
   late CampaignState _campaign;
   late EncounterGenerator _generator;
   bool _isLoading = true;
@@ -294,48 +295,6 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     });
   }
 
-  String _cardTypeKey(GameCard card) {
-    final id = card.id;
-    final parts = id.split('_');
-    if (parts.isNotEmpty && int.tryParse(parts.last) != null) {
-      return parts.sublist(0, parts.length - 1).join('_');
-    }
-    return id;
-  }
-
-  List<GameCard> _campaignCardPoolForLeader(String leaderId) {
-    if (leaderId == 'napoleon') {
-      return buildNapoleonCampaignCardPool();
-    }
-    return buildStarterCardPool()
-        .where((c) => !c.id.startsWith('scout_'))
-        .toList();
-  }
-
-  List<GameCard> _startingSpecialCardOptions({
-    required String leaderId,
-    required int act,
-    NapoleonProgressionState? napoleonProgression,
-  }) {
-    final pool = _campaignCardPoolForLeader(leaderId);
-    final seen = <String>{};
-    final unique = <GameCard>[];
-    for (final c in pool) {
-      final key = _cardTypeKey(c);
-      if (seen.contains(key)) continue;
-      seen.add(key);
-      unique.add(c);
-    }
-
-    int desired = 2;
-    if (leaderId == 'napoleon' && napoleonProgression != null) {
-      desired = napoleonProgression.modifiers.startingSpecialCardOptionCount;
-    }
-
-    if (unique.length <= desired) return unique;
-    return unique.take(desired).toList();
-  }
-
   List<ShopItem> _startingRelicOptions({
     required String leaderId,
     NapoleonProgressionState? napoleonProgression,
@@ -415,284 +374,9 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
 
     if (!mounted) return;
 
-    if (_campaign.startingSpecialCardId == null) {
-      final options = _startingSpecialCardOptions(
-        leaderId: leaderId,
-        act: act,
-        napoleonProgression: napoleonProgression,
-      );
-
-      final chosen = options.isEmpty
-          ? null
-          : await _pickStartingSpecialCardWithDetails(options);
-
-      if (chosen != null) {
-        final selectedTypeKey = _cardTypeKey(chosen);
-        _campaign.startingSpecialCardId = selectedTypeKey;
-        _campaign.addCard(chosen.copy());
-      }
-    }
-  }
-
-  Future<GameCard?> _pickStartingSpecialCardWithDetails(
-    List<GameCard> options,
-  ) async {
-    return showDialog<GameCard>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF2D2D2D),
-        title: const Text(
-          'What you choose to take on your journey',
-          style: TextStyle(color: Colors.white),
-        ),
-        content: SizedBox(
-          width: 360,
-          child: ListView(
-            shrinkWrap: true,
-            children: [
-              for (final c in options)
-                ListTile(
-                  leading: Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: _getElementColor(c.element ?? 'woods'),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: const Icon(Icons.style, color: Colors.white),
-                  ),
-                  title: Text(
-                    c.name,
-                    style: const TextStyle(color: Colors.white),
-                  ),
-                  subtitle: Text(
-                    '${c.element ?? ""}  ATK:${c.damage}  HP:${c.health}  AP:${c.maxAP}',
-                    style: TextStyle(color: Colors.grey[400]),
-                  ),
-                  trailing: const Icon(Icons.chevron_right, color: Colors.grey),
-                  onTap: () async {
-                    final confirmed = await _showCardDetailsForPick(c);
-                    if (!context.mounted) return;
-                    if (confirmed == true) {
-                      Navigator.pop(context, c);
-                    }
-                  },
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<bool?> _showCardDetailsForPick(GameCard card) {
-    return showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF2D2D2D),
-        contentPadding: EdgeInsets.zero,
-        content: Container(
-          width: 320,
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Text(
-                      card.name,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close, color: Colors.grey),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
-              const Divider(color: Colors.grey),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  _buildDetailStat(
-                    'ATK',
-                    '${card.damage}',
-                    Icons.local_fire_department,
-                    Colors.orange,
-                  ),
-                  _buildDetailStat(
-                    'HP',
-                    '${card.health}',
-                    Icons.favorite,
-                    Colors.red,
-                  ),
-                  _buildDetailStat(
-                    'AP',
-                    '${card.maxAP}',
-                    Icons.bolt,
-                    Colors.blue,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: _getAttackTypeColor(card),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      _getAttackTypeIcon(card),
-                      color: Colors.white,
-                      size: 16,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      _getAttackTypeLabel(card),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              if (card.abilities.isNotEmpty) ...[
-                const Text(
-                  'Abilities',
-                  style: TextStyle(
-                    color: Colors.grey,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: card.abilities
-                      .map(
-                        (a) => Tooltip(
-                          message: _getAbilityDescription(a),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.amber[800],
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              a.replaceAll('_', ' ').toUpperCase(),
-                              style: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                        ),
-                      )
-                      .toList(),
-                ),
-                const SizedBox(height: 8),
-                ...card.abilities.map(
-                  (a) => Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(
-                          _getAbilityIcon(a),
-                          color: Colors.amber[300],
-                          size: 14,
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            _getAbilityDescription(a),
-                            style: TextStyle(
-                              color: Colors.grey[400],
-                              fontSize: 10,
-                              fontStyle: FontStyle.italic,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-              ],
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: _getElementColor(
-                    card.element ?? 'woods',
-                  ).withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: _getElementColor(
-                      card.element ?? 'woods',
-                    ).withValues(alpha: 0.5),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      _getElementIcon(card.element ?? 'woods'),
-                      color: _getElementColor(card.element ?? 'woods'),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      '${card.element ?? "Neutral"} Unit',
-                      style: TextStyle(
-                        color: _getElementColor(card.element ?? 'woods'),
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  icon: const Icon(Icons.check),
-                  label: const Text('Choose This Card'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green[700],
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                  onPressed: () => Navigator.pop(context, true),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+    // Story mode: remove the pre-first-encounter special card selection.
+    // Use an empty sentinel so we don't re-prompt on next app launch.
+    _campaign.startingSpecialCardId ??= '';
   }
 
   Future<void> _initCampaign() async {
@@ -867,9 +551,21 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     if (distanceMeters > _mapRelicDiscoverDistanceMeters) return;
 
     if (!mounted) return;
+
+    final rewardPool = ShopInventory.getCardsForAct(_campaign.act);
+    GameCard? rewardCard;
+    if (rewardPool.isNotEmpty) {
+      rewardPool.shuffle(_random);
+      rewardCard = rewardPool.first;
+    }
+
     setState(() {
       _campaign.mapRelicDiscovered = true;
       _campaign.addRelic(_campaignMapRelicId);
+
+      if (rewardCard != null) {
+        _campaign.addCardToReserves(rewardCard);
+      }
     });
     await _saveCampaign();
     if (!mounted) return;
@@ -887,7 +583,19 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
           'Your scouts uncover a hidden cache while exploring the area.',
           style: TextStyle(color: Colors.white70),
         ),
+        actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
         actions: [
+          if (rewardCard != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Recovered: ${rewardCard.name} (sent to Reserves)',
+                  style: const TextStyle(color: Colors.white70),
+                ),
+              ),
+            ),
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('Claim'),
@@ -899,6 +607,71 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
 
   Future<void> _saveCampaign() async {
     await _persistence.saveCampaign(_campaign);
+  }
+
+  List<String> _campaignBuffLabelsForBattle({
+    required NapoleonProgressionModifiers mods,
+    int defenseDamageBonus = 0,
+    int defenseHealthBonus = 0,
+  }) {
+    final labels = <String>[];
+
+    if (_campaign.hasRelic('relic_armor')) {
+      labels.add("Relic: Officer's Armor (+10 max HP)");
+    }
+    if (_campaign.hasRelic('legendary_relic_armor')) {
+      labels.add("Relic: Marshal's Armor (+20 max HP)");
+    }
+
+    if (_campaign.isRelicActive('relic_morale')) {
+      labels.add('Relic: Battle Standard (+1 damage to all units)');
+    }
+    if (_campaign.isRelicActive('legendary_relic_morale')) {
+      labels.add('Relic: Imperial Standard (+2 damage to all units)');
+    }
+
+    if (_campaign.isRelicActive('relic_gold_purse')) {
+      labels.add('Relic: War Chest (+10 gold after each battle)');
+    }
+    if (_campaign.isRelicActive('legendary_relic_gold_purse')) {
+      labels.add('Relic: Imperial Treasury (+20 gold after each battle)');
+    }
+
+    if (_campaign.isRelicActive('relic_supply_routes')) {
+      labels.add('Relic: Supply Routes (Home Town distance penalty -1)');
+    }
+
+    if (defenseDamageBonus > 0) {
+      labels.add('Defense: +$defenseDamageBonus damage this battle');
+    }
+    if (defenseHealthBonus > 0) {
+      labels.add('Defense: +$defenseHealthBonus HP this battle');
+    }
+
+    return labels;
+  }
+
+  List<String> _campaignBuffLabelsForBuffsDialog({
+    required NapoleonProgressionModifiers mods,
+    int defenseDamageBonus = 0,
+    int defenseHealthBonus = 0,
+  }) {
+    final labels = _campaignBuffLabelsForBattle(
+      mods: mods,
+      defenseDamageBonus: defenseDamageBonus,
+      defenseHealthBonus: defenseHealthBonus,
+    );
+
+    if (mods.extraStartingDraw > 0) {
+      labels.add('Bonus: +${mods.extraStartingDraw} starting draw');
+    }
+    if (mods.artilleryDamageBonus > 0) {
+      labels.add('Bonus: Artillery +${mods.artilleryDamageBonus} damage');
+    }
+    if (mods.heroAbilityDamageBoost > 0) {
+      labels.add('Bonus: Hero ability +${mods.heroAbilityDamageBoost} damage');
+    }
+    return labels;
   }
 
   String _homeTownBuildingName(String id) {
@@ -921,7 +694,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
       case _buildingTrainingGroundsId:
         return 'Provides a common unit card once per encounter.';
       case _buildingSupplyDepotId:
-        return 'Provides gold once per encounter.';
+        return 'Passive: +15 gold per encounter.';
       case _buildingOfficersAcademyId:
         return 'Provides a rare unit card on a longer supply schedule.';
       case _buildingWarCollegeId:
@@ -934,11 +707,11 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
   int _homeTownBuildCost(String id) {
     switch (id) {
       case _buildingSupplyDepotId:
-        return 120;
+        return 60;
       case _buildingOfficersAcademyId:
-        return 220;
+        return 110;
       case _buildingWarCollegeId:
-        return 320;
+        return 160;
       default:
         return 0;
     }
@@ -1051,6 +824,49 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     final interval = _buildingSupplyEveryEncounters(building);
     return (_campaign.encounterNumber - building.lastCollectedEncounter) >=
         interval;
+  }
+
+  Future<void> _hurryHomeTownSupply() async {
+    const cost = 100;
+    if (_campaign.gold < cost) return;
+
+    setState(() {
+      _campaign.spendGold(cost);
+
+      if (_campaign.pendingCardDeliveries.isNotEmpty) {
+        _campaign.pendingCardDeliveries = _campaign.pendingCardDeliveries.map((
+          d,
+        ) {
+          final remaining = _campaign.encountersUntilDeliveryArrives(d);
+          if (remaining <= 1) return d;
+          return PendingCardDelivery(
+            id: d.id,
+            sourceBuildingId: d.sourceBuildingId,
+            card: d.card,
+            scheduledAtEncounter: d.scheduledAtEncounter,
+            arrivesAtEncounter: _campaign.encounterNumber + 1,
+          );
+        }).toList();
+      }
+
+      for (final b in _campaign.homeTownBuildings) {
+        final inFlight = _campaign.pendingCardDeliveries.any(
+          (d) => d.sourceBuildingId == b.id,
+        );
+        if (inFlight) continue;
+
+        final interval = _buildingSupplyEveryEncounters(b);
+        final sinceLast = _campaign.encounterNumber - b.lastCollectedEncounter;
+        final remaining = interval - sinceLast;
+        if (remaining <= 1) continue;
+
+        // Make it ready in exactly 1 encounter.
+        final desiredSinceLast = interval - 1;
+        b.lastCollectedEncounter = _campaign.encounterNumber - desiredSinceLast;
+      }
+    });
+
+    await _saveCampaign();
   }
 
   Future<void> _showHomeTownDeliveryDialog({
@@ -1186,13 +1002,17 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
       final all = ShopInventory.getAllConsumables();
       final item = all.where((e) => e.id == id).toList();
       final name = item.isNotEmpty ? item.first.name : id;
-      return amount > 1 ? 'Offer: $name ×$amount' : 'Offer: $name';
+      final description = item.isNotEmpty ? item.first.description : '';
+      final headline = amount > 1 ? 'Offer: $name ×$amount' : 'Offer: $name';
+      return description.isNotEmpty ? '$headline\n$description' : headline;
     }
     if (type == 'relic') {
       final all = ShopInventory.getAllRelics();
       final item = all.where((e) => e.id == id).toList();
       final name = item.isNotEmpty ? item.first.name : id;
-      return 'Offer: $name';
+      final description = item.isNotEmpty ? item.first.description : '';
+      final headline = 'Offer: $name';
+      return description.isNotEmpty ? '$headline\n$description' : headline;
     }
     return 'Offer: $id';
   }
@@ -1271,27 +1091,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     }
 
     if (building.id == _buildingSupplyDepotId) {
-      const goldReward = 15;
-      setState(() {
-        _campaign.addGold(goldReward);
-        building.lastCollectedEncounter = _campaign.encounterNumber;
-      });
-      await _saveCampaign();
-      final event = RewardEvent(
-        title: 'Supply Depot',
-        message: 'Delivered: +15 Gold',
-        icon: Icons.monetization_on,
-        iconColor: Colors.amber,
-      );
-      if (showDialog) {
-        await _showHomeTownDeliveryDialog(
-          title: event.title,
-          message: event.message,
-          icon: event.icon,
-          iconColor: event.iconColor,
-        );
-      }
-      return event;
+      return null;
     }
 
     if (building.id == _buildingOfficersAcademyId) {
@@ -1415,10 +1215,6 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
 
     for (final b in buildings) {
       if (b.id == _buildingSupplyDepotId) {
-        if (!_canCollectBuilding(b)) continue;
-        final event = await _collectBuilding(b, showDialog: showDialogs);
-        if (event != null) events.add(event);
-        if (!mounted) return <RewardEvent>[];
         continue;
       }
 
@@ -1554,7 +1350,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
 
                       String producesText = _homeTownBuildingDescription(id);
                       if (id == _buildingSupplyDepotId) {
-                        producesText = 'Produces: +15 Gold';
+                        producesText = 'Passive: +15 Gold per encounter';
                       } else if (id == _buildingOfficersAcademyId) {
                         final candidates = ShopInventory.getCardsForAct(
                           _campaign.act,
@@ -1608,8 +1404,12 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                                   }
                                 : null,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.amber[700],
-                              foregroundColor: Colors.black,
+                              backgroundColor: canAfford
+                                  ? Colors.amber[700]
+                                  : Colors.grey,
+                              foregroundColor: canAfford
+                                  ? Colors.black
+                                  : Colors.white,
                             ),
                             child: Text('Build ($effectiveCost)'),
                           ),
@@ -1741,6 +1541,67 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                     ),
                   ),
                   const SizedBox(height: 18),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: _campaign.gold >= 100
+                          ? () async {
+                              final confirmed = await showDialog<bool>(
+                                context: context,
+                                builder: (context) => AlertDialog(
+                                  backgroundColor: const Color(0xFF2D2D2D),
+                                  title: const Text(
+                                    'Hurry Supply?',
+                                    style: TextStyle(color: Colors.white),
+                                  ),
+                                  content: const Text(
+                                    'Hurry Supply - Reduce all current supply times to 1 encounter\n\nCost: 100 Gold',
+                                    style: TextStyle(color: Colors.white70),
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.pop(context, false),
+                                      child: const Text('Cancel'),
+                                    ),
+                                    ElevatedButton(
+                                      onPressed: () =>
+                                          Navigator.pop(context, true),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.orange[700],
+                                        foregroundColor: Colors.white,
+                                      ),
+                                      child: const Text('Pay 100'),
+                                    ),
+                                  ],
+                                ),
+                              );
+
+                              if (confirmed != true) return;
+                              await _hurryHomeTownSupply();
+                              setSheetState(() {});
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Supply hurried: all ETAs reduced to 1 encounter.',
+                                  ),
+                                ),
+                              );
+                            }
+                          : null,
+                      icon: const Icon(Icons.flash_on),
+                      label: const Text(
+                        'Hurry Supply - Reduce all current supply times to 1 encounter',
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.orange[700],
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
                   Row(
                     children: [
                       const Icon(
@@ -1831,12 +1692,35 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     }
 
     if (_campaign.isBossTime) {
-      // Time for the boss!
+      // Boss is available, but not forced: keep regular encounters as options.
       final boss = _generator.generateBoss();
-      final choices = <Encounter>[boss];
-      if (pendingDefense != null) {
-        choices.add(pendingDefense);
+      final choices = _generator.generateChoices(_campaign.encounterNumber);
+
+      if (choices.isEmpty) {
+        choices.add(boss);
+      } else {
+        var replaceIndex = choices.indexWhere(
+          (e) =>
+              e.type == EncounterType.battle || e.type == EncounterType.elite,
+        );
+        if (replaceIndex == -1) {
+          replaceIndex = choices.length - 1;
+        }
+        choices[replaceIndex] = boss;
       }
+
+      if (pendingDefense != null) {
+        final alreadyIncluded = choices.any((e) => e.id == pendingDefense.id);
+        if (!alreadyIncluded) {
+          if (choices.isEmpty) {
+            choices.add(pendingDefense);
+          } else {
+            // Replace the last choice so we keep the same number of options.
+            choices[choices.length - 1] = pendingDefense;
+          }
+        }
+      }
+
       _campaign.currentChoices = choices;
       return;
     }
@@ -1896,11 +1780,45 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     return grid;
   }
 
+  static const List<({String name, LatLng pos})> _act1NamedLocations = [
+    (name: 'Nice', pos: LatLng(43.695, 7.264)),
+    (name: 'Savona', pos: LatLng(44.309, 8.477)),
+    (name: 'Genoa', pos: LatLng(44.405, 8.946)),
+    (name: 'Tende', pos: LatLng(44.107, 7.669)),
+    (name: 'Mondovì', pos: LatLng(44.384, 7.823)),
+    (name: 'Cuneo', pos: LatLng(44.558, 7.734)),
+    (name: 'Alessandria', pos: LatLng(44.915, 8.617)),
+    (name: 'Turin', pos: LatLng(45.070, 7.687)),
+    (name: 'Pavia', pos: LatLng(45.133, 9.158)),
+    (name: 'Milan', pos: LatLng(45.453, 9.183)),
+    (name: 'Monza', pos: LatLng(45.542, 9.270)),
+    (name: 'Lodi', pos: LatLng(45.309, 9.503)),
+    (name: 'Mantua', pos: LatLng(45.263, 10.992)),
+  ];
+
+  String _nearestPlaceNameFor(double lat, double lng) {
+    if (_act1NamedLocations.isEmpty) return 'Unknown location';
+    final target = LatLng(lat, lng);
+    final distance = const Distance();
+    var bestName = _act1NamedLocations.first.name;
+    var bestMeters = distance(target, _act1NamedLocations.first.pos);
+
+    for (final p in _act1NamedLocations.skip(1)) {
+      final d = distance(target, p.pos);
+      if (d < bestMeters) {
+        bestMeters = d;
+        bestName = p.name;
+      }
+    }
+
+    return bestName;
+  }
+
   String _locationLabelForCurrentTravel() {
     final lat = _campaign.lastTravelLat;
     final lng = _campaign.lastTravelLng;
     if (lat == null || lng == null) return 'Unknown location';
-    return '${lat.toStringAsFixed(2)}, ${lng.toStringAsFixed(2)}';
+    return _nearestPlaceNameFor(lat, lng);
   }
 
   String _storyTextForEncounter(Encounter encounter) {
@@ -2214,6 +2132,16 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
 
     final int defenseDamageBonus = encounter.isDefense ? 1 : 0;
     final int defenseHealthBonus = encounter.isDefense ? 1 : 0;
+    final buffLabels = _campaignBuffLabelsForBattle(
+      mods: mods,
+      defenseDamageBonus: defenseDamageBonus,
+      defenseHealthBonus: defenseHealthBonus,
+    );
+    final buffsDialogLabels = _campaignBuffLabelsForBuffsDialog(
+      mods: mods,
+      defenseDamageBonus: defenseDamageBonus,
+      defenseHealthBonus: defenseHealthBonus,
+    );
 
     if (!mounted) return;
     final navigator = Navigator.of(context);
@@ -2232,6 +2160,8 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
           artilleryDamageBonus: mods.artilleryDamageBonus,
           heroAbilityDamageBoost: mods.heroAbilityDamageBoost,
           playerCurrentHealth: _campaign.health,
+          campaignBuffLabels: buffLabels,
+          campaignBuffLabelsForBuffsDialog: buffsDialogLabels,
         ),
       ),
     );
@@ -2413,6 +2343,9 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
 
     final mods = progressionState.modifiers;
 
+    final buffLabels = _campaignBuffLabelsForBattle(mods: mods);
+    final buffsDialogLabels = _campaignBuffLabelsForBuffsDialog(mods: mods);
+
     final int bossOpponentBaseHP = 25 + (25 * _campaign.act);
 
     debugPrint(
@@ -2443,6 +2376,8 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
           artilleryDamageBonus: mods.artilleryDamageBonus,
           heroAbilityDamageBoost: mods.heroAbilityDamageBoost,
           opponentBaseHP: bossOpponentBaseHP,
+          campaignBuffLabels: buffLabels,
+          campaignBuffLabelsForBuffsDialog: buffsDialogLabels,
         ),
       ),
     );
@@ -3168,170 +3103,6 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     }
   }
 
-  Widget _buildDetailStat(
-    String label,
-    String value,
-    IconData icon,
-    Color color,
-  ) {
-    return Column(
-      children: [
-        Icon(icon, color: color, size: 24),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        Text(label, style: TextStyle(color: Colors.grey[400], fontSize: 10)),
-      ],
-    );
-  }
-
-  String _getAttackType(GameCard card) {
-    if (card.isLongRange || card.abilities.contains('far_attack')) {
-      return 'long_range';
-    }
-    if (card.isRanged) return 'ranged';
-    return 'melee';
-  }
-
-  Color _getAttackTypeColor(GameCard card) {
-    switch (_getAttackType(card)) {
-      case 'long_range':
-        return Colors.deepOrange[700]!;
-      case 'ranged':
-        return Colors.teal[600]!;
-      default:
-        return Colors.red[700]!;
-    }
-  }
-
-  IconData _getAttackTypeIcon(GameCard card) {
-    switch (_getAttackType(card)) {
-      case 'long_range':
-        return Icons.gps_fixed;
-      case 'ranged':
-        return Icons.arrow_forward;
-      default:
-        return Icons.sports_martial_arts;
-    }
-  }
-
-  String _getAttackTypeLabel(GameCard card) {
-    switch (_getAttackType(card)) {
-      case 'long_range':
-        return 'LONG RANGE (2 tiles)';
-      case 'ranged':
-        return 'RANGED (No Retaliation)';
-      default:
-        return 'MELEE';
-    }
-  }
-
-  IconData _getAbilityIcon(String ability) {
-    switch (ability) {
-      case 'guard':
-        return Icons.security;
-      case 'scout':
-        return Icons.visibility;
-      case 'long_range':
-        return Icons.gps_fixed;
-      case 'ranged':
-        return Icons.arrow_forward;
-      case 'flanking':
-        return Icons.swap_horiz;
-      case 'cavalry':
-        return Icons.directions_run;
-      case 'pikeman':
-        return Icons.vertical_align_top;
-      case 'archer':
-        return Icons.arrow_forward;
-      default:
-        if (ability.startsWith('inspire')) return Icons.music_note;
-        if (ability.startsWith('fury')) return Icons.local_fire_department;
-        if (ability.startsWith('shield')) return Icons.shield;
-        if (ability.startsWith('thorns')) return Icons.grass;
-        if (ability.startsWith('regen') || ability.startsWith('regenerate')) {
-          return Icons.healing;
-        }
-        if (ability.startsWith('rally')) return Icons.campaign;
-        if (ability.startsWith('command')) return Icons.military_tech;
-        if (ability == 'first_strike') return Icons.bolt;
-        if (ability == 'far_attack') return Icons.adjust;
-        if (ability == 'cleave') return Icons.all_inclusive;
-        return Icons.star;
-    }
-  }
-
-  String _getAbilityDescription(String ability) {
-    if (ability.startsWith('shield_')) {
-      final value = ability.split('_').last;
-      return 'Reduces incoming damage by $value.';
-    }
-    if (ability.startsWith('fury_')) {
-      final value = ability.split('_').last;
-      return '+$value damage on attack and retaliation.';
-    }
-    if (ability.startsWith('inspire_')) {
-      final value = ability.split('_').last;
-      return '+$value damage to all friendly units in this lane.';
-    }
-    if (ability.startsWith('rally_')) {
-      final value = ability.split('_').last;
-      return '+$value damage to adjacent ally in stack.';
-    }
-    if (ability.startsWith('command_')) {
-      final value = ability.split('_').last;
-      return '+$value damage AND +$value shield to all allies in lane.';
-    }
-    if (ability.startsWith('thorns_')) {
-      final value = ability.split('_').last;
-      return 'Deals $value damage to attackers after combat.';
-    }
-    if (ability.startsWith('regen_')) {
-      final value = ability.split('_').last;
-      return 'Regenerates $value HP at the start of each turn.';
-    }
-
-    switch (ability) {
-      case 'guard':
-        return 'Must be defeated before other units can be targeted.';
-      case 'scout':
-        return 'Reveals enemy cards in adjacent lanes.';
-      case 'long_range':
-        return 'Can attack enemies 2 tiles away.';
-      case 'ranged':
-        return 'Attacks without triggering retaliation from melee units.';
-      case 'flanking':
-        return 'Can move to adjacent lanes (left/right).';
-      case 'first_strike':
-        return 'Attacks FIRST in the same tick. Can kill before counterattacks.';
-      case 'far_attack':
-        return 'Attacks enemies at OTHER tiles in same lane. Disabled if contested.';
-      case 'cleave':
-        return 'Hits BOTH enemies on the same tile with full damage.';
-      default:
-        return ability.replaceAll('_', ' ');
-    }
-  }
-
-  IconData _getElementIcon(String element) {
-    switch (element.toLowerCase()) {
-      case 'woods':
-        return Icons.forest;
-      case 'lake':
-        return Icons.water_drop;
-      case 'desert':
-        return Icons.wb_sunny;
-      default:
-        return Icons.help_outline;
-    }
-  }
-
   Color _getElementColor(String element) {
     switch (element.toLowerCase()) {
       case 'woods':
@@ -3840,6 +3611,8 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                     child: Text(
                       offerLabel,
                       style: const TextStyle(color: Colors.white70),
+                      maxLines: 4,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
@@ -4155,11 +3928,12 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                     Expanded(
                       child: Text(
                         _campaign.isBossTime
-                            ? 'Final Battle: choose where to engage'
+                            ? 'Boss available: choose where to engage'
                             : 'Choose your next destination',
                         style: const TextStyle(
                           color: Colors.white,
-                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ),
@@ -4249,7 +4023,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                   children: [
                     Text(
                       _campaign.isBossTime
-                          ? '👑 BOSS BATTLE!'
+                          ? '👑 Boss available'
                           : '${_campaign.encountersUntilBoss} encounters until boss',
                       style: TextStyle(
                         color: _campaign.isBossTime
@@ -4604,7 +4378,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
           Container(
             padding: const EdgeInsets.symmetric(vertical: 20),
             child: Text(
-              _campaign.isBossTime ? 'Final Battle' : 'Choose Your Path',
+              _campaign.isBossTime ? 'Boss Available' : 'Choose Your Path',
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 24,
@@ -4770,7 +4544,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                             Flexible(
                               child: Text(
                                 offerLabel,
-                                maxLines: 1,
+                                maxLines: 3,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   fontSize: 10,

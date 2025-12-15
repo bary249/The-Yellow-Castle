@@ -918,7 +918,25 @@ class CombatResolver {
           : _playerLaneShieldBonus;
       final effectiveShieldBonus = baseShieldBonus + targetLaneShieldBonus;
       final totalShield = targetShield + effectiveShieldBonus;
+      final damageBeforeShield = damage;
       damage = (damage - totalShield).clamp(0, damage);
+      if (damageBeforeShield > 0 && totalShield > 0) {
+        final appliedTargetShield = targetShield
+            .clamp(0, damageBeforeShield)
+            .toInt();
+        final remainingAfterTarget = (damageBeforeShield - appliedTargetShield)
+            .clamp(0, damageBeforeShield)
+            .toInt();
+        final appliedLaneShield = effectiveShieldBonus
+            .clamp(0, remainingAfterTarget)
+            .toInt();
+        if (appliedTargetShield > 0) {
+          modifiers.add('-$appliedTargetShield Shield');
+        }
+        if (appliedLaneShield > 0) {
+          modifiers.add('-$appliedLaneShield Lane Shield');
+        }
+      }
     }
 
     // Deal damage to target
@@ -1015,11 +1033,30 @@ class CombatResolver {
           ? _playerLaneShieldBonus
           : _opponentLaneShieldBonus;
       final effectiveShieldBonus = attackerShieldBonus + laneShieldBonus;
+      final retaliationBeforeShield = retaliationDamage;
       retaliationDamage =
           (retaliationDamage - attackerShield - effectiveShieldBonus).clamp(
             0,
             retaliationDamage,
           );
+      if (retaliationBeforeShield > 0) {
+        final appliedAttackerShield = attackerShield
+            .clamp(0, retaliationBeforeShield)
+            .toInt();
+        final remainingAfterShield =
+            (retaliationBeforeShield - appliedAttackerShield)
+                .clamp(0, retaliationBeforeShield)
+                .toInt();
+        final appliedLaneShield = effectiveShieldBonus
+            .clamp(0, remainingAfterShield)
+            .toInt();
+        if (appliedAttackerShield > 0) {
+          retModifiers.add('-$appliedAttackerShield Shield');
+        }
+        if (appliedLaneShield > 0) {
+          retModifiers.add('-$appliedLaneShield Lane Shield');
+        }
+      }
 
       // Deal retaliation damage
       final attackerHpBefore = attacker.currentHealth;
@@ -1194,7 +1231,25 @@ class CombatResolver {
         : _playerLaneShieldBonus;
     final effectiveShieldBonus = baseShieldBonus + targetLaneShieldBonus;
     final totalShield = targetShield + effectiveShieldBonus;
+    final damageBeforeShield = damage;
     damage = (damage - totalShield).clamp(0, damage);
+    if (damageBeforeShield > 0 && totalShield > 0) {
+      final appliedTargetShield = targetShield
+          .clamp(0, damageBeforeShield)
+          .toInt();
+      final remainingAfterTarget = (damageBeforeShield - appliedTargetShield)
+          .clamp(0, damageBeforeShield)
+          .toInt();
+      final appliedLaneShield = effectiveShieldBonus
+          .clamp(0, remainingAfterTarget)
+          .toInt();
+      if (appliedTargetShield > 0) {
+        modifiers.add('-$appliedTargetShield Shield');
+      }
+      if (appliedLaneShield > 0) {
+        modifiers.add('-$appliedLaneShield Lane Shield');
+      }
+    }
 
     // Predict target death (no side effects)
     final targetHpAfter = (target.currentHealth - damage).clamp(
@@ -1263,11 +1318,30 @@ class CombatResolver {
           ? _playerLaneShieldBonus
           : _opponentLaneShieldBonus;
       final effectiveShieldBonus = attackerShieldBonus + laneShieldBonus;
+      final retaliationBeforeShield = retaliationDamage;
       retaliationDamage =
           (retaliationDamage - attackerShield - effectiveShieldBonus).clamp(
             0,
             retaliationDamage,
           );
+      if (retaliationBeforeShield > 0) {
+        final appliedAttackerShield = attackerShield
+            .clamp(0, retaliationBeforeShield)
+            .toInt();
+        final remainingAfterShield =
+            (retaliationBeforeShield - appliedAttackerShield)
+                .clamp(0, retaliationBeforeShield)
+                .toInt();
+        final appliedLaneShield = effectiveShieldBonus
+            .clamp(0, remainingAfterShield)
+            .toInt();
+        if (appliedAttackerShield > 0) {
+          retModifiers.add('-$appliedAttackerShield Shield');
+        }
+        if (appliedLaneShield > 0) {
+          retModifiers.add('-$appliedLaneShield Lane Shield');
+        }
+      }
 
       // Calculate retaliation damage (PREVIEW ONLY - no side effects)
       attackerHpAfter = (attacker.currentHealth - retaliationDamage).clamp(
@@ -1292,6 +1366,7 @@ class CombatResolver {
           targetHpBefore: attacker.currentHealth,
           targetHpAfter: attackerHpAfter,
           targetDied: attackerDied,
+          modifiers: retModifiers,
         ),
       );
     } else if (!targetDied && attacker.isRanged) {

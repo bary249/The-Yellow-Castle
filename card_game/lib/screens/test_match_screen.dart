@@ -45,6 +45,9 @@ class TestMatchScreen extends StatefulWidget {
   final int heroAbilityDamageBoost;
   final int? opponentBaseHP;
 
+  final List<String> campaignBuffLabels;
+  final List<String> campaignBuffLabelsForBuffsDialog;
+
   const TestMatchScreen({
     super.key,
     this.selectedHero,
@@ -61,6 +64,8 @@ class TestMatchScreen extends StatefulWidget {
     this.artilleryDamageBonus = 0,
     this.heroAbilityDamageBoost = 0,
     this.opponentBaseHP,
+    this.campaignBuffLabels = const [],
+    this.campaignBuffLabelsForBuffsDialog = const [],
   });
 
   @override
@@ -1505,20 +1510,11 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     int col,
   ) {
     final laneName = _getLaneName(col);
-    bool dialogDismissed = false;
 
     showDialog(
       context: context,
       barrierDismissible: true,
       builder: (dialogContext) {
-        // Auto-dismiss after 2 seconds
-        Future.delayed(const Duration(seconds: 2), () {
-          if (!dialogDismissed && mounted && Navigator.canPop(dialogContext)) {
-            dialogDismissed = true;
-            Navigator.pop(dialogContext);
-          }
-        });
-
         return AlertDialog(
           title: Column(
             children: [
@@ -1542,9 +1538,12 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text(
-                      attacker.name,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    Flexible(
+                      child: Text(
+                        attacker.name,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
                     ),
                     const Text(' dealt '),
                     Text(
@@ -1565,8 +1564,27 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                 ),
               ),
 
+              if (result.modifiers.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: result.modifiers
+                      .map(
+                        (m) => Text(
+                          m,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[700],
+                          ),
+                        ),
+                      )
+                      .toList(),
+                ),
+              ],
+
               // Retaliation
-              if (result.retaliationDamage > 0) ...[
+              if (result.retaliationDamage > 0 ||
+                  result.retaliationModifiers.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Container(
                   padding: const EdgeInsets.all(12),
@@ -1577,9 +1595,12 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(
-                        target.name,
-                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      Flexible(
+                        child: Text(
+                          target.name,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
                       ),
                       const Text(' retaliated for '),
                       Text(
@@ -1598,6 +1619,24 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                     ],
                   ),
                 ),
+
+                if (result.retaliationModifiers.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: result.retaliationModifiers
+                        .map(
+                          (m) => Text(
+                            m,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[700],
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ],
               ],
 
               // Summary
@@ -1626,12 +1665,45 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
+
+              if (widget.campaignBuffLabels.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.blueGrey[50],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.blueGrey[200]!),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Active buffs',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        widget.campaignBuffLabels.join('\n'),
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.blueGrey[900],
+                          height: 1.2,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ],
           ),
           actions: [
             ElevatedButton(
               onPressed: () {
-                dialogDismissed = true;
                 Navigator.pop(dialogContext);
               },
               child: const Text('OK'),
@@ -1679,6 +1751,8 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                 children: [
                   Text(
                     attacker.name,
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
@@ -1703,6 +1777,8 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                   const SizedBox(height: 4),
                   Text(
                     target.name,
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
@@ -1722,8 +1798,24 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
               ),
             ),
 
+            if (result.modifiers.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: result.modifiers
+                    .map(
+                      (m) => Text(
+                        m,
+                        style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                      ),
+                    )
+                    .toList(),
+              ),
+            ],
+
             // Retaliation
-            if (result.retaliationDamage > 0) ...[
+            if (result.retaliationDamage > 0 ||
+                result.retaliationModifiers.isNotEmpty) ...[
               const SizedBox(height: 12),
               Container(
                 padding: const EdgeInsets.all(8),
@@ -1776,6 +1868,58 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                           fontWeight: FontWeight.bold,
                         ),
                       ),
+                  ],
+                ),
+              ),
+
+              if (result.retaliationModifiers.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: result.retaliationModifiers
+                      .map(
+                        (m) => Text(
+                          m,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[700],
+                          ),
+                        ),
+                      )
+                      .toList(),
+                ),
+              ],
+            ],
+
+            if (widget.campaignBuffLabels.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.blueGrey[50],
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.blueGrey[200]!),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Active buffs',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      widget.campaignBuffLabels.join('\n'),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.blueGrey[900],
+                        height: 1.2,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -2314,6 +2458,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
 
     showDialog(
       context: context,
+      barrierDismissible: true,
       builder: (context) => AlertDialog(
         title: Column(
           children: [
@@ -2521,22 +2666,11 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       final match = _matchManager.currentMatch;
       final enemyHp = match?.opponent.baseHP ?? 0;
       final laneName = _getLaneName(col);
-      bool dialogDismissed = false;
 
       showDialog(
         context: context,
         barrierDismissible: true,
         builder: (dialogContext) {
-          // Auto-dismiss after 2 seconds
-          Future.delayed(const Duration(seconds: 2), () {
-            if (!dialogDismissed &&
-                mounted &&
-                Navigator.canPop(dialogContext)) {
-              dialogDismissed = true;
-              Navigator.pop(dialogContext);
-            }
-          });
-
           return AlertDialog(
             title: Column(
               children: [
@@ -2598,7 +2732,6 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
             actions: [
               ElevatedButton(
                 onPressed: () {
-                  dialogDismissed = true;
                   Navigator.pop(dialogContext);
                 },
                 child: const Text('OK'),
@@ -5387,6 +5520,10 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
       );
     }
 
+    final buffsForDialog = widget.campaignBuffLabelsForBuffsDialog.isNotEmpty
+        ? widget.campaignBuffLabelsForBuffsDialog
+        : widget.campaignBuffLabels;
+
     return Focus(
       autofocus: true,
       onKeyEvent: (node, event) {
@@ -5419,11 +5556,34 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
             // TYC3: Show turn timer (only in online mode)
             if (_useTYC3Mode && _isOnlineMode && !match.isGameOver)
               _buildTimerDisplay(match),
+
+            if (buffsForDialog.isNotEmpty)
+              IconButton(
+                icon: const Icon(Icons.auto_awesome),
+                tooltip: 'Buffs',
+                onPressed: () {
+                  showDialog<void>(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text('Active buffs'),
+                      content: Text(buffsForDialog.join('\n')),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('Close'),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+
             if (match.isGameOver)
               IconButton(
                 icon: const Icon(Icons.refresh),
                 onPressed: _startNewMatch,
               ),
+
             if (!match.isGameOver && !_useTYC3Mode && !match.playerSubmitted)
               IconButton(
                 icon: const Icon(Icons.clear_all),
@@ -5433,20 +5593,11 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                 },
                 tooltip: 'Clear all placements',
               ),
-            // UI Mode Toggle
-            // IconButton(
-            //   icon: Icon(_useStackedCardUI ? Icons.view_list : Icons.layers),
-            //   onPressed: () =>
-            //       setState(() => _useStackedCardUI = !_useStackedCardUI),
-            //   tooltip: _useStackedCardUI
-            //       ? 'Switch to List View'
-            //       : 'Switch to Stacked View',
-            // ),
-            // Settings Toggle
+
             IconButton(
               icon: Icon(_showSettings ? Icons.visibility_off : Icons.tune),
               onPressed: () => setState(() => _showSettings = !_showSettings),
-              tooltip: 'UI Settings',
+              tooltip: _showSettings ? 'Hide Settings' : 'Show Settings',
             ),
           ],
         ),
@@ -5463,15 +5614,15 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         floatingActionButton: _useTYC3Mode
             ? _buildTYC3ActionButton(match)
             : match.currentPhase == MatchPhase.combatPhase
-            // During combat: show skip button (combat auto-advances, but ENTER skips all)
-            ? FloatingActionButton.extended(
-                onPressed: () => _matchManager.skipToEnd(),
-                label: const Text('Skip Combat (ENTER)'),
-                icon: const Icon(Icons.fast_forward),
-                backgroundColor: Colors.red[700],
-                heroTag: 'skip',
-              )
-            : _buildSubmitButton(match),
+                // During combat: show skip button (combat auto-advances, but ENTER skips all)
+                ? FloatingActionButton.extended(
+                    onPressed: () => _matchManager.skipToEnd(),
+                    label: const Text('Skip Combat (ENTER)'),
+                    icon: const Icon(Icons.fast_forward),
+                    backgroundColor: Colors.red[700],
+                    heroTag: 'skip',
+                  )
+                : _buildSubmitButton(match),
       ),
     );
   }
@@ -5722,6 +5873,32 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
           Text('Opponent Crystal: ${match.opponent.crystalHP} HP'),
           const SizedBox(height: 20),
           Text('Total Turns: ${match.turnNumber}'),
+          if (isCampaignMode && widget.campaignBuffLabels.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Container(
+              width: 360,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.06),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.black.withOpacity(0.12)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Active buffs',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    widget.campaignBuffLabels.join('\n'),
+                    style: const TextStyle(fontSize: 12, height: 1.25),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 30),
           // Replay Button
           if (match.history.isNotEmpty)
@@ -6535,7 +6712,8 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
               ),
             ),
           ],
-        ),
+          );
+      })(),
       ),
     );
   }

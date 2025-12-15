@@ -272,7 +272,7 @@ class CampaignState {
     awardedLegacyMilestones.add(milestoneId);
   }
 
-  static const int bossEncounterThreshold = 5;
+  static const int bossEncounterThreshold = 7;
   bool get isBossTime => encounterNumber >= bossEncounterThreshold;
   bool get isOver => isVictory || health <= 0;
   int get encountersUntilBoss => (bossEncounterThreshold - encounterNumber)
@@ -520,6 +520,13 @@ class CampaignState {
     if (recoveryEncountersRemaining > 0) {
       recoveryEncountersRemaining--;
     }
+
+    // Home Town passive effects
+    // Supply Depot: +15 gold per encounter (passive, not a delivery).
+    if (homeTownBuildings.any((b) => b.id == 'building_supply_depot')) {
+      addGold(15);
+    }
+
     clearExpiredGates();
   }
 
@@ -697,14 +704,80 @@ class EncounterGenerator {
   EncounterGenerator({required this.act, int? seed})
     : _random = seed != null ? Random(seed) : Random();
 
-  String _randomConsumableOfferId() {
+  String _randomConsumableOfferId({String? exclude}) {
     const ids = <String>['heal_potion', 'large_heal_potion', 'remove_card'];
+    if (exclude != null && ids.length > 1) {
+      final filtered = ids.where((e) => e != exclude).toList();
+      return filtered[_random.nextInt(filtered.length)];
+    }
     return ids[_random.nextInt(ids.length)];
   }
 
-  String _randomRelicOfferId() {
+  String _randomRelicOfferId({String? exclude}) {
     const ids = <String>['relic_gold_purse', 'relic_armor', 'relic_morale'];
+    if (exclude != null && ids.length > 1) {
+      final filtered = ids.where((e) => e != exclude).toList();
+      return filtered[_random.nextInt(filtered.length)];
+    }
     return ids[_random.nextInt(ids.length)];
+  }
+
+  Encounter _withOffer(
+    Encounter encounter, {
+    required String? offerType,
+    required String? offerId,
+    required int? offerAmount,
+  }) {
+    return Encounter(
+      id: encounter.id,
+      type: encounter.type,
+      title: encounter.title,
+      description: encounter.description,
+      difficulty: encounter.difficulty,
+      goldReward: encounter.goldReward,
+      eventId: encounter.eventId,
+      isConquerableCity: encounter.isConquerableCity,
+      isDefense: encounter.isDefense,
+      offerType: offerType,
+      offerId: offerId,
+      offerAmount: offerAmount,
+    );
+  }
+
+  void _ensureOfferDiversity(List<Encounter> choices) {
+    final offered = <int>[];
+    for (int i = 0; i < choices.length; i++) {
+      if (choices[i].offerType != null && choices[i].offerId != null) {
+        offered.add(i);
+      }
+    }
+    if (offered.length < 2) return;
+
+    final keys = offered
+        .map((i) => '${choices[i].offerType}:${choices[i].offerId}')
+        .toSet();
+    if (keys.length > 1) return;
+
+    // All offers are identical - reroll one offer to guarantee variety.
+    final idx = offered.last;
+    final e = choices[idx];
+    if (e.offerType == 'consumable') {
+      final newId = _randomConsumableOfferId(exclude: e.offerId);
+      choices[idx] = _withOffer(
+        e,
+        offerType: e.offerType,
+        offerId: newId,
+        offerAmount: e.offerAmount,
+      );
+    } else if (e.offerType == 'relic') {
+      final newId = _randomRelicOfferId(exclude: e.offerId);
+      choices[idx] = _withOffer(
+        e,
+        offerType: e.offerType,
+        offerId: newId,
+        offerAmount: e.offerAmount,
+      );
+    }
   }
 
   List<Encounter> generateChoices(int encounterNumber) {
@@ -751,6 +824,7 @@ class EncounterGenerator {
       }
     }
 
+    _ensureOfferDiversity(choices);
     choices.shuffle(_random);
     return choices;
   }
