@@ -1510,6 +1510,103 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     }
   }
 
+  String _locationLabelForCurrentTravel() {
+    final lat = _campaign.lastTravelLat;
+    final lng = _campaign.lastTravelLng;
+    if (lat == null || lng == null) return 'Unknown location';
+    return '${lat.toStringAsFixed(2)}, ${lng.toStringAsFixed(2)}';
+  }
+
+  String _storyTextForEncounter(Encounter encounter) {
+    final loc = _locationLabelForCurrentTravel();
+    final lat = _campaign.lastTravelLat ?? 0;
+    final lng = _campaign.lastTravelLng ?? 0;
+    final seedLat = (lat.abs() * 1000).round();
+    final seedLng = (lng.abs() * 1000).round();
+    final seed = encounter.id.hashCode ^ (seedLat * 1000003) ^ seedLng;
+    final rng = Random(seed);
+
+    String pick(List<String> options) => options[rng.nextInt(options.length)];
+
+    if (encounter.isDefense) {
+      return pick([
+        'At $loc, your newly raised banners draw a swift response. The enemy returns in force, but your troops hold the streets and gates with stubborn resolve.',
+        'The city at $loc erupts again as the foe attempts to retake what was lost. You fortify, countercharge, and deny them any foothold.',
+      ]);
+    }
+    if (encounter.isConquerableCity) {
+      return pick([
+        'You advance on the city at $loc under a hard sky. After brief, violent fighting, the defenders break—your standards rise above the walls.',
+        'At $loc, the populace watches in tense silence as your columns enter. The garrison yields after sharp resistance, and the city is yours—for now.',
+      ]);
+    }
+
+    switch (encounter.type) {
+      case EncounterType.battle:
+      case EncounterType.elite:
+        return pick([
+          'Smoke drifts over $loc as the last volleys fade. You regroup, count losses, and press on before the enemy can reorganize.',
+          'At $loc, the clash is brief but decisive. Discipline holds; your line does not break, and the road ahead opens.',
+        ]);
+      case EncounterType.boss:
+        return pick([
+          'The field at $loc is won—at a cost. The enemy commander’s plan collapses, and the campaign turns in your favor.',
+          'At $loc, the decisive encounter ends with your forces in control. The opposition reels; the next chapter awaits.',
+        ]);
+      case EncounterType.shop:
+        return pick([
+          'At $loc you barter and resupply. Rumors pass between merchants and officers—useful truths hidden among exaggerations.',
+          'The market at $loc offers brief comfort: dry powder, fresh bread, and a moment to plan the march ahead.',
+        ]);
+      case EncounterType.rest:
+        return pick([
+          'A quiet camp near $loc steadies the army. Wounds are bound, orders are written, and morale rises with the firelight.',
+          'You halt near $loc. The men rest, the horses drink, and the coming miles feel possible again.',
+        ]);
+      case EncounterType.event:
+      case EncounterType.mystery:
+        return pick([
+          'Near $loc, chance intervenes. A small decision reshapes the day—sometimes fortune favors boldness, sometimes caution.',
+          'At $loc, the unexpected becomes policy. You adapt quickly, turning uncertainty into advantage.',
+        ]);
+      case EncounterType.treasure:
+        return pick([
+          'At $loc you seize unattended stores—coin, tools, and provisions. The army moves lighter in spirit, heavier in supply.',
+          'A hidden cache near $loc changes hands. Your quartermasters smile; your enemies will not.',
+        ]);
+    }
+  }
+
+  Future<void> _showStoryAfterEncounter(Encounter encounter) async {
+    if (!_isNapoleonAct1MapEnabled) return;
+    if (!mounted) return;
+
+    final navigator = Navigator.of(context);
+    final story = _storyTextForEncounter(encounter);
+    await showDialog<void>(
+      context: navigator.context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF2D2D2D),
+        title: const Text('Dispatch', style: TextStyle(color: Colors.white)),
+        content: Text(
+          story,
+          style: const TextStyle(color: Colors.white70, height: 1.25),
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.teal,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Continue'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _onEncounterSelected(Encounter encounter) {
     switch (encounter.type) {
       case EncounterType.battle:
@@ -1661,6 +1758,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
               await _saveCampaign();
               await _applyEncounterOffer(encounter);
               await _maybeDiscoverMapRelicAfterEncounter(encounter);
+              await _showStoryAfterEncounter(encounter);
               await _maybeOfferVisitHomeTownAfterEncounter();
             },
             child: const Text('Claim'),
@@ -1809,6 +1907,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
           _generateNewChoices();
         });
         await _saveCampaign();
+        await _showStoryAfterEncounter(encounter);
         await _maybeOfferVisitHomeTownAfterEncounter();
       } else {
         if (_campaign.health <= 0) {
@@ -2628,14 +2727,15 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                 child: SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: () {
+                    onPressed: () async {
                       Navigator.pop(context);
                       setState(() {
                         _campaign.completeEncounter();
                         _generateNewChoices();
                       });
                       _saveCampaign();
-                      _maybeOfferVisitHomeTownAfterEncounter();
+                      await _showStoryAfterEncounter(encounter);
+                      await _maybeOfferVisitHomeTownAfterEncounter();
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.grey[700],
@@ -2995,6 +3095,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                 SnackBar(content: Text('Recovered $healAmount HP!')),
               );
               _saveCampaign();
+              _showStoryAfterEncounter(encounter);
               _maybeOfferVisitHomeTownAfterEncounter();
             },
             child: Text('Rest (+$healAmount HP)'),
@@ -3056,6 +3157,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
               await _saveCampaign();
               await _applyEncounterOffer(encounter);
               await _maybeDiscoverMapRelicAfterEncounter(encounter);
+              await _showStoryAfterEncounter(encounter);
               await _maybeOfferVisitHomeTownAfterEncounter();
             },
             child: const Text('Continue'),

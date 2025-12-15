@@ -19,4 +19,4 @@ Changes to Story mode:
 17. ✅ The Encounter location should affect the middle and enemy base terrain, based on the true real location of the encounter on the real earth map.
 18. ✅ Some encounter nodes are conqurable cities. Conquered cities allow the player to play a defence encounter(as one of the selectable encounters after the conquer encounter), this is an easier encounter where the player has a +1 damage +1 hp to all cards for these types of battles. (They are mainly to "wait" for supply arrival)
 19. ✅ We want to show the player the path they hasve passed (like in Ticket to ride kind of style).
-20. Add a "story" dialog after every encounter, that provides a short story about the encounter, and the player's actions in it, but based on the historical real background of the encounter location.
+20. ✅ Add a "story" dialog after every encounter, that provides a short story about the encounter, and the player's actions in it, but based on the historical real background of the encounter location.

@@ -88,6 +88,8 @@
 
 - The campaign map can show the route you have traveled so far.
 
+- After encounters in Story Mode, a short story/dispatch dialog can appear.
+
 - Campaign mode also has **consumables** (e.g. healing, remove-card) that are stored in the campaign inventory and can be equipped/used between encounters.
 
 ---
