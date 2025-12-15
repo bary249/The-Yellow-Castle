@@ -11,7 +11,7 @@ Changes to Story mode:
 9. ✅ The distance of the hero from the home town (base node) also affects supply time.
 10. ✅ Hero Progression nodes should also have perks for the home town, that can be unlocked as the hero progresses.
 11. ✅ A dialog should pop for the player each time a new card/gold/item/relic is provided to the player from their home town.
-12. Winning enctouner nodes,s should provide gold, and a pre-determined offer of items/relics/buildings (the buildings should be mainly around reducing the supply time of home town buildings) based on the node type (city/battle grounds/defence).
+12. ✅ Winning enctouner nodes,s should provide gold, and a pre-determined offer of items/relics/buildings (the buildings should be mainly around reducing the supply time of home town buildings) based on the node type (city/battle grounds/defence).
 13. The Player should be able to see the home town buildings, and the distance to them/the supply time of the buildings.
 14. The Player should be able to see the pre-determined reward of an encounter before selecting the encounter.
 15. Shop encounters should allow to "repair" cards that were destroyed in battle, for a price.

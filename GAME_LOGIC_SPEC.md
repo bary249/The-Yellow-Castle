@@ -116,6 +116,7 @@ This document captures the **implemented and intended logic** of the game, mappe
 - Supply time can also be increased based on **distance from Home Town**.
 - Hero progression unlocks can also grant **Home Town perks** (e.g. building cost discounts, improved logistics).
 - When a Home Town building delivers a reward, the UI can show a dialog to confirm what arrived.
+- Encounters can include a **pre-determined offer** (e.g. consumable/relic/building) that is generated with the encounter and awarded on completion.
 
 **Implemented campaign bonuses:**
 - **Gold per battle bonus**: `CampaignState.goldPerBattleBonus` (e.g. `relic_gold_purse` => +10 gold per battle reward).
