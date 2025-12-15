@@ -82,14 +82,6 @@ class ShopInventory {
         type: ShopItemType.consumable,
         effect: 'heal_30',
       ),
-      ShopItem(
-        id: 'remove_card',
-        name: 'Discharge Papers',
-        description: 'Remove a card from your deck',
-        cost: 50,
-        type: ShopItemType.consumable,
-        effect: 'remove_card',
-      ),
     ];
   }
 

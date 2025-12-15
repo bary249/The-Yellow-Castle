@@ -73,15 +73,24 @@ class PendingCardDelivery {
   final String id;
   final String sourceBuildingId;
   final GameCard card;
-  final int scheduledAtEncounter;
-  final int arrivesAtEncounter;
+  int scheduledAtEncounter;
+  final int productionDurationEncounters;
 
-  const PendingCardDelivery({
+  /// How many kilometers this delivery has traveled so far.
+  double traveledKm;
+
+  /// Optional override used for legacy saves and “hurry supply”.
+  /// If set, the delivery is considered arrived once encounterNumber >= this.
+  int? forcedArrivesAtEncounter;
+
+  PendingCardDelivery({
     required this.id,
     required this.sourceBuildingId,
     required this.card,
     required this.scheduledAtEncounter,
-    required this.arrivesAtEncounter,
+    required this.productionDurationEncounters,
+    this.traveledKm = 0,
+    this.forcedArrivesAtEncounter,
   });
 
   Map<String, dynamic> toJson() => {
@@ -89,7 +98,11 @@ class PendingCardDelivery {
     'sourceBuildingId': sourceBuildingId,
     'card': card.toJson(),
     'scheduledAtEncounter': scheduledAtEncounter,
-    'arrivesAtEncounter': arrivesAtEncounter,
+    'productionDurationEncounters': productionDurationEncounters,
+    'traveledKm': traveledKm,
+    // Backward compatibility: older saves use arrivesAtEncounter.
+    'arrivesAtEncounter': forcedArrivesAtEncounter,
+    'forcedArrivesAtEncounter': forcedArrivesAtEncounter,
   };
 
   factory PendingCardDelivery.fromJson(Map<String, dynamic> json) =>
@@ -99,7 +112,12 @@ class PendingCardDelivery {
         card: GameCard.fromJson(json['card'] as Map<String, dynamic>),
         scheduledAtEncounter:
             (json['scheduledAtEncounter'] as num?)?.toInt() ?? 0,
-        arrivesAtEncounter: (json['arrivesAtEncounter'] as num?)?.toInt() ?? 0,
+        productionDurationEncounters:
+            (json['productionDurationEncounters'] as num?)?.toInt() ?? 0,
+        traveledKm: (json['traveledKm'] as num?)?.toDouble() ?? 0.0,
+        forcedArrivesAtEncounter:
+            (json['forcedArrivesAtEncounter'] as num?)?.toInt() ??
+            (json['arrivesAtEncounter'] as num?)?.toInt(),
       );
 }
 
@@ -193,6 +211,10 @@ class CampaignState {
 
   int recoveryEncountersRemaining;
 
+  /// Campaign upgrade: reduces distance-based supply penalty.
+  /// Currently 0 or 1.
+  int supplyDistancePenaltyReduction;
+
   CampaignState({
     required this.id,
     required this.leaderId,
@@ -233,6 +255,7 @@ class CampaignState {
     List<TravelPoint>? visitedNodes,
     Map<String, int>? gatedReserveCards,
     this.recoveryEncountersRemaining = 0,
+    this.supplyDistancePenaltyReduction = 0,
     DateTime? lastUpdated,
   }) : inventory = inventory ?? [],
        gatedReserveCards = gatedReserveCards ?? <String, int>{},
@@ -248,6 +271,92 @@ class CampaignState {
        travelHistory = travelHistory ?? <TravelPoint>[],
        visitedNodes = visitedNodes ?? <TravelPoint>[],
        lastUpdated = lastUpdated ?? DateTime.now();
+
+  int supplyProductionDurationForCard(GameCard card) {
+    return switch (card.rarity) {
+      1 => 1,
+      2 => 2,
+      3 => 3,
+      4 => 4,
+      _ => 1,
+    };
+  }
+
+  static double _degToRad(double deg) => deg * (pi / 180.0);
+
+  static double _haversineKm({
+    required double lat1,
+    required double lng1,
+    required double lat2,
+    required double lng2,
+  }) {
+    const earthRadiusKm = 6371.0;
+    final dLat = _degToRad(lat2 - lat1);
+    final dLng = _degToRad(lng2 - lng1);
+    final a =
+        sin(dLat / 2) * sin(dLat / 2) +
+        cos(_degToRad(lat1)) *
+            cos(_degToRad(lat2)) *
+            sin(dLng / 2) *
+            sin(dLng / 2);
+    final c = 2 * atan2(sqrt(a), sqrt(1 - a));
+    return earthRadiusKm * c;
+  }
+
+  double? distanceHomeToHeroKm() {
+    final townLat = homeTownLat;
+    final townLng = homeTownLng;
+    final heroLat = lastTravelLat;
+    final heroLng = lastTravelLng;
+    if (townLat == null ||
+        townLng == null ||
+        heroLat == null ||
+        heroLng == null) {
+      return null;
+    }
+    return _haversineKm(
+      lat1: townLat,
+      lng1: townLng,
+      lat2: heroLat,
+      lng2: heroLng,
+    );
+  }
+
+  int distanceSupplyModifierEncountersFromKm(double km) {
+    final baseModifier = (km < 40)
+        ? -1
+        : (km < 80)
+        ? 0
+        : (km < 180)
+        ? 1
+        : (km < 320)
+        ? 2
+        : (km < 500)
+        ? 3
+        : 4;
+
+    final relicReduction = isRelicActive('relic_supply_routes') ? 1 : 0;
+    final totalReduction = supplyDistancePenaltyReduction + relicReduction;
+    return baseModifier - totalReduction;
+  }
+
+  int currentTravelDurationEncounters() {
+    final km = distanceHomeToHeroKm();
+    if (km == null) return 1;
+    // Base travel time is 1; distance modifies it.
+    final modifier = distanceSupplyModifierEncountersFromKm(km);
+    return (1 + modifier).clamp(1, 99);
+  }
+
+  bool isDeliveryProduced(PendingCardDelivery d) {
+    return (encounterNumber - d.scheduledAtEncounter) >=
+        d.productionDurationEncounters;
+  }
+
+  int encountersUntilDeliveryProduced(PendingCardDelivery d) {
+    final producedAt = d.scheduledAtEncounter + d.productionDurationEncounters;
+    return (producedAt - encounterNumber).clamp(0, 999999);
+  }
 
   void addTravelPoint(double lat, double lng) {
     travelHistory = [...travelHistory, TravelPoint(lat: lat, lng: lng)];
@@ -398,29 +507,56 @@ class CampaignState {
     inventory = [...inventory, card];
   }
 
-  void enqueueCardDelivery({
+  PendingCardDelivery enqueueCardDelivery({
     required String sourceBuildingId,
     required GameCard card,
-    required int arrivesAtEncounter,
   }) {
     final delivery = PendingCardDelivery(
       id: 'delivery_${DateTime.now().millisecondsSinceEpoch}_${pendingCardDeliveries.length}',
       sourceBuildingId: sourceBuildingId,
       card: card,
       scheduledAtEncounter: encounterNumber,
-      arrivesAtEncounter: arrivesAtEncounter,
+      productionDurationEncounters: supplyProductionDurationForCard(card),
     );
     pendingCardDeliveries = [...pendingCardDeliveries, delivery];
+    return delivery;
+  }
+
+  void advanceSupplyChainOneEncounter() {
+    if (pendingCardDeliveries.isEmpty) return;
+
+    final km = distanceHomeToHeroKm();
+    if (km == null) {
+      // Without coordinates we only support forced arrivals.
+      return;
+    }
+
+    final travelDuration = currentTravelDurationEncounters();
+    final speedKmPerEncounter = km <= 0 ? 999999.0 : (km / travelDuration);
+
+    for (final d in pendingCardDeliveries) {
+      if (d.forcedArrivesAtEncounter != null) continue;
+      if (!isDeliveryProduced(d)) continue;
+      d.traveledKm += speedKmPerEncounter;
+    }
   }
 
   List<PendingCardDelivery> collectArrivedDeliveries() {
     if (pendingCardDeliveries.isEmpty) return <PendingCardDelivery>[];
-    final arrived = pendingCardDeliveries
-        .where((d) => d.arrivesAtEncounter <= encounterNumber)
-        .toList();
+
+    final km = distanceHomeToHeroKm();
+    final arrived = pendingCardDeliveries.where((d) {
+      final forced = d.forcedArrivesAtEncounter;
+      if (forced != null) {
+        return encounterNumber >= forced;
+      }
+      if (km == null) return false;
+      if (!isDeliveryProduced(d)) return false;
+      return d.traveledKm >= km;
+    }).toList();
     if (arrived.isEmpty) return <PendingCardDelivery>[];
     pendingCardDeliveries = pendingCardDeliveries
-        .where((d) => d.arrivesAtEncounter > encounterNumber)
+        .where((d) => !arrived.any((a) => a.id == d.id))
         .toList();
     for (final d in arrived) {
       addCardToReserves(d.card);
@@ -429,7 +565,25 @@ class CampaignState {
   }
 
   int encountersUntilDeliveryArrives(PendingCardDelivery d) {
-    return (d.arrivesAtEncounter - encounterNumber).clamp(0, 999999);
+    final forced = d.forcedArrivesAtEncounter;
+    if (forced != null) {
+      return (forced - encounterNumber).clamp(0, 999999);
+    }
+
+    final km = distanceHomeToHeroKm();
+    if (km == null) return 0;
+
+    final productionRemaining = encountersUntilDeliveryProduced(d);
+    if (productionRemaining > 0) {
+      final travelDuration = currentTravelDurationEncounters();
+      return (productionRemaining + travelDuration).clamp(0, 999999);
+    }
+
+    final travelDuration = currentTravelDurationEncounters();
+    final speedKmPerEncounter = km <= 0 ? 999999.0 : (km / travelDuration);
+    final remainingKm = (km - d.traveledKm).clamp(0.0, 999999999.0);
+    if (remainingKm <= 0) return 0;
+    return (remainingKm / speedKmPerEncounter).ceil().clamp(0, 999999);
   }
 
   void removeCard(String cardId) {
@@ -527,6 +681,9 @@ class CampaignState {
       addGold(15);
     }
 
+    // Advance supply chain once per encounter (production + travel).
+    advanceSupplyChainOneEncounter();
+
     clearExpiredGates();
   }
 
@@ -599,6 +756,7 @@ class CampaignState {
     'visitedNodes': visitedNodes.map((p) => p.toJson()).toList(),
     'gatedReserveCards': gatedReserveCards,
     'recoveryEncountersRemaining': recoveryEncountersRemaining,
+    'supplyDistancePenaltyReduction': supplyDistancePenaltyReduction,
     'lastUpdated': lastUpdated.toIso8601String(),
   };
 
@@ -691,6 +849,8 @@ class CampaignState {
     ),
     recoveryEncountersRemaining:
         (json['recoveryEncountersRemaining'] as num?)?.toInt() ?? 0,
+    supplyDistancePenaltyReduction:
+        (json['supplyDistancePenaltyReduction'] as num?)?.toInt() ?? 0,
     lastUpdated: json['lastUpdated'] != null
         ? DateTime.parse(json['lastUpdated'] as String)
         : null,
@@ -705,7 +865,7 @@ class EncounterGenerator {
     : _random = seed != null ? Random(seed) : Random();
 
   String _randomConsumableOfferId({String? exclude}) {
-    const ids = <String>['heal_potion', 'large_heal_potion', 'remove_card'];
+    const ids = <String>['heal_potion', 'large_heal_potion'];
     if (exclude != null && ids.length > 1) {
       final filtered = ids.where((e) => e != exclude).toList();
       return filtered[_random.nextInt(filtered.length)];

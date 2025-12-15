@@ -1,5 +1,6 @@
 import 'dart:math';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -11,7 +12,6 @@ import '../data/shop_items.dart';
 import 'test_match_screen.dart';
 import '../data/hero_library.dart';
 import 'campaign_deck_screen.dart';
-import 'campaign_inventory_screen.dart';
 import 'progression_screen.dart';
 import '../services/campaign_persistence_service.dart';
 import '../data/napoleon_progression.dart';
@@ -21,12 +21,15 @@ class RewardEvent {
   final String message;
   final IconData icon;
   final Color iconColor;
+  final String?
+  cardId; // If set, this event is a card delivery that can be added to deck
 
   const RewardEvent({
     required this.title,
     required this.message,
     required this.icon,
     required this.iconColor,
+    this.cardId,
   });
 }
 
@@ -54,6 +57,69 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
   bool _isLoading = true;
   final CampaignPersistenceService _persistence = CampaignPersistenceService();
   final MapController _mapController = MapController();
+
+  bool _isValidConsumableOfferId(String id) {
+    return ShopInventory.getAllConsumables().any((e) => e.id == id);
+  }
+
+  void _logSupply(String message) {
+    if (!kDebugMode) return;
+    debugPrint('[SUPPLY] $message');
+  }
+
+  int _distanceSupplyModifierEncountersAt({
+    required double travelLat,
+    required double travelLng,
+  }) {
+    final townLat = _campaign.homeTownLat;
+    final townLng = _campaign.homeTownLng;
+    if (townLat == null || townLng == null) {
+      return 0;
+    }
+
+    final distanceMeters = const Distance()(
+      LatLng(travelLat, travelLng),
+      LatLng(townLat, townLng),
+    );
+    final km = distanceMeters / 1000.0;
+
+    final baseModifier = (km < 40)
+        ? -1
+        : (km < 80)
+        ? 0
+        : (km < 180)
+        ? 1
+        : (km < 320)
+        ? 2
+        : (km < 500)
+        ? 3
+        : 4;
+
+    final reduction = _homeTownReduceDistancePenalty ? 1 : 0;
+    final relicReduction = _campaign.isRelicActive('relic_supply_routes')
+        ? 1
+        : 0;
+    final totalReduction = reduction + relicReduction;
+
+    return baseModifier - totalReduction;
+  }
+
+  double? _distanceToHomeTownKmAt({
+    required double travelLat,
+    required double travelLng,
+  }) {
+    final townLat = _campaign.homeTownLat;
+    final townLng = _campaign.homeTownLng;
+    if (townLat == null || townLng == null) {
+      return null;
+    }
+
+    final distanceMeters = const Distance()(
+      LatLng(travelLat, travelLng),
+      LatLng(townLat, townLng),
+    );
+    return distanceMeters / 1000.0;
+  }
 
   static const List<String> _locationTerrainPool = [
     'Woods',
@@ -112,7 +178,8 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
     _saveCampaign();
     return RewardEvent(
       title: 'Backtrack Cost',
-      message: '${card.name} is moved to Reserves during the retreat',
+      message:
+          '${card.name} is moved to Reserves during the retreat (available after 1 encounter)',
       icon: Icons.sick,
       iconColor: Colors.orangeAccent,
     );
@@ -195,6 +262,73 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
     );
   }
 
+  Future<void> _waitOneEncounter() async {
+    if (!mounted) return;
+
+    final navigator = Navigator.of(context);
+    final confirmed = await showDialog<bool>(
+      context: navigator.context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF2D2D2D),
+        title: const Text('Wait', style: TextStyle(color: Colors.white)),
+        content: const Text(
+          'Waiting counts as time passing and comes with a setback.',
+          style: TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blueGrey[700],
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Wait'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+    if (!mounted) return;
+
+    _logSupply(
+      'Wait: advance 1 encounter in place (encounter=${_campaign.encounterNumber})',
+    );
+
+    final rewardEvents = <RewardEvent>[];
+    rewardEvents.add(
+      const RewardEvent(
+        title: 'Wait',
+        message: 'You hold position and let time pass.',
+        icon: Icons.hourglass_bottom,
+        iconColor: Colors.orangeAccent,
+      ),
+    );
+
+    rewardEvents.add(_applyReturnPenalty());
+
+    setState(() {
+      _campaign.completeEncounter();
+      _generateNewChoices();
+    });
+
+    await _saveCampaign();
+    final deliveries = await _autoCollectHomeTownDeliveries(showDialogs: false);
+    rewardEvents.addAll(deliveries);
+    await _saveCampaign();
+
+    if (!mounted) return;
+    await _showCelebrationDialog(
+      title: 'After-Action Report',
+      events: rewardEvents,
+    );
+  }
+
   RewardEvent _goldEvent(int amount) {
     final prefix = amount >= 0 ? '+' : '';
     return RewardEvent(
@@ -212,57 +346,111 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
     if (events.isEmpty) return;
     final navigator = Navigator.of(context);
     if (!mounted) return;
+
+    // Track which cards have been added to deck during this dialog
+    final addedToDeck = <String>{};
+
     await showDialog<void>(
       context: navigator.context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF2D2D2D),
-        title: Text(title, style: const TextStyle(color: Colors.white)),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: ListView(
-            shrinkWrap: true,
-            children: events
-                .map(
-                  (e) => Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(e.icon, color: e.iconColor, size: 18),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                e.title,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: const Color(0xFF2D2D2D),
+          title: Text(title, style: const TextStyle(color: Colors.white)),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: ListView(
+              shrinkWrap: true,
+              children: events.map((e) {
+                final canAddToDeck =
+                    e.cardId != null &&
+                    !addedToDeck.contains(e.cardId) &&
+                    _campaign.inventory.any((c) => c.id == e.cardId);
+
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(e.icon, color: e.iconColor, size: 18),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              e.title,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              e.message,
+                              style: const TextStyle(color: Colors.white70),
+                            ),
+                            if (canAddToDeck) ...[
+                              const SizedBox(height: 6),
+                              ElevatedButton.icon(
+                                onPressed: () {
+                                  _campaign.addCardFromInventory(e.cardId!);
+                                  _saveCampaign();
+                                  addedToDeck.add(e.cardId!);
+                                  setDialogState(() {});
+                                  setState(() {});
+                                },
+                                icon: const Icon(Icons.add, size: 16),
+                                label: const Text('Add to Deck'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.green[700],
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 4,
+                                  ),
+                                  minimumSize: const Size(0, 28),
                                 ),
                               ),
-                              const SizedBox(height: 2),
-                              Text(
-                                e.message,
-                                style: const TextStyle(color: Colors.white70),
-                              ),
                             ],
-                          ),
+                            if (e.cardId != null &&
+                                addedToDeck.contains(e.cardId))
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.check_circle,
+                                      color: Colors.green[400],
+                                      size: 14,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'Added to Deck',
+                                      style: TextStyle(
+                                        color: Colors.green[400],
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                          ],
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                )
-                .toList(),
+                );
+              }).toList(),
+            ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
-          ),
-        ],
       ),
     );
   }
@@ -279,6 +467,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
       setState(() {
         _homeTownBuildDiscountPercent = 0;
         _homeTownReduceDistancePenalty = false;
+        _campaign.supplyDistancePenaltyReduction = 0;
       });
       return;
     }
@@ -292,6 +481,9 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
     setState(() {
       _homeTownBuildDiscountPercent = mods.shopDiscountPercent;
       _homeTownReduceDistancePenalty = state.hasEffect('continental_system');
+      _campaign.supplyDistancePenaltyReduction = _homeTownReduceDistancePenalty
+          ? 1
+          : 0;
     });
   }
 
@@ -484,6 +676,21 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
         _campaign.homeTownLat != null &&
         _campaign.homeTownLng != null) {
       _ensureHomeTownStarterBuildings();
+
+      // Backward compat: older saves may have buildings with lastCollectedEncounter = -1,
+      // which makes them look "Ready" immediately. Treat them as starting cooldown now.
+      final updated = _campaign.homeTownBuildings
+          .map(
+            (b) => b.lastCollectedEncounter < 0
+                ? HomeTownBuilding(
+                    id: b.id,
+                    level: b.level,
+                    lastCollectedEncounter: _campaign.encounterNumber,
+                  )
+                : b,
+          )
+          .toList();
+      _campaign.homeTownBuildings = updated;
       return;
     }
 
@@ -504,7 +711,10 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
     }
     _campaign.homeTownBuildings = [
       ..._campaign.homeTownBuildings,
-      HomeTownBuilding(id: _buildingTrainingGroundsId),
+      HomeTownBuilding(
+        id: _buildingTrainingGroundsId,
+        lastCollectedEncounter: _campaign.encounterNumber,
+      ),
     ];
   }
 
@@ -717,38 +927,25 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
     }
   }
 
-  int _distanceSupplyPenaltyEncounters() {
-    final townLat = _campaign.homeTownLat;
-    final townLng = _campaign.homeTownLng;
+  /// Calculate supply time modifier based on distance from home town.
+  /// Returns negative value (bonus) when close, positive (penalty) when far.
+  int _distanceSupplyModifierEncounters() {
     final travelLat = _campaign.lastTravelLat;
     final travelLng = _campaign.lastTravelLng;
-    if (townLat == null ||
-        townLng == null ||
-        travelLat == null ||
-        travelLng == null) {
+    if (travelLat == null || travelLng == null) {
       return 0;
     }
 
-    final distanceMeters = const Distance()(
-      LatLng(travelLat, travelLng),
-      LatLng(townLat, townLng),
+    return _distanceSupplyModifierEncountersAt(
+      travelLat: travelLat,
+      travelLng: travelLng,
     );
-    final km = distanceMeters / 1000.0;
-    final basePenalty = (km < 80)
-        ? 0
-        : (km < 180)
-        ? 1
-        : (km < 320)
-        ? 2
-        : (km < 500)
-        ? 3
-        : 4;
-    final reduction = _homeTownReduceDistancePenalty ? 1 : 0;
-    final relicReduction = _campaign.isRelicActive('relic_supply_routes')
-        ? 1
-        : 0;
-    final totalReduction = reduction + relicReduction;
-    return (basePenalty - totalReduction).clamp(0, basePenalty).toInt();
+  }
+
+  /// Legacy wrapper for UI that expects only penalties (non-negative values)
+  int _distanceSupplyPenaltyEncounters() {
+    final modifier = _distanceSupplyModifierEncounters();
+    return modifier > 0 ? modifier : 0;
   }
 
   double? _distanceToHomeTownKm() {
@@ -780,19 +977,25 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
   }
 
   int _buildingSupplyEveryEncounters(HomeTownBuilding building) {
-    final penalty = _distanceSupplyPenaltyEncounters();
+    final modifier = _distanceSupplyModifierEncounters();
     final base = _buildingBaseSupplyEveryEncounters(building);
-    return base + penalty;
+    // Ensure supply time is at least 1 encounter
+    return (base + modifier).clamp(1, 99);
   }
 
   String _buildingSupplyBreakdownText(HomeTownBuilding building) {
     final base = _buildingBaseSupplyEveryEncounters(building);
-    final penalty = _distanceSupplyPenaltyEncounters();
-    final total = base + penalty;
-    if (penalty <= 0) {
+    final modifier = _distanceSupplyModifierEncounters();
+    final total = (base + modifier).clamp(1, 99);
+    if (modifier == 0) {
       return 'Supply: every $base encounter${base == 1 ? "" : "s"}';
+    } else if (modifier < 0) {
+      // Bonus (closer to home)
+      return 'Supply: $base $modifier = $total encounter${total == 1 ? "" : "s"} (closer to home)';
+    } else {
+      // Penalty (far from home)
+      return 'Supply: $base + $modifier = $total encounters (distance)';
     }
-    return 'Supply: $base + $penalty = $total encounters';
   }
 
   String _buildingSupplyStatusText(HomeTownBuilding building) {
@@ -802,13 +1005,21 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
     if (pending.isNotEmpty) {
       final d = pending.first;
       final remaining = _campaign.encountersUntilDeliveryArrives(d);
+      final producingRemaining = _campaign.encountersUntilDeliveryProduced(d);
+      if (producingRemaining > 0) {
+        if (producingRemaining == 1) {
+          return 'Producing: ${d.card.name} (ready in 1 encounter)';
+        }
+        return 'Producing: ${d.card.name} (ready in $producingRemaining encounters)';
+      }
+
       if (remaining <= 0) {
-        return 'Producing: ${d.card.name} (arriving now)';
+        return 'Traveling: ${d.card.name} (arriving now)';
       }
       if (remaining == 1) {
-        return 'Producing: ${d.card.name} (arrives in 1 encounter)';
+        return 'Traveling: ${d.card.name} (arrives in 1 encounter)';
       }
-      return 'Producing: ${d.card.name} (arrives in $remaining encounters)';
+      return 'Traveling: ${d.card.name} (arrives in $remaining encounters)';
     }
 
     final interval = _buildingSupplyEveryEncounters(building);
@@ -844,7 +1055,9 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
             sourceBuildingId: d.sourceBuildingId,
             card: d.card,
             scheduledAtEncounter: d.scheduledAtEncounter,
-            arrivesAtEncounter: _campaign.encounterNumber + 1,
+            productionDurationEncounters: d.productionDurationEncounters,
+            traveledKm: d.traveledKm,
+            forcedArrivesAtEncounter: _campaign.encounterNumber + 1,
           );
         }).toList();
       }
@@ -949,6 +1162,8 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
     Color iconColor = Colors.amber;
 
     if (type == 'consumable') {
+      // Backward compat: ignore legacy/unknown consumables (e.g. remove_card)
+      if (!_isValidConsumableOfferId(id)) return null;
       setState(() {
         _campaign.addConsumable(id, count: amount);
       });
@@ -1001,6 +1216,8 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
     if (type == 'consumable') {
       final all = ShopInventory.getAllConsumables();
       final item = all.where((e) => e.id == id).toList();
+      // Backward compat: hide legacy/unknown consumables (e.g. remove_card)
+      if (item.isEmpty) return '';
       final name = item.isNotEmpty ? item.first.name : id;
       final description = item.isNotEmpty ? item.first.description : '';
       final headline = amount > 1 ? 'Offer: $name ×$amount' : 'Offer: $name';
@@ -1057,19 +1274,25 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
       if (candidates.isNotEmpty) {
         candidates.shuffle(_random);
         final card = candidates.first;
-        final arrivesAt =
-            _campaign.encounterNumber +
-            _buildingSupplyEveryEncounters(building);
+        final productionDuration = _campaign.supplyProductionDurationForCard(
+          card,
+        );
+        final travelDuration = _campaign.currentTravelDurationEncounters();
+        _logSupply(
+          'Production start: building=${building.id} prod=$productionDuration travel=$travelDuration lastCollected=${building.lastCollectedEncounter} now=${_campaign.encounterNumber} card=${card.id}:${card.name}',
+        );
+        PendingCardDelivery? created;
         setState(() {
-          _campaign.enqueueCardDelivery(
+          created = _campaign.enqueueCardDelivery(
             sourceBuildingId: building.id,
             card: card,
-            arrivesAtEncounter: arrivesAt,
           );
           building.lastCollectedEncounter = _campaign.encounterNumber;
         });
         await _saveCampaign();
-        final remaining = arrivesAt - _campaign.encounterNumber;
+        final remaining = created == null
+            ? 0
+            : _campaign.encountersUntilDeliveryArrives(created!);
         final event = RewardEvent(
           title: 'Training Grounds',
           message:
@@ -1101,19 +1324,25 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
       if (candidates.isNotEmpty) {
         candidates.shuffle(_random);
         final card = candidates.first;
-        final arrivesAt =
-            _campaign.encounterNumber +
-            _buildingSupplyEveryEncounters(building);
+        final productionDuration = _campaign.supplyProductionDurationForCard(
+          card,
+        );
+        final travelDuration = _campaign.currentTravelDurationEncounters();
+        _logSupply(
+          'Production start: building=${building.id} prod=$productionDuration travel=$travelDuration lastCollected=${building.lastCollectedEncounter} now=${_campaign.encounterNumber} card=${card.id}:${card.name}',
+        );
+        PendingCardDelivery? created;
         setState(() {
-          _campaign.enqueueCardDelivery(
+          created = _campaign.enqueueCardDelivery(
             sourceBuildingId: building.id,
             card: card,
-            arrivesAtEncounter: arrivesAt,
           );
           building.lastCollectedEncounter = _campaign.encounterNumber;
         });
         await _saveCampaign();
-        final remaining = arrivesAt - _campaign.encounterNumber;
+        final remaining = created == null
+            ? 0
+            : _campaign.encountersUntilDeliveryArrives(created!);
         final event = RewardEvent(
           title: 'Officers Academy',
           message:
@@ -1141,19 +1370,25 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
       if (candidates.isNotEmpty) {
         candidates.shuffle(_random);
         final card = candidates.first;
-        final arrivesAt =
-            _campaign.encounterNumber +
-            _buildingSupplyEveryEncounters(building);
+        final productionDuration = _campaign.supplyProductionDurationForCard(
+          card,
+        );
+        final travelDuration = _campaign.currentTravelDurationEncounters();
+        _logSupply(
+          'Production start: building=${building.id} prod=$productionDuration travel=$travelDuration lastCollected=${building.lastCollectedEncounter} now=${_campaign.encounterNumber} card=${card.id}:${card.name}',
+        );
+        PendingCardDelivery? created;
         setState(() {
-          _campaign.enqueueCardDelivery(
+          created = _campaign.enqueueCardDelivery(
             sourceBuildingId: building.id,
             card: card,
-            arrivesAtEncounter: arrivesAt,
           );
           building.lastCollectedEncounter = _campaign.encounterNumber;
         });
         await _saveCampaign();
-        final remaining = arrivesAt - _campaign.encounterNumber;
+        final remaining = created == null
+            ? 0
+            : _campaign.encountersUntilDeliveryArrives(created!);
         final event = RewardEvent(
           title: 'War College',
           message:
@@ -1185,12 +1420,23 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
     final buildings = _campaign.homeTownBuildings;
     if (buildings.isEmpty) return <RewardEvent>[];
 
+    _logSupply(
+      'AutoCollect start: encounter=${_campaign.encounterNumber} home=(${_campaign.homeTownLat},${_campaign.homeTownLng}) hero=(${_campaign.lastTravelLat},${_campaign.lastTravelLng}) km=${_distanceToHomeTownKm()?.toStringAsFixed(1) ?? "?"} modifier=${_distanceSupplyModifierEncounters()} pendingDeliveries=${_campaign.pendingCardDeliveries.length}',
+    );
+
     final events = <RewardEvent>[];
 
     // Step 1: Move arrived deliveries into Reserves.
     final arrived = _campaign.collectArrivedDeliveries();
+    final arrivedBuildingIds = arrived.map((d) => d.sourceBuildingId).toSet();
     if (arrived.isNotEmpty) {
+      _logSupply(
+        'Arrived deliveries: count=${arrived.length} (encounter=${_campaign.encounterNumber})',
+      );
       for (final d in arrived) {
+        _logSupply(
+          'Delivery arrived: building=${d.sourceBuildingId} card=${d.card.id}:${d.card.name} scheduledAt=${d.scheduledAtEncounter} prod=${d.productionDurationEncounters} traveledKm=${d.traveledKm.toStringAsFixed(1)} forcedAt=${d.forcedArrivesAtEncounter ?? "-"}',
+        );
         final title = 'Delivery Arrived';
         final message =
             '${d.card.name} (from ${_homeTownBuildingName(d.sourceBuildingId)})';
@@ -1199,6 +1445,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
           message: message,
           icon: Icons.local_shipping,
           iconColor: Colors.greenAccent,
+          cardId: d.card.id,
         );
         events.add(event);
         if (showDialogs) {
@@ -1219,11 +1466,17 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
       }
 
       // Card buildings: if ready and no in-flight delivery, start production.
-      if (!_canCollectBuilding(b)) continue;
       final inFlight = _campaign.pendingCardDeliveries.any(
         (d) => d.sourceBuildingId == b.id,
       );
       if (inFlight) continue;
+
+      // If a delivery just arrived for this building, start the next cycle
+      // immediately (no “stale” encounter), even if the distance-based interval
+      // increased since the previous cycle started.
+      final canStartNow =
+          _canCollectBuilding(b) || arrivedBuildingIds.contains(b.id);
+      if (!canStartNow) continue;
 
       final event = await _collectBuilding(b, showDialog: showDialogs);
       if (event != null) events.add(event);
@@ -1300,7 +1553,8 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
     _saveCampaign();
     return RewardEvent(
       title: 'Illness',
-      message: '${card.name} is moved to Reserves',
+      message:
+          '${card.name} is moved to Reserves (available after 1 encounter)',
       icon: Icons.sick,
       iconColor: Colors.orangeAccent,
     );
@@ -1395,7 +1649,11 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
                                       _campaign.spendGold(effectiveCost);
                                       _campaign.homeTownBuildings = [
                                         ..._campaign.homeTownBuildings,
-                                        HomeTownBuilding(id: id),
+                                        HomeTownBuilding(
+                                          id: id,
+                                          lastCollectedEncounter:
+                                              _campaign.encounterNumber,
+                                        ),
                                       ];
                                     });
                                     await _saveCampaign();
@@ -3151,62 +3409,6 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
     ).showSnackBar(SnackBar(content: Text('Acquired ${item.name}!')));
   }
 
-  Future<bool> _showRemoveCardDialog() async {
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Remove a Card'),
-        content: SizedBox(
-          width: double.maxFinite,
-          height: 300,
-          child: ListView.builder(
-            itemCount: _campaign.deck.length,
-            itemBuilder: (context, index) {
-              final card = _campaign.deck[index];
-              return ListTile(
-                title: Text(card.name),
-                subtitle: Text(
-                  '${card.element} - DMG:${card.damage} HP:${card.health}',
-                ),
-                onTap: () {
-                  _campaign.removeCard(card.id);
-                  Navigator.pop(context, true);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Removed ${card.name} from deck')),
-                  );
-                  setState(() {});
-                  _saveCampaign();
-                },
-              );
-            },
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-        ],
-      ),
-    );
-    return result ?? false;
-  }
-
-  void _openInventory() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => CampaignInventoryScreen(
-          campaign: _campaign,
-          onChanged: () {
-            setState(() {});
-            _saveCampaign();
-          },
-          onRequestRemoveCard: _showRemoveCardDialog,
-        ),
-      ),
-    );
-  }
-
   void _openRestSite(Encounter encounter) {
     final healAmount = (_campaign.maxHealth * 0.3).round();
 
@@ -3398,20 +3600,38 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
                     (widget.leaderId == 'napoleon' && _campaign.act == 1)
                         ? _buildRealMapSelection()
                         : _buildChapterSelection(),
-                    if (_campaign.visitedNodes.length >= 2)
-                      Positioned(
-                        bottom: 16,
-                        left: 16,
-                        child: FloatingActionButton.extended(
-                          onPressed: _returnToPreviousNode,
-                          backgroundColor: Colors.orange[700],
-                          icon: const Icon(Icons.undo, color: Colors.white),
-                          label: const Text(
-                            'Return',
-                            style: TextStyle(color: Colors.white),
+                    Positioned(
+                      bottom: 16,
+                      left: 16,
+                      child: Row(
+                        children: [
+                          FloatingActionButton.extended(
+                            onPressed: _waitOneEncounter,
+                            backgroundColor: Colors.blueGrey[700],
+                            icon: const Icon(
+                              Icons.hourglass_bottom,
+                              color: Colors.white,
+                            ),
+                            label: const Text(
+                              'Wait',
+                              style: TextStyle(color: Colors.white),
+                            ),
                           ),
-                        ),
+                          if (_campaign.visitedNodes.length >= 2) ...[
+                            const SizedBox(width: 12),
+                            FloatingActionButton.extended(
+                              onPressed: _returnToPreviousNode,
+                              backgroundColor: Colors.orange[700],
+                              icon: const Icon(Icons.undo, color: Colors.white),
+                              label: const Text(
+                                'Return',
+                                style: TextStyle(color: Colors.white),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
+                    ),
                   ],
                 ),
               ),
@@ -3556,6 +3776,14 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
 
   Future<void> _confirmEncounterOnMap(Encounter encounter, LatLng pos) async {
     final offerLabel = _encounterOfferLabel(encounter);
+    final distanceKm = _distanceToHomeTownKmAt(
+      travelLat: pos.latitude,
+      travelLng: pos.longitude,
+    );
+    final supplyModifierAtDestination = _distanceSupplyModifierEncountersAt(
+      travelLat: pos.latitude,
+      travelLng: pos.longitude,
+    );
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -3579,6 +3807,34 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
             Text(
               encounter.description,
               style: TextStyle(color: Colors.grey[300]),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                const Icon(
+                  Icons.local_shipping,
+                  color: Colors.white70,
+                  size: 18,
+                ),
+                const SizedBox(width: 6),
+                const Text(
+                  'Supply chain: +1 on completion',
+                  style: TextStyle(color: Colors.white70),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Icon(Icons.route, color: Colors.white70, size: 18),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Distance to Home: ${distanceKm?.toStringAsFixed(0) ?? "?"} km  |  Supply modifier: $supplyModifierAtDestination',
+                    style: const TextStyle(color: Colors.white70),
+                  ),
+                ),
+              ],
             ),
             if (encounter.goldReward != null) ...[
               const SizedBox(height: 12),
@@ -3638,6 +3894,11 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
     );
 
     if (confirmed == true && mounted) {
+      final prevLat = _campaign.lastTravelLat;
+      final prevLng = _campaign.lastTravelLng;
+      _logSupply(
+        'Travel confirm: encounter=${_campaign.encounterNumber} from=($prevLat,$prevLng) to=(${pos.latitude},${pos.longitude}) home=(${_campaign.homeTownLat},${_campaign.homeTownLng}) km=${distanceKm?.toStringAsFixed(1) ?? "?"} modifier=$supplyModifierAtDestination',
+      );
       setState(() {
         _campaign.lastTravelLat = pos.latitude;
         _campaign.lastTravelLng = pos.longitude;
@@ -3814,6 +4075,53 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
       );
     }
 
+    if (townLat != null && townLng != null && heroPos != null) {
+      final km = _campaign.distanceHomeToHeroKm();
+      if (km != null && km > 0) {
+        for (final d in _campaign.pendingCardDeliveries) {
+          if (d.forcedArrivesAtEncounter != null) {
+            continue;
+          }
+          if (!_campaign.isDeliveryProduced(d)) {
+            continue;
+          }
+          final frac = (d.traveledKm / km).clamp(0.0, 1.0);
+          final lat = townLat + ((heroPos.latitude - townLat) * frac);
+          final lng = townLng + ((heroPos.longitude - townLng) * frac);
+          markers.add(
+            Marker(
+              point: LatLng(lat, lng),
+              width: 28,
+              height: 28,
+              child: IgnorePointer(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.greenAccent.withValues(alpha: 0.9),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.black, width: 1.5),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.35),
+                        blurRadius: 6,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: const Center(
+                    child: Icon(
+                      Icons.local_shipping,
+                      color: Colors.black,
+                      size: 16,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        }
+      }
+    }
+
     for (int i = 0; i < choices.length; i++) {
       final encounter = choices[i];
       LatLng pos = locations[i % locations.length];
@@ -3961,8 +4269,6 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
                 Navigator.pop(context);
               } else if (value == 'legacy') {
                 _openProgressionView();
-              } else if (value == 'reserves') {
-                _openInventory();
               }
             },
             itemBuilder: (context) => [
@@ -3986,16 +4292,6 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
                     Icon(Icons.account_tree, color: Colors.white, size: 18),
                     SizedBox(width: 8),
                     Text('Legacy', style: TextStyle(color: Colors.white)),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: 'reserves',
-                child: Row(
-                  children: [
-                    Icon(Icons.inventory_2, color: Colors.white, size: 18),
-                    SizedBox(width: 8),
-                    Text('Reserves', style: TextStyle(color: Colors.white)),
                   ],
                 ),
               ),
@@ -4482,6 +4778,26 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
                         fontStyle: FontStyle.italic,
                         height: 1.1,
                       ),
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(
+                          Icons.local_shipping,
+                          color: Colors.black54,
+                          size: 14,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Supply: +1',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.brown[800],
+                          ),
+                        ),
+                      ],
                     ),
                     if (encounter.goldReward != null) ...[
                       const SizedBox(height: 8),

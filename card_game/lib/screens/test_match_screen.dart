@@ -4873,12 +4873,11 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         }
       } else {
         // Single player: Start turn timer if it's player's turn
+        // Note: AI turn is triggered AFTER mulligan completes (see end of _startNewMatch)
         if (_matchManager.isPlayerTurn) {
           _startTurnTimer();
-        } else {
-          // AI goes first
-          _doAITurnTYC3();
         }
+        // Don't trigger AI here - wait for mulligan to complete first
       }
     } else {
       _matchManager.startMatch(
@@ -4907,9 +4906,17 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     _lastProcessedActionIndex = 0; // Reset action tracking for new match
     setState(() {});
 
-    // Mulligan Phase
+    // Mulligan Phase - MUST happen before AI can play
     if (mounted) {
       await _showMulliganDialog();
+    }
+
+    // After mulligan, trigger AI turn if needed (single-player only, TYC3 mode)
+    if (!_isOnlineMode &&
+        _useTYC3Mode &&
+        _matchManager.isOpponentTurn &&
+        mounted) {
+      _doAITurnTYC3();
     }
   }
 
