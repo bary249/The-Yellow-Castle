@@ -110,6 +110,8 @@ class MatchManager {
     bool isChessTimerMode = false, // Whether to use chess timer
     int? playerBaseHP, // Optional starting HP for player
     int? opponentBaseHP, // Optional starting HP for opponent
+    List<String>?
+    opponentPriorityCardIds, // Card IDs to prioritize in opponent's starting hand (e.g., boss cards)
   }) {
     // Debug: Log the deck being used
     _log(
@@ -147,6 +149,26 @@ class MatchManager {
     );
     if (!skipOpponentShuffle) {
       opponent.deck.shuffle();
+
+      // Move priority cards (e.g., boss cards) to front of deck for starting hand
+      if (opponentPriorityCardIds != null &&
+          opponentPriorityCardIds.isNotEmpty) {
+        final priorityCards = <GameCard>[];
+        final otherCards = <GameCard>[];
+        for (final card in opponent.deck.cards) {
+          if (opponentPriorityCardIds.any((id) => card.id.startsWith(id))) {
+            priorityCards.add(card);
+          } else {
+            otherCards.add(card);
+          }
+        }
+        if (priorityCards.isNotEmpty) {
+          opponent.deck.replaceCards([...priorityCards, ...otherCards]);
+          _log(
+            '👑 Prioritized ${priorityCards.length} boss card(s) in opponent starting hand: ${priorityCards.map((c) => c.name).join(", ")}',
+          );
+        }
+      }
     } else {
       _log('⏭️ Skipping opponent deck shuffle (using synced order)');
     }
@@ -1429,6 +1451,8 @@ class MatchManager {
     bool isChessTimerMode = false, // Whether to use chess timer
     int? playerBaseHP, // Optional starting HP for player
     int? opponentBaseHP, // Optional starting HP for opponent
+    List<String>?
+    opponentPriorityCardIds, // Card IDs to prioritize in opponent's starting hand (e.g., boss cards)
   }) {
     // Use the existing startMatch logic
     startMatch(
@@ -1451,6 +1475,7 @@ class MatchManager {
       isChessTimerMode: isChessTimerMode,
       playerBaseHP: playerBaseHP,
       opponentBaseHP: opponentBaseHP,
+      opponentPriorityCardIds: opponentPriorityCardIds,
     );
 
     if (_currentMatch == null) return;

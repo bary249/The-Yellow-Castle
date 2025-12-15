@@ -47,6 +47,8 @@ class TestMatchScreen extends StatefulWidget {
   final int cannonHealthBonus; // HP bonus for cannon/artillery cards
   final int heroAbilityDamageBoost;
   final int? opponentBaseHP;
+  final List<String>
+  opponentPriorityCardIds; // Card IDs to prioritize in opponent's starting hand (e.g., boss cards)
 
   final List<String> campaignBuffLabels;
   final List<String> campaignBuffLabelsForBuffsDialog;
@@ -69,6 +71,7 @@ class TestMatchScreen extends StatefulWidget {
     this.cannonHealthBonus = 0,
     this.heroAbilityDamageBoost = 0,
     this.opponentBaseHP,
+    this.opponentPriorityCardIds = const [],
     this.campaignBuffLabels = const [],
     this.campaignBuffLabelsForBuffsDialog = const [],
   });
@@ -5492,6 +5495,9 @@ class _TestMatchScreenState extends State<TestMatchScreen>
         isChessTimerMode: _useChessTimer,
         playerBaseHP: widget.playerCurrentHealth,
         opponentBaseHP: widget.opponentBaseHP,
+        opponentPriorityCardIds: widget.opponentPriorityCardIds.isEmpty
+            ? null
+            : widget.opponentPriorityCardIds,
       );
 
       if (widget.extraStartingDraw > 0) {

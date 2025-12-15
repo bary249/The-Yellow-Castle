@@ -3189,6 +3189,9 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
               : 0,
           heroAbilityDamageBoost: mods.heroAbilityDamageBoost,
           opponentBaseHP: bossOpponentBaseHP,
+          opponentPriorityCardIds: const [
+            'boss_',
+          ], // Prioritize boss cards in starting hand
           campaignBuffLabels: buffLabels,
           campaignBuffLabelsForBuffsDialog: buffsDialogLabels,
         ),
