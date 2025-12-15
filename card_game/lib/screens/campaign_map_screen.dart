@@ -79,6 +79,121 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     return discounted.round().clamp(0, cost);
   }
 
+  RewardEvent _applyReturnPenalty() {
+    final lat = _campaign.lastTravelLat ?? 0;
+    final lng = _campaign.lastTravelLng ?? 0;
+    final seedLat = (lat.abs() * 1000).round();
+    final seedLng = (lng.abs() * 1000).round();
+    final seed =
+        (seedLat * 1000003) ^ seedLng ^ (_campaign.encounterNumber * 31);
+    final rng = Random(seed);
+
+    if (rng.nextBool() || _campaign.deck.isEmpty) {
+      final goldLoss = 10 + rng.nextInt(11); // 10-20
+      final actualLoss = goldLoss.clamp(0, _campaign.gold);
+      setState(() {
+        _campaign.spendGold(actualLoss);
+      });
+      _saveCampaign();
+      return RewardEvent(
+        title: 'Backtrack Cost',
+        message: 'Lost -$actualLoss Gold while retreating',
+        icon: Icons.money_off,
+        iconColor: Colors.redAccent,
+      );
+    }
+
+    final idx = rng.nextInt(_campaign.deck.length);
+    final card = _campaign.deck[idx];
+    setState(() {
+      _campaign.removeCard(card.id);
+    });
+    _saveCampaign();
+    return RewardEvent(
+      title: 'Backtrack Cost',
+      message: '${card.name} is moved to Reserves during the retreat',
+      icon: Icons.sick,
+      iconColor: Colors.orangeAccent,
+    );
+  }
+
+  Future<void> _returnToPreviousNode() async {
+    if (_campaign.visitedNodes.length < 2) return;
+    if (!mounted) return;
+
+    final navigator = Navigator.of(context);
+    final confirmed = await showDialog<bool>(
+      context: navigator.context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF2D2D2D),
+        title: const Text(
+          'Return to Previous Node',
+          style: TextStyle(color: Colors.white),
+        ),
+        content: const Text(
+          'Returning counts as time passing and comes with a setback.',
+          style: TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange[700],
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Return'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+    if (!mounted) return;
+
+    final prev = _campaign.visitedNodes[_campaign.visitedNodes.length - 2];
+
+    final rewardEvents = <RewardEvent>[];
+    rewardEvents.add(
+      const RewardEvent(
+        title: 'Backtrack',
+        message: 'You return to the previous node.',
+        icon: Icons.undo,
+        iconColor: Colors.orangeAccent,
+      ),
+    );
+
+    // Apply the penalty before updating the node list so it keys off the current state.
+    rewardEvents.add(_applyReturnPenalty());
+
+    setState(() {
+      // Move hero back one node.
+      _campaign.popVisitedNode();
+      _campaign.lastTravelLat = prev.lat;
+      _campaign.lastTravelLng = prev.lng;
+      // Add a travel step so the route is visible.
+      _campaign.addTravelPoint(prev.lat, prev.lng);
+      // Counts as an iteration.
+      _campaign.completeEncounter();
+      _generateNewChoices();
+    });
+
+    await _saveCampaign();
+    final deliveries = await _autoCollectHomeTownDeliveries(showDialogs: false);
+    rewardEvents.addAll(deliveries);
+    await _saveCampaign();
+
+    if (!mounted) return;
+    await _showCelebrationDialog(
+      title: 'After-Action Report',
+      events: rewardEvents,
+    );
+  }
+
   RewardEvent _goldEvent(int amount) {
     final prefix = amount >= 0 ? '+' : '';
     return RewardEvent(
@@ -3619,6 +3734,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
         _campaign.lastTravelLat = pos.latitude;
         _campaign.lastTravelLng = pos.longitude;
         _campaign.addTravelPoint(pos.latitude, pos.longitude);
+        _campaign.recordVisitedNode(pos.latitude, pos.longitude);
       });
       await _saveCampaign();
       if (!mounted) return;
@@ -4052,6 +4168,40 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                             style: TextStyle(color: Colors.white, fontSize: 12),
                           ),
                         ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  InkWell(
+                    onTap: _campaign.visitedNodes.length >= 2
+                        ? _returnToPreviousNode
+                        : null,
+                    child: Opacity(
+                      opacity: _campaign.visitedNodes.length >= 2 ? 1.0 : 0.45,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.brown[600],
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.brown[400]!),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.undo, color: Colors.white, size: 14),
+                            SizedBox(width: 4),
+                            Text(
+                              'Return',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),

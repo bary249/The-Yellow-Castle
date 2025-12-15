@@ -149,6 +149,7 @@ class CampaignState {
   double? lastTravelLng;
 
   List<TravelPoint> travelHistory;
+  List<TravelPoint> visitedNodes;
 
   CampaignState({
     required this.id,
@@ -186,6 +187,7 @@ class CampaignState {
     this.lastTravelLat,
     this.lastTravelLng,
     List<TravelPoint>? travelHistory,
+    List<TravelPoint>? visitedNodes,
     DateTime? lastUpdated,
   }) : inventory = inventory ?? [],
        destroyedDeckCards = destroyedDeckCards ?? [],
@@ -197,10 +199,22 @@ class CampaignState {
        activeConsumables = activeConsumables ?? <String, int>{},
        awardedLegacyMilestones = awardedLegacyMilestones ?? <String>{},
        travelHistory = travelHistory ?? <TravelPoint>[],
+       visitedNodes = visitedNodes ?? <TravelPoint>[],
        lastUpdated = lastUpdated ?? DateTime.now();
 
   void addTravelPoint(double lat, double lng) {
     travelHistory = [...travelHistory, TravelPoint(lat: lat, lng: lng)];
+  }
+
+  void recordVisitedNode(double lat, double lng) {
+    visitedNodes = [...visitedNodes, TravelPoint(lat: lat, lng: lng)];
+  }
+
+  bool get canReturnToPreviousNode => visitedNodes.isNotEmpty;
+
+  void popVisitedNode() {
+    if (visitedNodes.isEmpty) return;
+    visitedNodes = visitedNodes.sublist(0, visitedNodes.length - 1);
   }
 
   bool hasAwardedMilestone(String milestoneId) {
@@ -439,6 +453,7 @@ class CampaignState {
     'lastTravelLat': lastTravelLat,
     'lastTravelLng': lastTravelLng,
     'travelHistory': travelHistory.map((p) => p.toJson()).toList(),
+    'visitedNodes': visitedNodes.map((p) => p.toJson()).toList(),
     'lastUpdated': lastUpdated.toIso8601String(),
   };
 
@@ -507,6 +522,11 @@ class CampaignState {
     lastTravelLng: (json['lastTravelLng'] as num?)?.toDouble(),
     travelHistory:
         (json['travelHistory'] as List?)
+            ?.map((e) => TravelPoint.fromJson(e as Map<String, dynamic>))
+            .toList() ??
+        <TravelPoint>[],
+    visitedNodes:
+        (json['visitedNodes'] as List?)
             ?.map((e) => TravelPoint.fromJson(e as Map<String, dynamic>))
             .toList() ??
         <TravelPoint>[],
