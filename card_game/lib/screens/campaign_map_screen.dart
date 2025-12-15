@@ -39,6 +39,9 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
   bool _isLoading = true;
   final CampaignPersistenceService _persistence = CampaignPersistenceService();
 
+  int _homeTownBuildDiscountPercent = 0;
+  bool _homeTownReduceDistancePenalty = false;
+
   static const String _campaignMapRelicId = 'campaign_map_relic';
   static const double _mapRelicDiscoverDistanceMeters = 25000;
 
@@ -61,6 +64,28 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
   void initState() {
     super.initState();
     _initCampaign();
+  }
+
+  Future<void> _refreshHomeTownProgressionPerks() async {
+    if (widget.leaderId != 'napoleon') {
+      if (!mounted) return;
+      setState(() {
+        _homeTownBuildDiscountPercent = 0;
+        _homeTownReduceDistancePenalty = false;
+      });
+      return;
+    }
+
+    final data = await _persistence.loadProgression();
+    final state = data != null
+        ? NapoleonProgressionState.fromJson(data)
+        : NapoleonProgressionState();
+    final mods = state.modifiers;
+    if (!mounted) return;
+    setState(() {
+      _homeTownBuildDiscountPercent = mods.shopDiscountPercent;
+      _homeTownReduceDistancePenalty = state.hasEffect('continental_system');
+    });
   }
 
   String _cardTypeKey(GameCard card) {
@@ -471,6 +496,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
 
       _initMapRelicIfNeeded();
       _initHomeTownIfNeeded();
+      await _refreshHomeTownProgressionPerks();
     } else {
       _generator = EncounterGenerator(act: widget.act);
 
@@ -518,6 +544,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
 
       _initMapRelicIfNeeded();
       _initHomeTownIfNeeded();
+      await _refreshHomeTownProgressionPerks();
 
       await _runPreCampaignSetupIfNeeded(
         leaderId: widget.leaderId,
@@ -732,11 +759,17 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
       LatLng(townLat, townLng),
     );
     final km = distanceMeters / 1000.0;
-    if (km < 80) return 0;
-    if (km < 180) return 1;
-    if (km < 320) return 2;
-    if (km < 500) return 3;
-    return 4;
+    final basePenalty = (km < 80)
+        ? 0
+        : (km < 180)
+        ? 1
+        : (km < 320)
+        ? 2
+        : (km < 500)
+        ? 3
+        : 4;
+    final reduction = _homeTownReduceDistancePenalty ? 1 : 0;
+    return (basePenalty - reduction).clamp(0, basePenalty).toInt();
   }
 
   int _buildingSupplyEveryEncounters(HomeTownBuilding building) {
@@ -878,7 +911,11 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                     itemBuilder: (context, index) {
                       final id = options[index];
                       final cost = _homeTownBuildCost(id);
-                      final canAfford = _campaign.gold >= cost;
+                      final effectiveCost = _applyDiscount(
+                        cost,
+                        _homeTownBuildDiscountPercent,
+                      );
+                      final canAfford = _campaign.gold >= effectiveCost;
 
                       return Card(
                         color: Colors.grey[850],
@@ -895,7 +932,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                             onPressed: canAfford
                                 ? () async {
                                     setState(() {
-                                      _campaign.spendGold(cost);
+                                      _campaign.spendGold(effectiveCost);
                                       _campaign.homeTownBuildings = [
                                         ..._campaign.homeTownBuildings,
                                         HomeTownBuilding(id: id),
@@ -910,7 +947,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                               backgroundColor: Colors.amber[700],
                               foregroundColor: Colors.black,
                             ),
-                            child: Text('Build ($cost)'),
+                            child: Text('Build ($effectiveCost)'),
                           ),
                         ),
                       );
@@ -928,9 +965,12 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     );
   }
 
-  void _openHomeTown() {
+  Future<void> _openHomeTown() async {
+    final navigator = Navigator.of(context);
+    await _refreshHomeTownProgressionPerks();
+    if (!mounted) return;
     showModalBottomSheet(
-      context: context,
+      context: navigator.context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => StatefulBuilder(
@@ -2769,7 +2809,9 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
           width: 70,
           height: 70,
           child: GestureDetector(
-            onTap: _openHomeTown,
+            onTap: () {
+              _openHomeTown();
+            },
             child: Container(
               decoration: BoxDecoration(
                 color: Colors.teal[700]!.withValues(alpha: 0.95),
@@ -2998,11 +3040,13 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                 children: [
                   if (_isNapoleonAct1MapEnabled) ...[
                     InkWell(
-                      onTap: _openHomeTown,
+                      onTap: () {
+                        _openHomeTown();
+                      },
                       child: Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 8,
-                          vertical: 4,
+                          vertical: 6,
                         ),
                         decoration: BoxDecoration(
                           color: Colors.brown[600],
