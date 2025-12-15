@@ -75,6 +75,8 @@
 - Some encounters grant an additional **pre-determined offer** (consumable/relic/building) on completion.
 - Encounter selection can show you this offer before you commit to traveling there.
 
+- Shop encounters can allow you to **repair** previously destroyed cards for a gold cost.
+
 - Campaign mode also has **consumables** (e.g. healing, remove-card) that are stored in the campaign inventory and can be equipped/used between encounters.
 
 ---

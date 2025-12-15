@@ -95,6 +95,7 @@ class CampaignState {
   int health;
   int maxHealth;
   List<GameCard> deck;
+  List<GameCard> destroyedDeckCards;
   List<GameCard> inventory;
   List<String> relics;
   List<String> activeRelics;
@@ -130,6 +131,7 @@ class CampaignState {
     this.health = 50,
     this.maxHealth = 50,
     required this.deck,
+    List<GameCard>? destroyedDeckCards,
     List<GameCard>? inventory,
     List<String>? relics,
     List<String>? activeRelics,
@@ -154,6 +156,7 @@ class CampaignState {
     this.lastTravelLng,
     DateTime? lastUpdated,
   }) : inventory = inventory ?? [],
+       destroyedDeckCards = destroyedDeckCards ?? [],
        relics = relics ?? [],
        activeRelics =
            activeRelics ?? (relics != null ? [...relics] : <String>[]),
@@ -304,7 +307,30 @@ class CampaignState {
   }
 
   void destroyCardPermanently(String cardId) {
+    GameCard? removed;
+    for (final c in deck) {
+      if (c.id == cardId) {
+        removed = c;
+        break;
+      }
+    }
     deck = deck.where((c) => c.id != cardId).toList();
+    if (removed != null) {
+      if (!destroyedDeckCards.any((c) => c.id == cardId)) {
+        destroyedDeckCards = [...destroyedDeckCards, removed];
+      }
+    }
+  }
+
+  bool repairDestroyedCard(String cardId) {
+    final matches = destroyedDeckCards.where((c) => c.id == cardId).toList();
+    if (matches.isEmpty) return false;
+    final card = matches.first;
+    destroyedDeckCards = destroyedDeckCards
+        .where((c) => c.id != cardId)
+        .toList();
+    deck = [...deck, card];
+    return true;
   }
 
   void addCardFromInventory(String cardId) {
@@ -329,6 +355,7 @@ class CampaignState {
     'health': health,
     'maxHealth': maxHealth,
     'deck': deck.map((c) => c.toJson()).toList(),
+    'destroyedDeckCards': destroyedDeckCards.map((c) => c.toJson()).toList(),
     'inventory': inventory.map((c) => c.toJson()).toList(),
     'relics': relics,
     'activeRelics': activeRelics,
@@ -364,6 +391,9 @@ class CampaignState {
     maxHealth: json['maxHealth'] as int? ?? 50,
     deck: (json['deck'] as List)
         .map((c) => GameCard.fromJson(c as Map<String, dynamic>))
+        .toList(),
+    destroyedDeckCards: (json['destroyedDeckCards'] as List?)
+        ?.map((c) => GameCard.fromJson(c as Map<String, dynamic>))
         .toList(),
     inventory: (json['inventory'] as List?)
         ?.map((c) => GameCard.fromJson(c as Map<String, dynamic>))

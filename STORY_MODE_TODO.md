@@ -14,7 +14,7 @@ Changes to Story mode:
 12. ✅ Winning enctouner nodes,s should provide gold, and a pre-determined offer of items/relics/buildings (the buildings should be mainly around reducing the supply time of home town buildings) based on the node type (city/battle grounds/defence).
 13. The Player should be able to see the home town buildings, and the distance to them/the supply time of the buildings.
 14. ✅ The Player should be able to see the pre-determined reward of an encounter before selecting the encounter.
-15. Shop encounters should allow to "repair" cards that were destroyed in battle, for a price.
+15. ✅ Shop encounters should allow to "repair" cards that were destroyed in battle, for a price.
 16. After every encounter the Player should be able to buy stuff in the home town.
 17. The Encounter location should affect the middle and enemy base terrain, based on the true real location of the encounter on the real earth map.
 18. Some encounter nodes are conqurable cities. Conquered cities allow the player to play a defence encounter(as one of the selectable encounters after the conquer encounter), this is an easier encounter where the player has a +1 damage +1 hp to all cards for these types of battles. (They are mainly to "wait" for supply arrival)

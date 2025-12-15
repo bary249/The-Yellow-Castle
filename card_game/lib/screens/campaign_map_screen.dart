@@ -2145,6 +2145,12 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     );
   }
 
+  int _repairCostForCard(GameCard card) {
+    final rarityAdj = ((card.rarity - 1).clamp(0, 3)) * 25;
+    final statAdj = (card.damage + card.health).clamp(0, 50);
+    return 30 + rarityAdj + statAdj;
+  }
+
   void _openShop(Encounter encounter) async {
     final shopItems = ShopInventory.generateForAct(_campaign.act);
 
@@ -2238,69 +2244,153 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                   ],
                 ),
               ),
-              // Shop items
               Expanded(
-                child: ListView.builder(
+                child: ListView(
                   padding: const EdgeInsets.all(16),
-                  itemCount: shopItems.length,
-                  itemBuilder: (context, index) {
-                    final item = shopItems[index];
-                    final effectiveCost = _applyDiscount(
-                      item.cost,
-                      mods.shopDiscountPercent,
-                    );
-                    final canAfford = _campaign.gold >= effectiveCost;
-                    // Check if already owned relic
-                    final isOwned =
-                        item.type == ShopItemType.relic &&
-                        _campaign.hasRelic(item.id);
-
-                    return Card(
-                      color: Colors.grey[850],
-                      margin: const EdgeInsets.only(bottom: 12),
-                      child: ListTile(
-                        leading: _getShopItemIcon(item),
-                        title: Text(
-                          item.name,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
+                  children: [
+                    if (_campaign.destroyedDeckCards.isNotEmpty) ...[
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.build_circle,
+                            color: Colors.orangeAccent,
+                            size: 18,
                           ),
-                        ),
-                        subtitle: Text(
-                          item.description,
-                          style: TextStyle(color: Colors.grey[400]),
-                        ),
-                        trailing: isOwned
-                            ? const Icon(
-                                Icons.check_circle,
-                                color: Colors.green,
-                              )
-                            : ElevatedButton(
-                                onPressed: canAfford
-                                    ? () => _buyItem(
-                                        item,
-                                        effectiveCost,
-                                        setShopState,
-                                      )
-                                    : null,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: canAfford
-                                      ? Colors.amber
-                                      : Colors.grey,
-                                ),
-                                child: Text(
-                                  '$effectiveCost',
-                                  style: TextStyle(
-                                    color: canAfford
-                                        ? Colors.black
-                                        : Colors.grey[600],
+                          const SizedBox(width: 8),
+                          const Expanded(
+                            child: Text(
+                              'Repair Destroyed Cards',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      ..._campaign.destroyedDeckCards.map((card) {
+                        final cost = _repairCostForCard(card);
+                        final canAfford = _campaign.gold >= cost;
+                        return Card(
+                          color: Colors.grey[850],
+                          margin: const EdgeInsets.only(bottom: 12),
+                          child: ListTile(
+                            leading: Container(
+                              width: 48,
+                              height: 48,
+                              decoration: BoxDecoration(
+                                color: Colors.red[800],
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(
+                                Icons.construction,
+                                color: Colors.white,
+                              ),
+                            ),
+                            title: Text(
+                              card.name,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            subtitle: Text(
+                              '${card.element ?? "Neutral"} - DMG:${card.damage} HP:${card.health}',
+                              style: TextStyle(color: Colors.grey[400]),
+                            ),
+                            trailing: ElevatedButton(
+                              onPressed: canAfford
+                                  ? () {
+                                      if (!_campaign.spendGold(cost)) return;
+                                      final ok = _campaign.repairDestroyedCard(
+                                        card.id,
+                                      );
+                                      if (!ok) return;
+                                      setShopState(() {});
+                                      setState(() {});
+                                      _saveCampaign();
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            'Repaired ${card.name}',
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                  : null,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: canAfford
+                                    ? Colors.orange
+                                    : Colors.grey,
+                                foregroundColor: Colors.black,
+                              ),
+                              child: Text('$cost'),
+                            ),
+                          ),
+                        );
+                      }),
+                      const Divider(color: Colors.white24, height: 24),
+                    ],
+                    ...shopItems.map((item) {
+                      final effectiveCost = _applyDiscount(
+                        item.cost,
+                        mods.shopDiscountPercent,
+                      );
+                      final canAfford = _campaign.gold >= effectiveCost;
+                      final isOwned =
+                          item.type == ShopItemType.relic &&
+                          _campaign.hasRelic(item.id);
+
+                      return Card(
+                        color: Colors.grey[850],
+                        margin: const EdgeInsets.only(bottom: 12),
+                        child: ListTile(
+                          leading: _getShopItemIcon(item),
+                          title: Text(
+                            item.name,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          subtitle: Text(
+                            item.description,
+                            style: TextStyle(color: Colors.grey[400]),
+                          ),
+                          trailing: isOwned
+                              ? const Icon(
+                                  Icons.check_circle,
+                                  color: Colors.green,
+                                )
+                              : ElevatedButton(
+                                  onPressed: canAfford
+                                      ? () => _buyItem(
+                                          item,
+                                          effectiveCost,
+                                          setShopState,
+                                        )
+                                      : null,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: canAfford
+                                        ? Colors.amber
+                                        : Colors.grey,
+                                  ),
+                                  child: Text(
+                                    '$effectiveCost',
+                                    style: TextStyle(
+                                      color: canAfford
+                                          ? Colors.black
+                                          : Colors.grey[600],
+                                    ),
                                   ),
                                 ),
-                              ),
-                      ),
-                    );
-                  },
+                        ),
+                      );
+                    }),
+                  ],
                 ),
               ),
               // Leave button
