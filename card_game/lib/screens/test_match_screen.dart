@@ -14,6 +14,7 @@ import '../models/turn_snapshot.dart';
 
 import '../models/tile.dart';
 import '../models/game_board.dart';
+import '../models/player.dart';
 import '../data/hero_library.dart';
 import '../services/match_manager.dart';
 import '../services/simple_ai.dart';
@@ -36,6 +37,7 @@ class TestMatchScreen extends StatefulWidget {
   final List<GameCard>?
   customDeck; // Custom player deck (overrides default/saved)
   final int? playerCurrentHealth; // Starting HP for campaign mode
+  final int? playerMaxHealth; // Max HP for campaign mode
   final int
   playerDamageBonus; // Flat damage bonus applied to all player deck cards
   final int
@@ -58,6 +60,7 @@ class TestMatchScreen extends StatefulWidget {
     this.predefinedTerrainsOverride,
     this.customDeck,
     this.playerCurrentHealth,
+    this.playerMaxHealth,
     this.playerDamageBonus = 0,
     this.playerCardHealthBonus = 0,
     this.extraStartingDraw = 0,
@@ -86,7 +89,8 @@ class _CardFocusSwitchTarget {
   });
 }
 
-class _TestMatchScreenState extends State<TestMatchScreen> {
+class _TestMatchScreenState extends State<TestMatchScreen>
+    with SingleTickerProviderStateMixin {
   final MatchManager _matchManager = MatchManager();
   final SimpleAI _ai = SimpleAI();
   final AuthService _authService = AuthService();
@@ -94,6 +98,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   FirebaseFirestore? _firestore;
 
   final Set<String> _campaignDestroyedPlayerCardIds = <String>{};
+  final Map<String, int> _fallenPlayerCardCounts = <String, int>{};
 
   bool _isArtilleryCard(GameCard card) {
     if (card.abilities.contains('cannon')) return true;
@@ -125,6 +130,12 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
 
   final Map<String, Rect> _handCardRects = {};
   final Map<String, Rect> _boardCardRects = {};
+
+  final GlobalKey _matchViewStackKey = GlobalKey();
+  late final AnimationController _attackArrowController;
+  Offset? _attackArrowFrom;
+  Offset? _attackArrowTo;
+  bool _showAttackArrow = false;
 
   final Map<String, _CardFocusSwitchTarget> _handCardTargets = {};
   final Map<String, _CardFocusSwitchTarget> _boardCardTargets = {};
@@ -206,6 +217,10 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   @override
   void initState() {
     super.initState();
+    _attackArrowController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 450),
+    );
     try {
       _firestore = FirebaseFirestore.instance;
     } catch (e) {
@@ -236,7 +251,44 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     _cardFocusOverlay?.remove();
     _onlineStateSubscription?.cancel();
     _onlineGameManager?.dispose();
+    _attackArrowController.dispose();
     super.dispose();
+  }
+
+  Future<void> _playAttackArrow(
+    GameCard attacker,
+    int attackerRow,
+    int attackerCol,
+    GameCard target,
+    int targetRow,
+    int targetCol,
+  ) async {
+    if (!mounted) return;
+
+    final fromRect =
+        _boardCardRects['${attacker.id}_$attackerRow,$attackerCol'];
+    final toRect = _boardCardRects['${target.id}_$targetRow,$targetCol'];
+    if (fromRect == null || toRect == null) return;
+
+    final renderObject = _matchViewStackKey.currentContext?.findRenderObject();
+    if (renderObject is! RenderBox) return;
+
+    final from = renderObject.globalToLocal(fromRect.center);
+    final to = renderObject.globalToLocal(toRect.center);
+
+    setState(() {
+      _attackArrowFrom = from;
+      _attackArrowTo = to;
+      _showAttackArrow = true;
+    });
+
+    _attackArrowController.reset();
+    await _attackArrowController.forward();
+
+    if (!mounted) return;
+    setState(() {
+      _showAttackArrow = false;
+    });
   }
 
   Rect _globalRectForContext(BuildContext ctx) {
@@ -1091,7 +1143,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                             ),
                           ),
                           Icon(
-                            _getTerrainIcon(tileTerrain!),
+                            _getTerrainIcon(tileTerrain),
                             size: 12,
                             color: _getTerrainColor(tileTerrain),
                           ),
@@ -1132,7 +1184,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                               ),
                             ),
                             Icon(
-                              _getTerrainIcon(tileTerrain!),
+                              _getTerrainIcon(tileTerrain),
                               size: 12,
                               color: _getTerrainColor(tileTerrain),
                             ),
@@ -1222,9 +1274,9 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
-              _executeAttackTYC3(
+              await _executeAttackTYC3(
                 attacker,
                 target,
                 attackerRow,
@@ -1320,14 +1372,14 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
   }
 
   /// Execute the attack after confirmation
-  void _executeAttackTYC3(
+  Future<void> _executeAttackTYC3(
     GameCard attacker,
     GameCard target,
     int attackerRow,
     int attackerCol,
     int targetRow,
     int targetCol,
-  ) {
+  ) async {
     // Check if we need to move first to reach the target
     // Find the best position to attack from (may require moving)
     final reachableTargets = _matchManager.getReachableAttackTargets(
@@ -1385,6 +1437,20 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         currentCol = nextCol;
       }
     }
+
+    if (mounted) {
+      setState(() {});
+      await WidgetsBinding.instance.endOfFrame;
+    }
+
+    await _playAttackArrow(
+      attacker,
+      currentRow,
+      currentCol,
+      target,
+      targetRow,
+      targetCol,
+    );
 
     // NEW: Use OnlineGameManager for online mode if available
     if (_onlineGameManager != null) {
@@ -4676,16 +4742,21 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         : playerDeck;
 
     _campaignDestroyedPlayerCardIds.clear();
-    if (widget.forceCampaignDeck && !_isOnlineMode) {
-      _matchManager.onCardDestroyed = (card) {
-        final match = _matchManager.currentMatch;
-        if (match == null) return;
-        if (card.ownerId != match.player.id) return;
+    _fallenPlayerCardCounts.clear();
+    _matchManager.onCardDestroyed = (card) {
+      final match = _matchManager.currentMatch;
+      if (match == null) return;
+      if (card.ownerId != match.player.id) return;
+
+      // Always track fallen cards for Victory screen summary.
+      _fallenPlayerCardCounts[card.name] =
+          (_fallenPlayerCardCounts[card.name] ?? 0) + 1;
+
+      // Campaign needs IDs back to map for permanent destruction.
+      if (widget.forceCampaignDeck && !_isOnlineMode) {
         _campaignDestroyedPlayerCardIds.add(card.id);
-      };
-    } else {
-      _matchManager.onCardDestroyed = null;
-    }
+      }
+    };
 
     // Determine opponent name and deck
     final opponentNameFinal = _isOnlineMode
@@ -5859,6 +5930,17 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
     final playerWon = winner?.id == match.player.id;
     final isCampaignMode = widget.forceCampaignDeck;
 
+    final startPlayerBaseHp = widget.playerCurrentHealth ?? Player.maxBaseHP;
+    final maxPlayerBaseHp = widget.playerMaxHealth ?? startPlayerBaseHp;
+    final currentPlayerBaseHp = match.player.baseHP;
+    final damageTakenThisBattle = (startPlayerBaseHp - currentPlayerBaseHp)
+        .clamp(0, startPlayerBaseHp);
+
+    final fallenLines = _fallenPlayerCardCounts.entries
+        .where((e) => e.value > 0)
+        .map((e) => '${e.key} ×${e.value}')
+        .toList();
+
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -5876,8 +5958,46 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
           const SizedBox(height: 10),
           Text('${winner?.name} wins!'),
           const SizedBox(height: 20),
-          Text('Player Crystal: ${match.player.crystalHP} HP'),
-          Text('Opponent Crystal: ${match.opponent.crystalHP} HP'),
+          Text('Player Base: ${match.player.baseHP} HP'),
+          Text('Opponent Base: ${match.opponent.baseHP} HP'),
+          const SizedBox(height: 16),
+          Container(
+            width: 360,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.black.withValues(alpha: 0.12)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Battle Summary',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Base damage taken: $damageTakenThisBattle',
+                  style: const TextStyle(fontSize: 12, height: 1.25),
+                ),
+                Text(
+                  'Base HP: $currentPlayerBaseHp / $maxPlayerBaseHp',
+                  style: const TextStyle(fontSize: 12, height: 1.25),
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Fallen cards',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  fallenLines.isEmpty ? 'None' : fallenLines.join('\n'),
+                  style: const TextStyle(fontSize: 12, height: 1.25),
+                ),
+              ],
+            ),
+          ),
           const SizedBox(height: 20),
           Text('Total Turns: ${match.turnNumber}'),
           if (isCampaignMode && widget.campaignBuffLabels.isNotEmpty) ...[
@@ -5979,6 +6099,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
 
   Widget _buildMatchView(MatchState match) {
     return Stack(
+      key: _matchViewStackKey,
       children: [
         // Main content
         Column(
@@ -6028,6 +6149,26 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
             ),
           ],
         ),
+
+        if (_showAttackArrow &&
+            _attackArrowFrom != null &&
+            _attackArrowTo != null)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: AnimatedBuilder(
+                animation: _attackArrowController,
+                builder: (context, _) {
+                  return CustomPaint(
+                    painter: _AttackArrowPainter(
+                      from: _attackArrowFrom!,
+                      to: _attackArrowTo!,
+                      t: _attackArrowController.value,
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
 
         // Battle log toggle button
         Positioned(
@@ -7734,262 +7875,297 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
                               isPlayerCard &&
                               _matchManager.playerDamageBoost > 0;
 
-                          return GestureDetector(
-                            onTap: () => _onCardTapTYC3(
-                              card,
-                              row,
-                              col,
-                              isPlayerCard,
-                              isOpponent,
-                            ),
-                            onLongPress: () => _showCardDetails(card),
-                            child: Stack(
-                              children: [
-                                Container(
-                                  margin: const EdgeInsets.symmetric(
-                                    vertical: 1,
-                                  ),
-                                  padding: const EdgeInsets.all(3),
-                                  decoration: BoxDecoration(
-                                    color: isSelected
-                                        ? Colors.yellow[200]!
-                                        : isValidTarget
-                                        ? Colors.orange[200]!
-                                        : cardColor,
-                                    borderRadius: BorderRadius.circular(4),
-                                    boxShadow: isDamageBoosted
-                                        ? [
-                                            BoxShadow(
-                                              color: Colors.red.withOpacity(
-                                                0.6,
-                                              ),
-                                              blurRadius: 8,
-                                              spreadRadius: 2,
-                                            ),
-                                          ]
-                                        : null,
-                                    border: isSelected
-                                        ? Border.all(
-                                            color: Colors.yellow[700]!,
-                                            width: 3,
-                                          )
-                                        : isValidTarget
-                                        ? Border.all(
-                                            color: Colors.orange[700]!,
-                                            width: 2,
-                                          )
-                                        : isStaged
-                                        ? Border.all(
-                                            color: Colors.amber,
-                                            width: 2,
-                                          )
-                                        : Border.all(
-                                            color: rarityBorder,
-                                            width: _useTYC3Mode
-                                                ? 1
-                                                : (isFrontCard ? 2 : 1),
-                                          ),
-                                  ),
-                                  child: isConcealed
-                                      // Show hidden card placeholder
-                                      ? Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.center,
-                                          children: [
-                                            Text(
-                                              positionLabel ?? '',
-                                              style: TextStyle(
-                                                fontSize: 7,
-                                                fontWeight: FontWeight.bold,
-                                                color: Colors.grey[600],
-                                              ),
-                                            ),
-                                            const Text(
-                                              '🔮 Hidden',
-                                              style: TextStyle(
-                                                fontSize: 9,
-                                                fontWeight: FontWeight.bold,
-                                                color: Colors.white,
-                                              ),
-                                            ),
-                                          ],
-                                        )
-                                      // Show normal card info with position label
-                                      : Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            // Position label row
-                                            if (positionLabel != null)
-                                              Container(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                      horizontal: 3,
-                                                      vertical: 1,
-                                                    ),
-                                                margin: const EdgeInsets.only(
-                                                  bottom: 2,
-                                                ),
-                                                decoration: BoxDecoration(
-                                                  color: labelColor.withValues(
-                                                    alpha: 0.2,
+                          return Builder(
+                            builder: (ctx) {
+                              WidgetsBinding.instance.addPostFrameCallback((_) {
+                                if (!mounted) return;
+                                final rect = _globalRectForContext(ctx);
+                                if (rect == Rect.zero) return;
+                                final key = '${card.id}_$row,$col';
+                                _boardCardRects[key] = rect;
+                              });
+
+                              return GestureDetector(
+                                onTap: () => _onCardTapTYC3(
+                                  card,
+                                  row,
+                                  col,
+                                  isPlayerCard,
+                                  isOpponent,
+                                ),
+                                onLongPress: () => _showCardDetails(card),
+                                child: Stack(
+                                  children: [
+                                    Container(
+                                      margin: const EdgeInsets.symmetric(
+                                        vertical: 1,
+                                      ),
+                                      padding: const EdgeInsets.all(3),
+                                      decoration: BoxDecoration(
+                                        color: isSelected
+                                            ? Colors.yellow[200]!
+                                            : isValidTarget
+                                            ? Colors.orange[200]!
+                                            : cardColor,
+                                        borderRadius: BorderRadius.circular(4),
+                                        boxShadow: isDamageBoosted
+                                            ? [
+                                                BoxShadow(
+                                                  color: Colors.red.withOpacity(
+                                                    0.6,
                                                   ),
-                                                  borderRadius:
-                                                      BorderRadius.circular(3),
+                                                  blurRadius: 8,
+                                                  spreadRadius: 2,
                                                 ),
-                                                child: Text(
-                                                  positionLabel,
+                                              ]
+                                            : null,
+                                        border: isSelected
+                                            ? Border.all(
+                                                color: Colors.yellow[700]!,
+                                                width: 3,
+                                              )
+                                            : isValidTarget
+                                            ? Border.all(
+                                                color: Colors.orange[700]!,
+                                                width: 2,
+                                              )
+                                            : isStaged
+                                            ? Border.all(
+                                                color: Colors.amber,
+                                                width: 2,
+                                              )
+                                            : Border.all(
+                                                color: rarityBorder,
+                                                width: _useTYC3Mode
+                                                    ? 1
+                                                    : (isFrontCard ? 2 : 1),
+                                              ),
+                                      ),
+                                      child: isConcealed
+                                          // Show hidden card placeholder
+                                          ? Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.center,
+                                              children: [
+                                                Text(
+                                                  positionLabel ?? '',
                                                   style: TextStyle(
                                                     fontSize: 7,
                                                     fontWeight: FontWeight.bold,
-                                                    color: labelColor,
+                                                    color: Colors.grey[600],
                                                   ),
                                                 ),
-                                              ),
-                                            Row(
-                                              mainAxisSize: MainAxisSize.min,
+                                                const Text(
+                                                  '🔮 Hidden',
+                                                  style: TextStyle(
+                                                    fontSize: 9,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: Colors.white,
+                                                  ),
+                                                ),
+                                              ],
+                                            )
+                                          // Show normal card info with position label
+                                          : Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
                                               children: [
-                                                // Show damage as current/max
-                                                _buildStatIconWithMax(
-                                                  Icons.local_fire_department,
-                                                  card.currentDamage +
-                                                      (isDamageBoosted ? 1 : 0),
-                                                  card.damage,
-                                                  size: 10,
-                                                ),
-                                                if (isDamageBoosted)
-                                                  Padding(
-                                                    padding:
-                                                        const EdgeInsets.only(
-                                                          left: 1,
-                                                        ),
-                                                    child: Text(
-                                                      '(+1)',
-                                                      style: const TextStyle(
-                                                        fontSize: 8,
-                                                        color: Colors.red,
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                // Show attack AP cost only if > 1
-                                                if (card.attackAPCost > 1) ...[
-                                                  Text(
-                                                    ' (${card.attackAPCost}',
-                                                    style: TextStyle(
-                                                      fontSize: 8,
-                                                      color: Colors.orange[700],
-                                                    ),
-                                                  ),
-                                                  Icon(
-                                                    Icons.bolt,
-                                                    size: 8,
-                                                    color: Colors.orange[700],
-                                                  ),
-                                                  Text(
-                                                    ')',
-                                                    style: TextStyle(
-                                                      fontSize: 8,
-                                                      color: Colors.orange[700],
-                                                    ),
-                                                  ),
-                                                ],
-                                                const SizedBox(width: 2),
-                                                // Show HP as current/max
-                                                _buildStatIconWithMax(
-                                                  Icons.favorite,
-                                                  card.currentHealth,
-                                                  card.health,
-                                                  size: 10,
-                                                ),
-                                                const SizedBox(width: 2),
-                                                // TYC3: Show AP (current/max) and attack style icon
-                                                if (_useTYC3Mode) ...[
-                                                  _buildStatIconWithMax(
-                                                    Icons.bolt,
-                                                    card.currentAP,
-                                                    card.maxAP,
-                                                    size: 10,
-                                                  ),
-                                                  const SizedBox(width: 2),
-                                                  // Attack style: melee (sword), ranged (bow), far_attack (cannon)
-                                                  _buildAttackStyleIcon(
-                                                    card,
-                                                    size: 10,
-                                                  ),
-                                                ] else ...[
-                                                  _buildStatIcon(
-                                                    Icons.timer,
-                                                    card.tick,
-                                                    size: 10,
-                                                  ),
-                                                  const SizedBox(width: 2),
-                                                  _buildStatIcon(
-                                                    Icons.directions_run,
-                                                    card.moveSpeed,
-                                                    size: 10,
-                                                  ),
-                                                ],
-                                                // Element/Terrain icon
-                                                if (card.element != null) ...[
-                                                  const SizedBox(width: 2),
+                                                // Position label row
+                                                if (positionLabel != null)
                                                   Container(
                                                     padding:
-                                                        const EdgeInsets.all(2),
+                                                        const EdgeInsets.symmetric(
+                                                          horizontal: 3,
+                                                          vertical: 1,
+                                                        ),
+                                                    margin:
+                                                        const EdgeInsets.only(
+                                                          bottom: 2,
+                                                        ),
                                                     decoration: BoxDecoration(
-                                                      color: _getTerrainColor(
-                                                        card.element!,
-                                                      ),
+                                                      color: labelColor
+                                                          .withValues(
+                                                            alpha: 0.2,
+                                                          ),
                                                       borderRadius:
                                                           BorderRadius.circular(
                                                             3,
                                                           ),
                                                     ),
-                                                    child: Icon(
-                                                      _getTerrainIcon(
-                                                        card.element!,
+                                                    child: Text(
+                                                      positionLabel,
+                                                      style: TextStyle(
+                                                        fontSize: 7,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        color: labelColor,
                                                       ),
-                                                      size: 8,
-                                                      color: Colors.white,
                                                     ),
                                                   ),
-                                                ],
+                                                Row(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    // Show damage as current/max
+                                                    _buildStatIconWithMax(
+                                                      Icons
+                                                          .local_fire_department,
+                                                      card.currentDamage +
+                                                          (isDamageBoosted
+                                                              ? 1
+                                                              : 0),
+                                                      card.damage,
+                                                      size: 10,
+                                                    ),
+                                                    if (isDamageBoosted)
+                                                      Padding(
+                                                        padding:
+                                                            const EdgeInsets.only(
+                                                              left: 1,
+                                                            ),
+                                                        child: Text(
+                                                          '(+1)',
+                                                          style:
+                                                              const TextStyle(
+                                                                fontSize: 8,
+                                                                color:
+                                                                    Colors.red,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .bold,
+                                                              ),
+                                                        ),
+                                                      ),
+                                                    // Show attack AP cost only if > 1
+                                                    if (card.attackAPCost >
+                                                        1) ...[
+                                                      Text(
+                                                        ' (${card.attackAPCost}',
+                                                        style: TextStyle(
+                                                          fontSize: 8,
+                                                          color: Colors
+                                                              .orange[700],
+                                                        ),
+                                                      ),
+                                                      Icon(
+                                                        Icons.bolt,
+                                                        size: 8,
+                                                        color:
+                                                            Colors.orange[700],
+                                                      ),
+                                                      Text(
+                                                        ')',
+                                                        style: TextStyle(
+                                                          fontSize: 8,
+                                                          color: Colors
+                                                              .orange[700],
+                                                        ),
+                                                      ),
+                                                    ],
+                                                    const SizedBox(width: 2),
+                                                    // Show HP as current/max
+                                                    _buildStatIconWithMax(
+                                                      Icons.favorite,
+                                                      card.currentHealth,
+                                                      card.health,
+                                                      size: 10,
+                                                    ),
+                                                    const SizedBox(width: 2),
+                                                    // TYC3: Show AP (current/max) and attack style icon
+                                                    if (_useTYC3Mode) ...[
+                                                      _buildStatIconWithMax(
+                                                        Icons.bolt,
+                                                        card.currentAP,
+                                                        card.maxAP,
+                                                        size: 10,
+                                                      ),
+                                                      const SizedBox(width: 2),
+                                                      // Attack style: melee (sword), ranged (bow), far_attack (cannon)
+                                                      _buildAttackStyleIcon(
+                                                        card,
+                                                        size: 10,
+                                                      ),
+                                                    ] else ...[
+                                                      _buildStatIcon(
+                                                        Icons.timer,
+                                                        card.tick,
+                                                        size: 10,
+                                                      ),
+                                                      const SizedBox(width: 2),
+                                                      _buildStatIcon(
+                                                        Icons.directions_run,
+                                                        card.moveSpeed,
+                                                        size: 10,
+                                                      ),
+                                                    ],
+                                                    // Element/Terrain icon
+                                                    if (card.element !=
+                                                        null) ...[
+                                                      const SizedBox(width: 2),
+                                                      Container(
+                                                        padding:
+                                                            const EdgeInsets.all(
+                                                              2,
+                                                            ),
+                                                        decoration: BoxDecoration(
+                                                          color:
+                                                              _getTerrainColor(
+                                                                card.element!,
+                                                              ),
+                                                          borderRadius:
+                                                              BorderRadius.circular(
+                                                                3,
+                                                              ),
+                                                        ),
+                                                        child: Icon(
+                                                          _getTerrainIcon(
+                                                            card.element!,
+                                                          ),
+                                                          size: 8,
+                                                          color: Colors.white,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ],
+                                                ),
                                               ],
                                             ),
-                                          ],
-                                        ),
-                                ),
-                                // X button to remove staged cards
-                                if (isStaged &&
-                                    match.currentPhase !=
-                                        MatchPhase.combatPhase)
-                                  Positioned(
-                                    top: 0,
-                                    right: 0,
-                                    child: GestureDetector(
-                                      onTap: () =>
-                                          _removeCardFromTile(row, col, card),
-                                      child: Container(
-                                        padding: const EdgeInsets.all(2),
-                                        decoration: BoxDecoration(
-                                          color: Colors.red,
-                                          shape: BoxShape.circle,
-                                          border: Border.all(
-                                            color: Colors.white,
-                                            width: 1,
+                                    ),
+                                    // X button to remove staged cards
+                                    if (isStaged &&
+                                        match.currentPhase !=
+                                            MatchPhase.combatPhase)
+                                      Positioned(
+                                        top: 0,
+                                        right: 0,
+                                        child: GestureDetector(
+                                          onTap: () => _removeCardFromTile(
+                                            row,
+                                            col,
+                                            card,
+                                          ),
+                                          child: Container(
+                                            padding: const EdgeInsets.all(2),
+                                            decoration: BoxDecoration(
+                                              color: Colors.red,
+                                              shape: BoxShape.circle,
+                                              border: Border.all(
+                                                color: Colors.white,
+                                                width: 1,
+                                              ),
+                                            ),
+                                            child: const Icon(
+                                              Icons.close,
+                                              size: 10,
+                                              color: Colors.white,
+                                            ),
                                           ),
                                         ),
-                                        child: const Icon(
-                                          Icons.close,
-                                          size: 10,
-                                          color: Colors.white,
-                                        ),
                                       ),
-                                    ),
-                                  ),
-                              ],
-                            ),
+                                  ],
+                                ),
+                              );
+                            },
                           );
                         }).toList(),
                       ),
@@ -8269,36 +8445,46 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
             candidateData.isNotEmpty && _validTargets.contains(card);
 
         return Builder(
-          builder: (ctx) => GestureDetector(
-            onTap: () => _onCardTapTYC3(card, row, col, false, true),
-            onLongPress: () {
+          builder: (ctx) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted) return;
               final rect = _globalRectForContext(ctx);
-              final terrain = _matchManager.currentMatch?.board
-                  .getTile(row, col)
-                  .terrain;
-              _showCardFocus(card, rect, tileTerrain: terrain);
-            },
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
-              transform: Matrix4.identity()
-                ..scale(isBeingDraggedOver ? 1.15 : 1.0)
-                ..translate(0.0, isBeingDraggedOver ? -10.0 : 0.0),
-              transformAlignment: Alignment.center,
-              decoration: isBeingDraggedOver
-                  ? BoxDecoration(
-                      borderRadius: BorderRadius.circular(8),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.orange.withOpacity(0.7),
-                          blurRadius: 16,
-                          spreadRadius: 4,
-                        ),
-                      ],
-                    )
-                  : null,
-              child: cardWidget,
-            ),
-          ),
+              if (rect == Rect.zero) return;
+              final key = '${card.id}_$row,$col';
+              _boardCardRects[key] = rect;
+            });
+
+            return GestureDetector(
+              onTap: () => _onCardTapTYC3(card, row, col, false, true),
+              onLongPress: () {
+                final rect = _globalRectForContext(ctx);
+                final terrain = _matchManager.currentMatch?.board
+                    .getTile(row, col)
+                    .terrain;
+                _showCardFocus(card, rect, tileTerrain: terrain);
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                transform: Matrix4.identity()
+                  ..scale(isBeingDraggedOver ? 1.15 : 1.0)
+                  ..translate(0.0, isBeingDraggedOver ? -10.0 : 0.0),
+                transformAlignment: Alignment.center,
+                decoration: isBeingDraggedOver
+                    ? BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.orange.withOpacity(0.7),
+                            blurRadius: 16,
+                            spreadRadius: 4,
+                          ),
+                        ],
+                      )
+                    : null,
+                child: cardWidget,
+              ),
+            );
+          },
         );
       },
     );
@@ -9558,5 +9744,54 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         },
       ),
     );
+  }
+}
+
+class _AttackArrowPainter extends CustomPainter {
+  final Offset from;
+  final Offset to;
+  final double t;
+
+  _AttackArrowPainter({required this.from, required this.to, required this.t});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final clampedT = t.clamp(0.0, 1.0);
+    final end = Offset.lerp(from, to, clampedT)!;
+
+    final paint = Paint()
+      ..color = Colors.red.withOpacity(0.9)
+      ..strokeWidth = 4
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+
+    canvas.drawLine(from, end, paint);
+
+    final dir = (end - from);
+    final len = dir.distance;
+    if (len <= 0.01) return;
+
+    final angle = atan2(dir.dy, dir.dx);
+    const headLen = 14.0;
+    const headAngle = 0.55;
+
+    final p1 =
+        end +
+        Offset(cos(angle + pi - headAngle), sin(angle + pi - headAngle)) *
+            headLen;
+    final p2 =
+        end +
+        Offset(cos(angle + pi + headAngle), sin(angle + pi + headAngle)) *
+            headLen;
+
+    canvas.drawLine(end, p1, paint);
+    canvas.drawLine(end, p2, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _AttackArrowPainter oldDelegate) {
+    return oldDelegate.from != from ||
+        oldDelegate.to != to ||
+        oldDelegate.t != t;
   }
 }
