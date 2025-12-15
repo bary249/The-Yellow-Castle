@@ -1115,6 +1115,121 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
     );
   }
 
+  Future<void> _showDeliveryDetailsDialog({
+    required PendingCardDelivery delivery,
+    required String phase,
+    required int eta,
+    required int prodRemaining,
+  }) async {
+    final navigator = Navigator.of(context);
+    if (!mounted) return;
+
+    final buildingName = _homeTownBuildingName(delivery.sourceBuildingId);
+    final cardName = delivery.card.name;
+    final km = _campaign.distanceHomeToHeroKm();
+    final distanceText = km != null ? '${km.toStringAsFixed(0)} km' : 'unknown';
+
+    String statusText;
+    if (phase == 'Producing') {
+      statusText =
+          'Production: $prodRemaining encounter${prodRemaining == 1 ? '' : 's'} remaining';
+    } else {
+      final travelRemaining = eta;
+      statusText =
+          'En route: $travelRemaining encounter${travelRemaining == 1 ? '' : 's'} to arrival';
+    }
+
+    await showDialog<void>(
+      context: navigator.context,
+      barrierDismissible: true,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF2D2D2D),
+        title: Row(
+          children: [
+            Icon(
+              Icons.local_shipping,
+              color: phase == 'Producing'
+                  ? Colors.orangeAccent
+                  : Colors.greenAccent,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Supply Delivery',
+                style: const TextStyle(color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Cargo: $cardName',
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'From: $buildingName',
+              style: const TextStyle(color: Colors.white70),
+            ),
+            Text(
+              'To: Hero (current position)',
+              style: const TextStyle(color: Colors.white70),
+            ),
+            Text(
+              'Distance: $distanceText',
+              style: const TextStyle(color: Colors.white70),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: phase == 'Producing'
+                    ? Colors.orange.withValues(alpha: 0.2)
+                    : Colors.green.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    phase == 'Producing' ? Icons.build : Icons.directions,
+                    color: phase == 'Producing'
+                        ? Colors.orangeAccent
+                        : Colors.greenAccent,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      statusText,
+                      style: TextStyle(
+                        color: phase == 'Producing'
+                            ? Colors.orangeAccent
+                            : Colors.greenAccent,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _showEncounterRewardDialog({
     required String title,
     required String message,
@@ -4075,50 +4190,75 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
       );
     }
 
-    if (townLat != null && townLng != null && heroPos != null) {
+    if (townLat != null && townLng != null) {
       final km = _campaign.distanceHomeToHeroKm();
-      if (km != null && km > 0) {
-        for (final d in _campaign.pendingCardDeliveries) {
-          if (d.forcedArrivesAtEncounter != null) {
-            continue;
-          }
-          if (!_campaign.isDeliveryProduced(d)) {
-            continue;
-          }
+      for (final d in _campaign.pendingCardDeliveries) {
+        if (d.forcedArrivesAtEncounter != null) {
+          continue;
+        }
+
+        final isProduced = _campaign.isDeliveryProduced(d);
+        final eta = _campaign.encountersUntilDeliveryArrives(d);
+        final prodRemaining = _campaign.encountersUntilDeliveryProduced(d);
+
+        double lat;
+        double lng;
+        Color markerColor;
+        String phase;
+
+        if (!isProduced) {
+          // Still in production: show at Home Town
+          lat = townLat;
+          lng = townLng;
+          markerColor = Colors.orangeAccent;
+          phase = 'Producing';
+        } else if (heroPos != null && km != null && km > 0) {
+          // Traveling: interpolate position
           final frac = (d.traveledKm / km).clamp(0.0, 1.0);
-          final lat = townLat + ((heroPos.latitude - townLat) * frac);
-          final lng = townLng + ((heroPos.longitude - townLng) * frac);
-          markers.add(
-            Marker(
-              point: LatLng(lat, lng),
-              width: 28,
-              height: 28,
-              child: IgnorePointer(
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.greenAccent.withValues(alpha: 0.9),
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.black, width: 1.5),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.35),
-                        blurRadius: 6,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
-                  ),
-                  child: const Center(
-                    child: Icon(
-                      Icons.local_shipping,
-                      color: Colors.black,
-                      size: 16,
+          lat = townLat + ((heroPos.latitude - townLat) * frac);
+          lng = townLng + ((heroPos.longitude - townLng) * frac);
+          markerColor = Colors.greenAccent;
+          phase = 'Traveling';
+        } else {
+          continue;
+        }
+
+        markers.add(
+          Marker(
+            point: LatLng(lat, lng),
+            width: 32,
+            height: 32,
+            child: GestureDetector(
+              onTap: () => _showDeliveryDetailsDialog(
+                delivery: d,
+                phase: phase,
+                eta: eta,
+                prodRemaining: prodRemaining,
+              ),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: markerColor.withValues(alpha: 0.9),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.black, width: 1.5),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.35),
+                      blurRadius: 6,
+                      offset: const Offset(0, 3),
                     ),
+                  ],
+                ),
+                child: const Center(
+                  child: Icon(
+                    Icons.local_shipping,
+                    color: Colors.black,
+                    size: 18,
                   ),
                 ),
               ),
             ),
-          );
-        }
+          ),
+        );
       }
     }
 
