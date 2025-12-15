@@ -20,3 +20,8 @@ Changes to Story mode:
 18. ✅ Some encounter nodes are conqurable cities. Conquered cities allow the player to play a defence encounter(as one of the selectable encounters after the conquer encounter), this is an easier encounter where the player has a +1 damage +1 hp to all cards for these types of battles. (They are mainly to "wait" for supply arrival)
 19. ✅ We want to show the player the path they hasve passed (like in Ticket to ride kind of style).
 20. ✅ Add a "story" dialog after every encounter, that provides a short story about the encounter, and the player's actions in it, but based on the historical real background of the encounter location.
+21. We need to see where are hero is in the map, which will be the place of the last encounter/shop etc.
+22.make sure we show the player the path they hasve passed (like in Ticket to ride kind of style), also after the first encounter ( route should be from home town base to first encounter.), also color each path iteration in a slightly different color, and add the iteration number on it.
+23. Remove the "Would you like to visit home town" after every encounter.
+24. The player should not press "collect" in order ot receive the new cards, they should automatically be added ot the player card invetntory , and they should have a dialog that alerts about it when they are added.
+25. Change deck "Inventory" to "Reserves" 
