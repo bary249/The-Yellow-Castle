@@ -44,6 +44,8 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
 
   static const String _buildingTrainingGroundsId = 'building_training_grounds';
   static const String _buildingSupplyDepotId = 'building_supply_depot';
+  static const String _buildingOfficersAcademyId = 'building_officers_academy';
+  static const String _buildingWarCollegeId = 'building_war_college';
 
   final Random _random = Random();
 
@@ -676,6 +678,10 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
         return 'Training Grounds';
       case _buildingSupplyDepotId:
         return 'Supply Depot';
+      case _buildingOfficersAcademyId:
+        return 'Officers Academy';
+      case _buildingWarCollegeId:
+        return 'War College';
       default:
         return id;
     }
@@ -687,6 +693,10 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
         return 'Provides a common unit card once per encounter.';
       case _buildingSupplyDepotId:
         return 'Provides gold once per encounter.';
+      case _buildingOfficersAcademyId:
+        return 'Provides a rare unit card on a longer supply schedule.';
+      case _buildingWarCollegeId:
+        return 'Provides an epic unit card on a longer supply schedule.';
       default:
         return '';
     }
@@ -696,6 +706,10 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     switch (id) {
       case _buildingSupplyDepotId:
         return 120;
+      case _buildingOfficersAcademyId:
+        return 220;
+      case _buildingWarCollegeId:
+        return 320;
       default:
         return 0;
     }
@@ -707,6 +721,10 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
         return 1;
       case _buildingSupplyDepotId:
         return 1;
+      case _buildingOfficersAcademyId:
+        return 3;
+      case _buildingWarCollegeId:
+        return 4;
       default:
         return 1;
     }
@@ -764,6 +782,48 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
       }
       return;
     }
+
+    if (building.id == _buildingOfficersAcademyId) {
+      final candidates = ShopInventory.getCardsForAct(
+        _campaign.act,
+      ).where((c) => c.rarity == 2).toList();
+      if (candidates.isNotEmpty) {
+        candidates.shuffle(_random);
+        final card = candidates.first;
+        setState(() {
+          _campaign.addCard(card);
+          building.lastCollectedEncounter = _campaign.encounterNumber;
+        });
+        await _saveCampaign();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Officers Academy delivered: ${card.name}')),
+          );
+        }
+      }
+      return;
+    }
+
+    if (building.id == _buildingWarCollegeId) {
+      final candidates = ShopInventory.getCardsForAct(
+        _campaign.act,
+      ).where((c) => c.rarity == 3).toList();
+      if (candidates.isNotEmpty) {
+        candidates.shuffle(_random);
+        final card = candidates.first;
+        setState(() {
+          _campaign.addCard(card);
+          building.lastCollectedEncounter = _campaign.encounterNumber;
+        });
+        await _saveCampaign();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('War College delivered: ${card.name}')),
+          );
+        }
+      }
+      return;
+    }
   }
 
   Future<void> _showBuildBuildingDialog() async {
@@ -774,6 +834,8 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
       builder: (context) {
         final options = <String>[
           _buildingSupplyDepotId,
+          _buildingOfficersAcademyId,
+          _buildingWarCollegeId,
         ].where((id) => !alreadyBuilt.contains(id)).toList();
 
         return AlertDialog(
