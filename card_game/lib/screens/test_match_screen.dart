@@ -44,6 +44,7 @@ class TestMatchScreen extends StatefulWidget {
   playerCardHealthBonus; // Flat HP bonus applied to all player deck cards
   final int extraStartingDraw;
   final int artilleryDamageBonus;
+  final int cannonHealthBonus; // HP bonus for cannon/artillery cards
   final int heroAbilityDamageBoost;
   final int? opponentBaseHP;
 
@@ -65,6 +66,7 @@ class TestMatchScreen extends StatefulWidget {
     this.playerCardHealthBonus = 0,
     this.extraStartingDraw = 0,
     this.artilleryDamageBonus = 0,
+    this.cannonHealthBonus = 0,
     this.heroAbilityDamageBoost = 0,
     this.opponentBaseHP,
     this.campaignBuffLabels = const [],
@@ -5275,6 +5277,7 @@ class _TestMatchScreenState extends State<TestMatchScreen>
     final bool hasDeckBonuses =
         widget.playerDamageBonus != 0 ||
         widget.artilleryDamageBonus != 0 ||
+        widget.cannonHealthBonus != 0 ||
         widget.playerCardHealthBonus != 0;
     final Deck effectivePlayerDeck = hasDeckBonuses
         ? (widget.forceCampaignDeck
@@ -5282,14 +5285,20 @@ class _TestMatchScreenState extends State<TestMatchScreen>
                   id: 'custom_$id',
                   name: playerDeck.name,
                   cards: playerDeck.cards.map((c) {
-                    final artilleryBonus = _isArtilleryCard(c)
+                    final isArtillery = _isArtilleryCard(c);
+                    final artilleryDmgBonus = isArtillery
                         ? widget.artilleryDamageBonus
                         : 0;
-                    final totalBonus =
-                        widget.playerDamageBonus + artilleryBonus;
-                    final newDamage = c.damage + totalBonus;
-                    final newHealth = c.health + widget.playerCardHealthBonus;
-                    if (totalBonus == 0 && widget.playerCardHealthBonus == 0) {
+                    final cannonHpBonus = isArtillery
+                        ? widget.cannonHealthBonus
+                        : 0;
+                    final totalDmgBonus =
+                        widget.playerDamageBonus + artilleryDmgBonus;
+                    final totalHpBonus =
+                        widget.playerCardHealthBonus + cannonHpBonus;
+                    final newDamage = c.damage + totalDmgBonus;
+                    final newHealth = c.health + totalHpBonus;
+                    if (totalDmgBonus == 0 && totalHpBonus == 0) {
                       return c;
                     }
                     return c.copyWith(damage: newDamage, health: newHealth);
@@ -5300,14 +5309,20 @@ class _TestMatchScreenState extends State<TestMatchScreen>
                   playerId: id,
                   name: playerDeck.name,
                   cards: playerDeck.cards.map((c) {
-                    final artilleryBonus = _isArtilleryCard(c)
+                    final isArtillery = _isArtilleryCard(c);
+                    final artilleryDmgBonus = isArtillery
                         ? widget.artilleryDamageBonus
                         : 0;
-                    final totalBonus =
-                        widget.playerDamageBonus + artilleryBonus;
-                    final newDamage = c.damage + totalBonus;
-                    final newHealth = c.health + widget.playerCardHealthBonus;
-                    if (totalBonus == 0 && widget.playerCardHealthBonus == 0) {
+                    final cannonHpBonus = isArtillery
+                        ? widget.cannonHealthBonus
+                        : 0;
+                    final totalDmgBonus =
+                        widget.playerDamageBonus + artilleryDmgBonus;
+                    final totalHpBonus =
+                        widget.playerCardHealthBonus + cannonHpBonus;
+                    final newDamage = c.damage + totalDmgBonus;
+                    final newHealth = c.health + totalHpBonus;
+                    if (totalDmgBonus == 0 && totalHpBonus == 0) {
                       return c;
                     }
                     return c.copyWith(damage: newDamage, health: newHealth);

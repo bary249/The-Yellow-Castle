@@ -956,6 +956,10 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
       labels.add('Relic: Supply Routes (Home Town distance penalty -1)');
     }
 
+    if (_campaign.isRelicActive('campaign_map_relic')) {
+      labels.add('Relic: Map Relic (+1 HP to all Cannons)');
+    }
+
     if (defenseDamageBonus > 0) {
       labels.add('Defense: +$defenseDamageBonus damage this battle');
     }
@@ -2930,6 +2934,9 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
           playerCardHealthBonus: defenseHealthBonus,
           extraStartingDraw: mods.extraStartingDraw,
           artilleryDamageBonus: mods.artilleryDamageBonus,
+          cannonHealthBonus: _campaign.isRelicActive('campaign_map_relic')
+              ? 1
+              : 0,
           heroAbilityDamageBoost: mods.heroAbilityDamageBoost,
           playerCurrentHealth: _campaign.health,
           playerMaxHealth: _campaign.maxHealth,
@@ -3177,6 +3184,9 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
           playerDamageBonus: _campaign.globalDamageBonus,
           extraStartingDraw: mods.extraStartingDraw,
           artilleryDamageBonus: mods.artilleryDamageBonus,
+          cannonHealthBonus: _campaign.isRelicActive('campaign_map_relic')
+              ? 1
+              : 0,
           heroAbilityDamageBoost: mods.heroAbilityDamageBoost,
           opponentBaseHP: bossOpponentBaseHP,
           campaignBuffLabels: buffLabels,

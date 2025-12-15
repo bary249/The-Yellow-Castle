@@ -90,10 +90,10 @@ class ShopInventory {
       const ShopItem(
         id: 'campaign_map_relic',
         name: 'Map Relic',
-        description: 'A hidden cache discovered through exploration.',
+        description: '+1 max HP to all Cannons',
         cost: 0,
         type: ShopItemType.relic,
-        effect: 'map_relic',
+        effect: 'cannon_hp_1',
       ),
       const ShopItem(
         id: 'relic_supply_routes',
