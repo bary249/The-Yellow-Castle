@@ -9026,7 +9026,17 @@ class _TestMatchScreenState extends State<TestMatchScreen>
           _selectedCardCol = col;
           // Calculate valid targets when drag starts
           if (card.currentAP > 0) {
-            _validTargets = _matchManager.getValidTargetsTYC3(card, row, col);
+            // Medics get heal targets (friendly units), others get attack targets (enemies)
+            if (_isMedic(card)) {
+              final healTargets = _matchManager.getReachableHealTargets(
+                card,
+                row,
+                col,
+              );
+              _validTargets = healTargets.map((t) => t.target).toList();
+            } else {
+              _validTargets = _matchManager.getValidTargetsTYC3(card, row, col);
+            }
           } else {
             _validTargets = [];
           }
@@ -9103,12 +9113,16 @@ class _TestMatchScreenState extends State<TestMatchScreen>
         return _validTargets.contains(card);
       },
       onAcceptWithDetails: (details) {
-        // Show attack preview dialog when dropped on valid target
+        // Show attack/heal preview dialog when dropped on valid target
         final attackerCard = details.data;
         if (_selectedCardForAction == attackerCard &&
             _validTargets.contains(card)) {
-          // Use the same flow as tap-to-attack (shows preview dialog)
-          _attackTargetTYC3(card, row, col);
+          // Medics heal friendly units, others attack enemies
+          if (_isMedic(attackerCard)) {
+            _healTargetTYC3(card, row, col);
+          } else {
+            _attackTargetTYC3(card, row, col);
+          }
         }
       },
       builder: (context, candidateData, rejectedData) {
