@@ -701,8 +701,31 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     }
   }
 
+  int _buildingSupplyEveryEncounters(HomeTownBuilding building) {
+    switch (building.id) {
+      case _buildingTrainingGroundsId:
+        return 1;
+      case _buildingSupplyDepotId:
+        return 1;
+      default:
+        return 1;
+    }
+  }
+
+  String _buildingSupplyStatusText(HomeTownBuilding building) {
+    final interval = _buildingSupplyEveryEncounters(building);
+    final sinceLast =
+        _campaign.encounterNumber - building.lastCollectedEncounter;
+    final remaining = interval - sinceLast;
+    if (remaining <= 0) return 'Ready';
+    if (remaining == 1) return 'Ready in 1 encounter';
+    return 'Ready in $remaining encounters';
+  }
+
   bool _canCollectBuilding(HomeTownBuilding building) {
-    return building.lastCollectedEncounter < _campaign.encounterNumber;
+    final interval = _buildingSupplyEveryEncounters(building);
+    return (_campaign.encounterNumber - building.lastCollectedEncounter) >=
+        interval;
   }
 
   Future<void> _collectBuilding(HomeTownBuilding building) async {
@@ -958,7 +981,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                   else
                     ...buildings.map((b) {
                       final canCollect = _canCollectBuilding(b);
-                      final label = canCollect ? 'Collect' : 'Collected';
+                      final label = canCollect ? 'Collect' : 'Waiting';
 
                       return Card(
                         color: Colors.grey[850],
@@ -969,7 +992,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                             style: const TextStyle(color: Colors.white),
                           ),
                           subtitle: Text(
-                            _homeTownBuildingDescription(b.id),
+                            '${_homeTownBuildingDescription(b.id)}\n${_buildingSupplyStatusText(b)}',
                             style: const TextStyle(color: Colors.white70),
                           ),
                           trailing: ElevatedButton(
@@ -989,10 +1012,6 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                       );
                     }),
                   const SizedBox(height: 8),
-                  const Text(
-                    'No effects yet — upgrades will matter once we add buildings & supply.',
-                    style: TextStyle(color: Colors.white70, fontSize: 12),
-                  ),
                 ],
               ),
             ),
