@@ -73,6 +73,7 @@
 - Hero progression unlocks can also grant **Home Town perks**.
 - When a Home Town building delivers a reward, the game shows what arrived.
 - Some encounters grant an additional **pre-determined offer** (consumable/relic/building) on completion.
+- Encounter selection can show you this offer before you commit to traveling there.
 
 - Campaign mode also has **consumables** (e.g. healing, remove-card) that are stored in the campaign inventory and can be equipped/used between encounters.
 

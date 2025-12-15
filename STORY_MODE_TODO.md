@@ -13,7 +13,7 @@ Changes to Story mode:
 11. ✅ A dialog should pop for the player each time a new card/gold/item/relic is provided to the player from their home town.
 12. ✅ Winning enctouner nodes,s should provide gold, and a pre-determined offer of items/relics/buildings (the buildings should be mainly around reducing the supply time of home town buildings) based on the node type (city/battle grounds/defence).
 13. The Player should be able to see the home town buildings, and the distance to them/the supply time of the buildings.
-14. The Player should be able to see the pre-determined reward of an encounter before selecting the encounter.
+14. ✅ The Player should be able to see the pre-determined reward of an encounter before selecting the encounter.
 15. Shop encounters should allow to "repair" cards that were destroyed in battle, for a price.
 16. After every encounter the Player should be able to buy stuff in the home town.
 17. The Encounter location should affect the middle and enemy base terrain, based on the true real location of the encounter on the real earth map.

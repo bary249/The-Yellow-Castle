@@ -924,6 +924,56 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     );
   }
 
+  String _encounterOfferLabel(Encounter encounter) {
+    final type = encounter.offerType;
+    final id = encounter.offerId;
+    if (type == null || id == null || id.isEmpty) return '';
+    final amount = encounter.offerAmount ?? 1;
+
+    if (type == 'consumable') {
+      final all = ShopInventory.getAllConsumables();
+      final item = all.where((e) => e.id == id).toList();
+      final name = item.isNotEmpty ? item.first.name : id;
+      return amount > 1 ? 'Offer: $name ×$amount' : 'Offer: $name';
+    }
+    if (type == 'relic') {
+      final all = ShopInventory.getAllRelics();
+      final item = all.where((e) => e.id == id).toList();
+      final name = item.isNotEmpty ? item.first.name : id;
+      return 'Offer: $name';
+    }
+    if (type == 'building') {
+      return 'Offer: ${_homeTownBuildingName(id)}';
+    }
+    return 'Offer: $id';
+  }
+
+  IconData _encounterOfferIcon(Encounter encounter) {
+    switch (encounter.offerType) {
+      case 'consumable':
+        return Icons.local_hospital;
+      case 'relic':
+        return Icons.auto_awesome;
+      case 'building':
+        return Icons.apartment;
+      default:
+        return Icons.card_giftcard;
+    }
+  }
+
+  Color _encounterOfferColor(Encounter encounter) {
+    switch (encounter.offerType) {
+      case 'consumable':
+        return Colors.greenAccent;
+      case 'relic':
+        return Colors.purpleAccent;
+      case 'building':
+        return Colors.tealAccent;
+      default:
+        return Colors.amber;
+    }
+  }
+
   Future<void> _collectBuilding(HomeTownBuilding building) async {
     if (!_canCollectBuilding(building)) return;
 
@@ -2852,6 +2902,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
   }
 
   Future<void> _confirmEncounterOnMap(Encounter encounter, LatLng pos) async {
+    final offerLabel = _encounterOfferLabel(encounter);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -2889,6 +2940,25 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                   Text(
                     '+${encounter.goldReward} Gold',
                     style: const TextStyle(color: Colors.amber),
+                  ),
+                ],
+              ),
+            ],
+            if (offerLabel.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Icon(
+                    _encounterOfferIcon(encounter),
+                    color: _encounterOfferColor(encounter),
+                    size: 18,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      offerLabel,
+                      style: const TextStyle(color: Colors.white70),
+                    ),
                   ),
                 ],
               ),
@@ -3371,6 +3441,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
 
   Widget _buildChapterCard(Encounter encounter, int index) {
     final colors = _getEncounterColors(encounter.type);
+    final offerLabel = _encounterOfferLabel(encounter);
 
     return GestureDetector(
       onTap: () => _onEncounterSelected(encounter),
@@ -3470,6 +3541,45 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                                 fontSize: 10,
                                 fontWeight: FontWeight.bold,
                                 color: Colors.amber[900],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    if (offerLabel.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.06),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.brown[600]!.withValues(alpha: 0.25),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              _encounterOfferIcon(encounter),
+                              color: _encounterOfferColor(encounter),
+                              size: 14,
+                            ),
+                            const SizedBox(width: 4),
+                            Flexible(
+                              child: Text(
+                                offerLabel,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.brown[900],
+                                ),
                               ),
                             ),
                           ],
