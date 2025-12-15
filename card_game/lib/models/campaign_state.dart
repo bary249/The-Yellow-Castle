@@ -125,17 +125,20 @@ class HomeTownBuilding {
   final String id;
   int level;
   int lastCollectedEncounter;
+  String? preferredTerrain;
 
   HomeTownBuilding({
     required this.id,
     this.level = 1,
     this.lastCollectedEncounter = -1,
+    this.preferredTerrain,
   });
 
   Map<String, dynamic> toJson() => {
     'id': id,
     'level': level,
     'lastCollectedEncounter': lastCollectedEncounter,
+    'preferredTerrain': preferredTerrain,
   };
 
   factory HomeTownBuilding.fromJson(Map<String, dynamic> json) =>
@@ -144,6 +147,7 @@ class HomeTownBuilding {
         level: (json['level'] as num?)?.toInt() ?? 1,
         lastCollectedEncounter:
             (json['lastCollectedEncounter'] as num?)?.toInt() ?? -1,
+        preferredTerrain: json['preferredTerrain'] as String?,
       );
 }
 
@@ -480,6 +484,7 @@ class CampaignState {
             id: b.id,
             level: b.level,
             lastCollectedEncounter: encounterNumber,
+            preferredTerrain: b.preferredTerrain,
           ),
         )
         .toList();

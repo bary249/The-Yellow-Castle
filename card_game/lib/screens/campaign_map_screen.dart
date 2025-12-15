@@ -1809,8 +1809,9 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
   Future<RewardEvent?> _collectBuilding(
     HomeTownBuilding building, {
     bool showDialog = true,
+    bool forceStart = false,
   }) async {
-    if (!_canCollectBuilding(building)) return null;
+    if (!forceStart && !_canCollectBuilding(building)) return null;
 
     if (building.id == _buildingTrainingGroundsId) {
       // Training Grounds produces only common cards (rarity 1)
@@ -1869,12 +1870,22 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
       ).where((c) => c.rarity == 2).toList();
       if (allCandidates.isEmpty) return null;
 
-      // Show terrain picker for higher-rarity buildings
-      final selectedTerrain = await _showTerrainPickerDialog(
-        buildingName: 'Officers Academy',
-        availableCards: allCandidates,
-      );
-      if (selectedTerrain == null) return null; // User cancelled
+      // Use preferred terrain during auto/forced production to avoid going idle.
+      // Only prompt when user-initiated.
+      final String? selectedTerrain = forceStart
+          ? (building.preferredTerrain ??
+                await _showTerrainPickerDialog(
+                  buildingName: 'Officers Academy',
+                  availableCards: allCandidates,
+                ))
+          : await _showTerrainPickerDialog(
+              buildingName: 'Officers Academy',
+              availableCards: allCandidates,
+            );
+      if (selectedTerrain == null) return null; // User cancelled or no terrain
+
+      // Persist selection so future auto-cycles can reuse it.
+      building.preferredTerrain = selectedTerrain;
 
       final candidates = allCandidates
           .where((c) => c.element == selectedTerrain)
@@ -1927,12 +1938,22 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
       ).where((c) => c.rarity == 3).toList();
       if (allCandidates.isEmpty) return null;
 
-      // Show terrain picker for higher-rarity buildings
-      final selectedTerrain = await _showTerrainPickerDialog(
-        buildingName: 'War College',
-        availableCards: allCandidates,
-      );
-      if (selectedTerrain == null) return null; // User cancelled
+      // Use preferred terrain during auto/forced production to avoid going idle.
+      // Only prompt when user-initiated.
+      final String? selectedTerrain = forceStart
+          ? (building.preferredTerrain ??
+                await _showTerrainPickerDialog(
+                  buildingName: 'War College',
+                  availableCards: allCandidates,
+                ))
+          : await _showTerrainPickerDialog(
+              buildingName: 'War College',
+              availableCards: allCandidates,
+            );
+      if (selectedTerrain == null) return null; // User cancelled or no terrain
+
+      // Persist selection so future auto-cycles can reuse it.
+      building.preferredTerrain = selectedTerrain;
 
       final candidates = allCandidates
           .where((c) => c.element == selectedTerrain)
@@ -2105,11 +2126,18 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
       // increased since the previous cycle started.
       // Also start new production if: no unit producing AND (has traveling unit OR can collect)
       final canStartNow =
-          arrivedBuildingIds.contains(b.id) ||
-          (!hasProducingUnit && (hasTravelingUnit || _canCollectBuilding(b)));
+          !hasProducingUnit &&
+          (arrivedBuildingIds.contains(b.id) ||
+              (hasTravelingUnit || _canCollectBuilding(b)));
       if (!canStartNow) continue;
 
-      final event = await _collectBuilding(b, showDialog: showDialogs);
+      // If a unit is already traveling for this building, start a new production
+      // cycle immediately (no idle).
+      final event = await _collectBuilding(
+        b,
+        showDialog: showDialogs,
+        forceStart: hasTravelingUnit || arrivedBuildingIds.contains(b.id),
+      );
       if (event != null) events.add(event);
       if (!mounted) return <RewardEvent>[];
     }
@@ -2538,13 +2566,23 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
                       final isProductionBuilding =
                           b.id != _buildingSupplyDepotId;
 
-                      // Get currently producing card for this building (if any)
-                      final producingDelivery = _campaign.pendingCardDeliveries
+                      // Prefer the currently producing card (if any) for the
+                      // click-to-details behavior; otherwise fall back to the
+                      // traveling card.
+                      final deliveriesForBuilding = _campaign
+                          .pendingCardDeliveries
                           .where((d) => d.sourceBuildingId == b.id)
                           .toList();
-                      final currentCard = producingDelivery.isNotEmpty
-                          ? producingDelivery.first.card
-                          : null;
+                      PendingCardDelivery? producing;
+                      PendingCardDelivery? traveling;
+                      for (final d in deliveriesForBuilding) {
+                        if (_campaign.encountersUntilDeliveryProduced(d) > 0) {
+                          producing ??= d;
+                        } else {
+                          traveling ??= d;
+                        }
+                      }
+                      final currentCard = (producing ?? traveling)?.card;
 
                       return Card(
                         color: Colors.grey[850],
