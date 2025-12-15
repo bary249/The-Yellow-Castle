@@ -70,6 +70,7 @@
 - [x] Implement node types: Battle, Elite, Shop, Rest, Event, Boss
 - [x] Basic navigation and node completion
 - [x] Connect battles to actual enemy decks (Act 1 Austrian deck)
+- [x] Act transitions: carry over cards/relics/items/buildings; revive all cards; restore base HP; update Home Town + map theater per act (Acts 2-3)
 - [ ] Test path generation and navigation
 
 ### Phase 6: Shops & Rest Sites

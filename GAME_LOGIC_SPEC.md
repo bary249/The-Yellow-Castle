@@ -130,6 +130,13 @@ This document captures the **implemented and intended logic** of the game, mappe
     - Act 2: `Murad Bey`
     - Act 3: `Coalition Forces`
 
+- Act transitions (Campaign/Story Mode):
+  - When completing an act and advancing to the next one:
+    - The campaign **carries over** the player's cards, relics, consumables/items, and Home Town buildings.
+    - All fallen cards are **revived** (moved back into the deck and healed).
+    - Player base HP is restored to **full**.
+    - The act's Home Town location + end node are updated to match the new theater (affects distance-based supply and terrain seeding).
+
 - Shop encounters can offer **repairs** for previously destroyed campaign deck cards (for a gold cost).
 - After an encounter completes, the player can optionally visit the Home Town before selecting the next destination.
 - Home Town UI can display distance from town and a per-building supply-time breakdown.

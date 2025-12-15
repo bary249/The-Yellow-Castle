@@ -5093,10 +5093,24 @@ class _TestMatchScreenState extends State<TestMatchScreen>
       // Define custom relic for campaign (if applicable)
       String? relicName;
       String? relicDescription;
-      if (widget.forceCampaignDeck && widget.campaignAct == 1) {
-        relicName = 'Austrian Supply Wagon';
-        relicDescription =
-            'Supplies captured from the Austrian army. Contains a useful card.';
+      if (widget.forceCampaignDeck) {
+        switch (widget.campaignAct) {
+          case 1:
+            relicName = 'Austrian Supply Wagon';
+            relicDescription =
+                'Supplies captured from the Austrian army. Contains a useful card.';
+            break;
+          case 2:
+            relicName = 'Desert Cache';
+            relicDescription =
+                'A hidden store found in the sands. Contains a useful card.';
+            break;
+          case 3:
+            relicName = 'Coalition Stockpile';
+            relicDescription =
+                'Captured enemy supplies. Contains a useful card.';
+            break;
+        }
       }
 
       _matchManager.startMatchTYC3(

@@ -121,12 +121,17 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
     return distanceMeters / 1000.0;
   }
 
-  static const List<String> _locationTerrainPool = [
-    'Woods',
-    'Lake',
-    'Desert',
-    'Marsh',
-  ];
+  static List<String> _locationTerrainPoolForAct(int act) {
+    switch (act) {
+      case 2:
+        return const ['Desert', 'Desert', 'Desert', 'Marsh', 'Lake'];
+      case 3:
+        return const ['Woods', 'Woods', 'Lake', 'Marsh'];
+      default:
+        return const ['Woods', 'Lake', 'Desert', 'Marsh'];
+    }
+  }
+
   int _homeTownBuildDiscountPercent = 0;
   bool _homeTownReduceDistancePenalty = false;
 
@@ -676,16 +681,18 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
     await _saveCampaign();
   }
 
-  bool get _isNapoleonAct1MapEnabled {
-    return widget.leaderId == 'napoleon' && _campaign.act == 1;
+  bool get _isNapoleonRealMapEnabled {
+    return widget.leaderId == 'napoleon' &&
+        _campaign.act >= 1 &&
+        _campaign.act <= 3;
   }
 
   void _initMapRelicIfNeeded() {
-    if (!_isNapoleonAct1MapEnabled) return;
+    if (!_isNapoleonRealMapEnabled) return;
     if (_campaign.mapRelicDiscovered) return;
     if (_campaign.mapRelicLat != null && _campaign.mapRelicLng != null) return;
 
-    final pool = _act1MapRelicCandidateLocations();
+    final pool = _mapRelicCandidateLocationsForAct(_campaign.act);
     if (pool.isEmpty) return;
 
     final base = pool[_random.nextInt(pool.length)];
@@ -699,7 +706,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
   }
 
   void _initHomeTownIfNeeded() {
-    if (!_isNapoleonAct1MapEnabled) return;
+    if (!_isNapoleonRealMapEnabled) return;
     if (_campaign.homeTownName != null &&
         _campaign.homeTownLat != null &&
         _campaign.homeTownLng != null) {
@@ -722,15 +729,34 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
       return;
     }
 
-    // Napoleon Act 1 home base: Nice.
-    _campaign.homeTownName = 'Nice';
-    _campaign.homeTownLat = 43.695;
-    _campaign.homeTownLng = 7.264;
-    _campaign.homeTownLevel = _campaign.homeTownLevel.clamp(1, 99);
+    switch (_campaign.act) {
+      case 2:
+        _campaign.homeTownName = 'Alexandria';
+        _campaign.homeTownLat = 31.2001;
+        _campaign.homeTownLng = 29.9187;
 
-    // Campaign end node: Milan (boss location threshold check)
-    _campaign.campaignEndLat = 45.4642;
-    _campaign.campaignEndLng = 9.1900;
+        _campaign.campaignEndLat = 30.0444; // Cairo
+        _campaign.campaignEndLng = 31.2357;
+        break;
+      case 3:
+        _campaign.homeTownName = 'Paris';
+        _campaign.homeTownLat = 48.8566;
+        _campaign.homeTownLng = 2.3522;
+
+        _campaign.campaignEndLat = 49.1390; // Austerlitz (Slavkov u Brna)
+        _campaign.campaignEndLng = 16.7630;
+        break;
+      default:
+        _campaign.homeTownName = 'Nice';
+        _campaign.homeTownLat = 43.695;
+        _campaign.homeTownLng = 7.264;
+
+        _campaign.campaignEndLat = 45.4642; // Milan
+        _campaign.campaignEndLng = 9.1900;
+        break;
+    }
+
+    _campaign.homeTownLevel = _campaign.homeTownLevel.clamp(1, 99);
 
     _ensureHomeTownStarterBuildings();
   }
@@ -750,23 +776,40 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
     ];
   }
 
-  List<LatLng> _act1MapRelicCandidateLocations() {
-    // A handful of plausible Act 1 (Italy 1796) locations.
-    // The exact route is not enforced; this just keeps the relic in-theater.
-    return const [
-      LatLng(44.107, 7.669), // Tende / Alps pass area
-      LatLng(44.384, 7.823), // Mondovì
-      LatLng(44.418, 8.869), // Genoa outskirts
-      LatLng(44.913, 8.616), // Alessandria
-      LatLng(45.041, 7.657), // Turin outskirts
-      LatLng(45.184, 9.159), // Pavia area
-      LatLng(45.309, 9.503), // Lodi
-      LatLng(45.263, 10.992), // Mantua
-    ];
+  List<LatLng> _mapRelicCandidateLocationsForAct(int act) {
+    switch (act) {
+      case 2:
+        return const [
+          LatLng(31.2001, 29.9187), // Alexandria
+          LatLng(31.3986, 30.4170), // Rosetta
+          LatLng(31.4165, 31.8144), // Damietta
+          LatLng(30.0131, 31.2089), // Giza
+          LatLng(30.0444, 31.2357), // Cairo
+        ];
+      case 3:
+        return const [
+          LatLng(49.1193, 6.1757), // Metz
+          LatLng(48.5734, 7.7521), // Strasbourg
+          LatLng(48.4011, 9.9876), // Ulm
+          LatLng(48.2082, 16.3738), // Vienna
+          LatLng(49.1951, 16.6068), // Brno
+        ];
+      default:
+        return const [
+          LatLng(44.107, 7.669),
+          LatLng(44.384, 7.823),
+          LatLng(44.418, 8.869),
+          LatLng(44.913, 8.616),
+          LatLng(45.041, 7.657),
+          LatLng(45.184, 9.159),
+          LatLng(45.309, 9.503),
+          LatLng(45.263, 10.992),
+        ];
+    }
   }
 
   Future<void> _maybeDiscoverMapRelicAfterEncounter(Encounter encounter) async {
-    if (!_isNapoleonAct1MapEnabled) return;
+    if (!_isNapoleonRealMapEnabled) return;
     if (_campaign.mapRelicDiscovered) return;
     if (_campaign.hasRelic(_campaignMapRelicId)) return;
 
@@ -2261,17 +2304,19 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
     final seed = (seedLat * 1000003) ^ seedLng;
     final rng = Random(seed);
 
+    final pool = _locationTerrainPoolForAct(_campaign.act);
+
     String pickFrom(List<String> values) {
-      if (values.isEmpty) return _locationTerrainPool.first;
+      if (values.isEmpty) return pool.first;
       return values[rng.nextInt(values.length)];
     }
 
     // Enemy base and middle terrain are determined from location.
-    final enemyBaseTerrain = pickFrom(_locationTerrainPool);
-    var middleTerrain = pickFrom(_locationTerrainPool);
-    if (middleTerrain == enemyBaseTerrain && _locationTerrainPool.length > 1) {
+    final enemyBaseTerrain = pickFrom(pool);
+    var middleTerrain = pickFrom(pool);
+    if (middleTerrain == enemyBaseTerrain && pool.length > 1) {
       middleTerrain = pickFrom(
-        _locationTerrainPool.where((t) => t != enemyBaseTerrain).toList(),
+        pool.where((t) => t != enemyBaseTerrain).toList(),
       );
     }
 
@@ -2305,14 +2350,37 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
     (name: 'Mantua', pos: LatLng(45.263, 10.992)),
   ];
 
+  static const List<({String name, LatLng pos})> _act2NamedLocations = [
+    (name: 'Alexandria', pos: LatLng(31.2001, 29.9187)),
+    (name: 'Rosetta', pos: LatLng(31.3986, 30.4170)),
+    (name: 'Damietta', pos: LatLng(31.4165, 31.8144)),
+    (name: 'Giza', pos: LatLng(30.0131, 31.2089)),
+    (name: 'Cairo', pos: LatLng(30.0444, 31.2357)),
+  ];
+
+  static const List<({String name, LatLng pos})> _act3NamedLocations = [
+    (name: 'Paris', pos: LatLng(48.8566, 2.3522)),
+    (name: 'Metz', pos: LatLng(49.1193, 6.1757)),
+    (name: 'Strasbourg', pos: LatLng(48.5734, 7.7521)),
+    (name: 'Ulm', pos: LatLng(48.4011, 9.9876)),
+    (name: 'Vienna', pos: LatLng(48.2082, 16.3738)),
+    (name: 'Brno', pos: LatLng(49.1951, 16.6068)),
+    (name: 'Austerlitz', pos: LatLng(49.1390, 16.7630)),
+  ];
+
   String _nearestPlaceNameFor(double lat, double lng) {
-    if (_act1NamedLocations.isEmpty) return 'Unknown location';
+    final pool = switch (_campaign.act) {
+      2 => _act2NamedLocations,
+      3 => _act3NamedLocations,
+      _ => _act1NamedLocations,
+    };
+    if (pool.isEmpty) return 'Unknown location';
     final target = LatLng(lat, lng);
     final distance = const Distance();
-    var bestName = _act1NamedLocations.first.name;
-    var bestMeters = distance(target, _act1NamedLocations.first.pos);
+    var bestName = pool.first.name;
+    var bestMeters = distance(target, pool.first.pos);
 
-    for (final p in _act1NamedLocations.skip(1)) {
+    for (final p in pool.skip(1)) {
       final d = distance(target, p.pos);
       if (d < bestMeters) {
         bestMeters = d;
@@ -2391,7 +2459,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
   }
 
   Future<void> _showStoryAfterEncounter(Encounter encounter) async {
-    if (!_isNapoleonAct1MapEnabled) return;
+    if (!_isNapoleonRealMapEnabled) return;
     if (!mounted) return;
 
     final navigator = Navigator.of(context);
@@ -2987,6 +3055,9 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
       _generator = EncounterGenerator(act: _campaign.act);
       _generateNewChoices();
     });
+    _initHomeTownIfNeeded();
+    _initMapRelicIfNeeded();
+    _refreshHomeTownProgressionPerks();
     _saveCampaign();
     _showActIntroDialog();
   }
@@ -3880,7 +3951,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
               Expanded(
                 child: Stack(
                   children: [
-                    (widget.leaderId == 'napoleon' && _campaign.act == 1)
+                    (_isNapoleonRealMapEnabled)
                         ? _buildRealMapSelection()
                         : _buildChapterSelection(),
                     Positioned(
@@ -3967,7 +4038,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
                         },
                       ),
                     ),
-                    if (widget.leaderId == 'napoleon' && _campaign.act == 1)
+                    if (_isNapoleonRealMapEnabled)
                       Positioned(
                         bottom: 16,
                         right: 16,
@@ -3991,13 +4062,19 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
     );
   }
 
-  LatLng _act1ItalyCenter() {
-    // Northern Italy / Alps theater (1796 campaign).
-    return const LatLng(45.2, 8.6);
+  LatLng _mapCenterForAct(int act) {
+    switch (act) {
+      case 2:
+        return const LatLng(30.6, 31.1);
+      case 3:
+        return const LatLng(49.2, 10.6);
+      default:
+        return const LatLng(45.2, 8.6);
+    }
   }
 
   LatLng _centerOfLatLngs(List<LatLng> points) {
-    if (points.isEmpty) return _act1ItalyCenter();
+    if (points.isEmpty) return _mapCenterForAct(_campaign.act);
     double lat = 0;
     double lng = 0;
     for (final p in points) {
@@ -4035,50 +4112,117 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
 
   // For MVP: map the *currentChoices* (2-3 encounters) to plausible real locations
   // that progress generally toward Milan. We keep it deterministic per chapter.
-  List<LatLng> _act1CandidateLocationsForChapter(int chapterIndex) {
-    // The closer we are to boss, the closer we get to Milan.
-    // Approximate key areas: Nice, Savona, Genoa, Alessandria, Pavia/Milan.
-    final stage = _campaign.encounterNumber.clamp(0, 4);
-    final pool = <List<LatLng>>[
-      // Chapter 1-2: Ligurian coast / entry into Italy.
-      const [
-        LatLng(43.695, 7.264), // Nice
-        LatLng(44.309, 8.477), // Savona
-        LatLng(44.405, 8.946), // Genoa
-      ],
-      // Chapter 2-3: inland / Piedmont.
-      const [
-        LatLng(44.558, 7.734), // Cuneo
-        LatLng(44.915, 8.617), // Alessandria
-        LatLng(45.070, 7.687), // Turin
-      ],
-      // Chapter 3-4: Lombardy approach.
-      const [
-        LatLng(45.133, 9.158), // Pavia
-        LatLng(45.453, 9.183), // Milan
-        LatLng(45.464, 9.190), // Milan (alt point for spacing)
-      ],
-      // Chapter 4-5: near boss.
-      const [
-        LatLng(45.470, 9.190), // Milan
-        LatLng(45.542, 9.270), // Monza
-        LatLng(45.500, 9.090), // West of Milan
-      ],
-      // Boss focus.
-      const [
-        LatLng(45.464, 9.190), // Milan (boss)
-        LatLng(45.453, 9.183),
-        LatLng(45.470, 9.200),
-      ],
-    ];
+  List<LatLng> _candidateLocationsForChapter({
+    required int act,
+    required int chapterIndex,
+  }) {
+    final stage = chapterIndex.clamp(0, 4);
 
-    final chosenPool = pool[stage];
-    // Rotate based on chapterIndex so the same encounterNumber doesn’t always map to same spot.
-    final rotated = <LatLng>[];
-    for (int i = 0; i < chosenPool.length; i++) {
-      rotated.add(chosenPool[(i + chapterIndex) % chosenPool.length]);
+    if (act == 2) {
+      if (stage <= 0) {
+        return const [
+          LatLng(31.2001, 29.9187),
+          LatLng(31.3986, 30.4170),
+          LatLng(31.4165, 31.8144),
+        ];
+      }
+      if (stage == 1) {
+        return const [
+          LatLng(31.3986, 30.4170),
+          LatLng(30.0444, 31.2357),
+          LatLng(30.0131, 31.2089),
+        ];
+      }
+      if (stage == 2) {
+        return const [
+          LatLng(30.0444, 31.2357),
+          LatLng(30.0131, 31.2089),
+          LatLng(29.9850, 31.1320),
+        ];
+      }
+      if (stage == 3) {
+        return const [
+          LatLng(30.0444, 31.2357),
+          LatLng(30.0131, 31.2089),
+          LatLng(30.0500, 31.3000),
+        ];
+      }
+      return const [
+        LatLng(30.0444, 31.2357),
+        LatLng(30.0131, 31.2089),
+        LatLng(30.0500, 31.3000),
+      ];
     }
-    return rotated;
+
+    if (act == 3) {
+      if (stage <= 0) {
+        return const [
+          LatLng(48.8566, 2.3522),
+          LatLng(49.1193, 6.1757),
+          LatLng(48.5734, 7.7521),
+        ];
+      }
+      if (stage == 1) {
+        return const [
+          LatLng(48.5734, 7.7521),
+          LatLng(48.4011, 9.9876),
+          LatLng(48.1372, 11.5756),
+        ];
+      }
+      if (stage == 2) {
+        return const [
+          LatLng(48.4011, 9.9876),
+          LatLng(48.2082, 16.3738),
+          LatLng(49.1951, 16.6068),
+        ];
+      }
+      if (stage == 3) {
+        return const [
+          LatLng(48.2082, 16.3738),
+          LatLng(49.1951, 16.6068),
+          LatLng(49.1390, 16.7630),
+        ];
+      }
+      return const [
+        LatLng(49.1390, 16.7630),
+        LatLng(49.1951, 16.6068),
+        LatLng(48.2082, 16.3738),
+      ];
+    }
+
+    if (stage <= 0) {
+      return const [
+        LatLng(43.695, 7.264),
+        LatLng(44.309, 8.477),
+        LatLng(44.405, 8.946),
+      ];
+    }
+    if (stage == 1) {
+      return const [
+        LatLng(44.915, 8.617),
+        LatLng(45.070, 7.687),
+        LatLng(44.558, 7.734),
+      ];
+    }
+    if (stage == 2) {
+      return const [
+        LatLng(45.133, 9.158),
+        LatLng(45.309, 9.503),
+        LatLng(45.453, 9.183),
+      ];
+    }
+    if (stage == 3) {
+      return const [
+        LatLng(45.542, 9.270),
+        LatLng(45.309, 9.503),
+        LatLng(45.263, 10.992),
+      ];
+    }
+    return const [
+      LatLng(45.453, 9.183),
+      LatLng(45.309, 9.503),
+      LatLng(45.263, 10.992),
+    ];
   }
 
   IconData _iconForEncounterType(EncounterType type) {
@@ -4261,10 +4405,11 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
   }
 
   Widget _buildRealMapSelection() {
-    final center = _act1ItalyCenter();
+    final center = _mapCenterForAct(_campaign.act);
     final choices = _campaign.currentChoices;
-    final locations = _act1CandidateLocationsForChapter(
-      _campaign.encounterNumber,
+    final locations = _candidateLocationsForChapter(
+      act: _campaign.act,
+      chapterIndex: _campaign.encounterNumber,
     );
     final clusterCenter = _centerOfLatLngs(locations);
     final travelPoints = _campaign.travelHistory
@@ -4743,7 +4888,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (_isNapoleonAct1MapEnabled) ...[
+                  if (_isNapoleonRealMapEnabled) ...[
                     InkWell(
                       onTap: () {
                         _openHomeTown();

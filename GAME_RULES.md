@@ -83,6 +83,11 @@
   - Boss encounters include a **unique boss unit card** in the enemy deck (named after the boss).
   - Boss cards have **very strong stats** and **multiple abilities**.
 
+- Act transitions (Campaign/Story Mode):
+  - When you defeat the boss and enter the next act:
+    - Your cards, relics, consumables/items, and buildings **carry over**.
+    - Your army is restored: **all fallen cards return** and your base HP is set to **full**.
+
 - Shop encounters can allow you to **repair** previously destroyed cards for a gold cost.
 - After encounters, you can optionally visit your Home Town before choosing the next destination.
 

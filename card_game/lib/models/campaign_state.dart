@@ -460,7 +460,57 @@ class CampaignState {
   void nextAct() {
     act++;
     encounterNumber = 0;
-    // Reset health between acts
+
+    // Reset per-act pacing/state.
+    battleEncounterCount = 0;
+    recoveryEncountersRemaining = 0;
+    pendingDefenseEncounter = null;
+    pendingDefenseLat = null;
+    pendingDefenseLng = null;
+    currentChoices = const [];
+
+    // Reset encounter-based timers so they don't get stuck after encounterNumber resets.
+    gatedReserveCards = <String, int>{};
+    pendingCardDeliveries = <PendingCardDelivery>[];
+
+    // Buildings carry over, but their cooldown counters must be rebased.
+    homeTownBuildings = homeTownBuildings
+        .map(
+          (b) => HomeTownBuilding(
+            id: b.id,
+            level: b.level,
+            lastCollectedEncounter: encounterNumber,
+          ),
+        )
+        .toList();
+
+    // Revive all fallen cards at act transition.
+    if (destroyedDeckCards.isNotEmpty) {
+      deck = [...deck, ...destroyedDeckCards];
+      destroyedDeckCards = <GameCard>[];
+    }
+    for (final c in deck) {
+      c.currentHealth = c.health;
+    }
+    for (final c in inventory) {
+      c.currentHealth = c.health;
+    }
+
+    // Reset map-only travel state; the new act will set a new Home Town.
+    homeTownName = null;
+    homeTownLat = null;
+    homeTownLng = null;
+    campaignEndLat = null;
+    campaignEndLng = null;
+    lastTravelLat = null;
+    lastTravelLng = null;
+    travelHistory = <TravelPoint>[];
+    visitedNodes = <TravelPoint>[];
+    mapRelicLat = null;
+    mapRelicLng = null;
+    mapRelicDiscovered = false;
+
+    // Reset health between acts.
     health = maxHealth;
   }
 
