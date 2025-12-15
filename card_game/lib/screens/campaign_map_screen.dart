@@ -1572,6 +1572,107 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
     }
   }
 
+  /// Show terrain picker dialog for higher-rarity buildings
+  Future<String?> _showTerrainPickerDialog({
+    required String buildingName,
+    required List<GameCard> availableCards,
+  }) async {
+    // Get unique terrains from available cards
+    final terrains = availableCards
+        .map((c) => c.element)
+        .where((e) => e != null)
+        .cast<String>()
+        .toSet()
+        .toList();
+
+    if (terrains.isEmpty) return null;
+    if (terrains.length == 1) return terrains.first;
+
+    final navigator = Navigator.of(context);
+    return showDialog<String>(
+      context: navigator.context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF2D2D2D),
+        title: Text(
+          '$buildingName - Choose Terrain',
+          style: const TextStyle(color: Colors.white),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Select terrain specialization for your unit:',
+              style: TextStyle(color: Colors.white70),
+            ),
+            const SizedBox(height: 16),
+            ...terrains.map((terrain) {
+              final cardsForTerrain = availableCards
+                  .where((c) => c.element == terrain)
+                  .toList();
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(context, terrain),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _terrainColor(terrain),
+                    minimumSize: const Size(double.infinity, 48),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(_terrainIcon(terrain), color: Colors.white),
+                      const SizedBox(width: 8),
+                      Text(
+                        '$terrain (${cardsForTerrain.length} units)',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, null),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  IconData _terrainIcon(String? terrain) {
+    switch (terrain) {
+      case 'Woods':
+        return Icons.park;
+      case 'Lake':
+        return Icons.water;
+      case 'Desert':
+        return Icons.wb_sunny;
+      default:
+        return Icons.landscape;
+    }
+  }
+
+  Color _terrainColor(String? terrain) {
+    switch (terrain) {
+      case 'Woods':
+        return Colors.green[700]!;
+      case 'Lake':
+        return Colors.blue[700]!;
+      case 'Desert':
+        return Colors.orange[700]!;
+      default:
+        return Colors.grey[700]!;
+    }
+  }
+
   Future<RewardEvent?> _collectBuilding(
     HomeTownBuilding building, {
     bool showDialog = true,
@@ -1630,9 +1731,21 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
     }
 
     if (building.id == _buildingOfficersAcademyId) {
-      final candidates = ShopInventory.getCardsForAct(
+      final allCandidates = ShopInventory.getCardsForAct(
         _campaign.act,
       ).where((c) => c.rarity == 2).toList();
+      if (allCandidates.isEmpty) return null;
+
+      // Show terrain picker for higher-rarity buildings
+      final selectedTerrain = await _showTerrainPickerDialog(
+        buildingName: 'Officers Academy',
+        availableCards: allCandidates,
+      );
+      if (selectedTerrain == null) return null; // User cancelled
+
+      final candidates = allCandidates
+          .where((c) => c.element == selectedTerrain)
+          .toList();
       if (candidates.isNotEmpty) {
         candidates.shuffle(_random);
         final card = candidates.first;
@@ -1676,9 +1789,21 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
     }
 
     if (building.id == _buildingWarCollegeId) {
-      final candidates = ShopInventory.getCardsForAct(
+      final allCandidates = ShopInventory.getCardsForAct(
         _campaign.act,
       ).where((c) => c.rarity == 3).toList();
+      if (allCandidates.isEmpty) return null;
+
+      // Show terrain picker for higher-rarity buildings
+      final selectedTerrain = await _showTerrainPickerDialog(
+        buildingName: 'War College',
+        availableCards: allCandidates,
+      );
+      if (selectedTerrain == null) return null; // User cancelled
+
+      final candidates = allCandidates
+          .where((c) => c.element == selectedTerrain)
+          .toList();
       if (candidates.isNotEmpty) {
         candidates.shuffle(_random);
         final card = candidates.first;
