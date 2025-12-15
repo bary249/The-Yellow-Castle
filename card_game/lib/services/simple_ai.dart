@@ -16,9 +16,25 @@ class SimpleAI {
   Future<void> executeTurnTYC3(
     MatchManager matchManager, {
     Function(String description)? onAction,
-    Function(GameCard attacker, GameCard target, AttackResult result, int col)?
+    Function(
+      GameCard attacker,
+      GameCard target,
+      AttackResult result,
+      int attackerRow,
+      int attackerCol,
+      int targetRow,
+      int targetCol,
+    )?
     onCombatResult,
-    Function(GameCard attacker, int damage, int col)? onBaseAttack,
+    Function(
+      GameCard attacker,
+      int damage,
+      int attackerRow,
+      int attackerCol,
+      int targetBaseRow,
+      int targetBaseCol,
+    )?
+    onBaseAttack,
     int delayMs = 0,
   }) async {
     final match = matchManager.currentMatch;
@@ -206,7 +222,7 @@ class SimpleAI {
               if (result != null) {
                 // Notify via callback if provided
                 if (onCombatResult != null) {
-                  await onCombatResult(card, target, result, tc);
+                  await onCombatResult(card, target, result, row, col, tr, tc);
                 }
                 await logAndWait('Attacked ${target.name} (${result.message})');
               }
@@ -223,7 +239,7 @@ class SimpleAI {
           final dmg = matchManager.attackBaseTYC3(card, row, col);
           if (dmg > 0) {
             if (onBaseAttack != null) {
-              await onBaseAttack(card, dmg, col);
+              await onBaseAttack(card, dmg, row, col, enemyBaseRow, col);
             }
             await logAndWait('Attacked base for $dmg damage');
           }

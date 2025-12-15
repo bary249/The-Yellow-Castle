@@ -130,6 +130,7 @@ class _TestMatchScreenState extends State<TestMatchScreen>
 
   final Map<String, Rect> _handCardRects = {};
   final Map<String, Rect> _boardCardRects = {};
+  final Map<String, Rect> _boardTileRects = {};
 
   final GlobalKey _matchViewStackKey = GlobalKey();
   late final AnimationController _attackArrowController;
@@ -289,6 +290,138 @@ class _TestMatchScreenState extends State<TestMatchScreen>
     setState(() {
       _showAttackArrow = false;
     });
+  }
+
+  Future<void> _playAttackArrowToTile(
+    GameCard attacker,
+    int attackerRow,
+    int attackerCol,
+    int targetRow,
+    int targetCol,
+  ) async {
+    if (!mounted) return;
+
+    final fromRect =
+        _boardCardRects['${attacker.id}_$attackerRow,$attackerCol'];
+    final toRect = _boardTileRects[_tileKey(targetRow, targetCol)];
+    if (fromRect == null || toRect == null) return;
+
+    final renderObject = _matchViewStackKey.currentContext?.findRenderObject();
+    if (renderObject is! RenderBox) return;
+
+    final from = renderObject.globalToLocal(fromRect.center);
+    final to = renderObject.globalToLocal(toRect.center);
+
+    setState(() {
+      _attackArrowFrom = from;
+      _attackArrowTo = to;
+      _showAttackArrow = true;
+    });
+
+    _attackArrowController.reset();
+    await _attackArrowController.forward();
+
+    if (!mounted) return;
+    setState(() {
+      _showAttackArrow = false;
+    });
+  }
+
+  Future<void> _showDeckDialog(MatchState match) async {
+    final player = match.player;
+
+    final inPlay = <GameCard>[];
+    for (int row = 0; row < 3; row++) {
+      for (int col = 0; col < 3; col++) {
+        final tile = match.board.getTile(row, col);
+        inPlay.addAll(
+          tile.cards.where((c) => c.isAlive && c.ownerId == player.id),
+        );
+      }
+    }
+
+    final staged = <GameCard>[];
+    for (int row = 0; row < 3; row++) {
+      for (int col = 0; col < 3; col++) {
+        staged.addAll(_getStagedCards(row, col));
+      }
+    }
+
+    final destroyedNames = <String>[];
+    for (int row = 0; row < 3; row++) {
+      for (int col = 0; col < 3; col++) {
+        final tile = match.board.getTile(row, col);
+        for (final gs in tile.gravestones) {
+          if (gs.ownerId == player.id) {
+            destroyedNames.add(gs.cardName);
+          }
+        }
+      }
+    }
+
+    final remainingDeck = player.deck.cards;
+    final drawnNow = <GameCard>[...player.hand, ...inPlay, ...staged];
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Deck'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: ListView(
+              shrinkWrap: true,
+              children: [
+                ExpansionTile(
+                  title: Text('Drawn (Hand + In Play) (${drawnNow.length})'),
+                  children: drawnNow.isEmpty
+                      ? [const ListTile(title: Text('None'))]
+                      : drawnNow
+                            .map(
+                              (c) => ListTile(
+                                dense: true,
+                                title: Text(c.name),
+                                onTap: () {
+                                  Navigator.pop(context);
+                                  _showCardDetails(c);
+                                },
+                              ),
+                            )
+                            .toList(),
+                ),
+                ExpansionTile(
+                  title: Text('Remaining in Deck (${remainingDeck.length})'),
+                  children: remainingDeck.isEmpty
+                      ? [const ListTile(title: Text('Empty'))]
+                      : remainingDeck
+                            .map(
+                              (c) => ListTile(dense: true, title: Text(c.name)),
+                            )
+                            .toList(),
+                ),
+                ExpansionTile(
+                  title: Text('Destroyed (${destroyedNames.length})'),
+                  children: destroyedNames.isEmpty
+                      ? [const ListTile(title: Text('None'))]
+                      : destroyedNames
+                            .map(
+                              (name) =>
+                                  ListTile(dense: true, title: Text(name)),
+                            )
+                            .toList(),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Rect _globalRectForContext(BuildContext ctx) {
@@ -2894,18 +3027,52 @@ class _TestMatchScreenState extends State<TestMatchScreen>
         debugPrint('AI Action: $description');
         if (mounted) setState(() {});
       },
-      onCombatResult: (attacker, target, result, col) async {
-        if (mounted) {
-          setState(() {});
-          await _showAIBattleResultDialog(result, attacker, target, col);
-        }
-      },
-      onBaseAttack: (attacker, damage, col) async {
-        if (mounted) {
-          setState(() {});
-          await _showAIBaseAttackDialog(attacker, damage, col);
-        }
-      },
+      onCombatResult:
+          (
+            attacker,
+            target,
+            result,
+            attackerRow,
+            attackerCol,
+            targetRow,
+            targetCol,
+          ) async {
+            if (mounted) {
+              setState(() {});
+              await WidgetsBinding.instance.endOfFrame;
+              await _playAttackArrow(
+                attacker,
+                attackerRow,
+                attackerCol,
+                target,
+                targetRow,
+                targetCol,
+              );
+              await _showAIBattleResultDialog(result, attacker, target, col);
+            }
+          },
+      onBaseAttack:
+          (
+            attacker,
+            damage,
+            attackerRow,
+            attackerCol,
+            targetBaseRow,
+            targetBaseCol,
+          ) async {
+            if (mounted) {
+              setState(() {});
+              await WidgetsBinding.instance.endOfFrame;
+              await _playAttackArrowToTile(
+                attacker,
+                attackerRow,
+                attackerCol,
+                targetBaseRow,
+                targetBaseCol,
+              );
+              await _showAIBaseAttackDialog(attacker, damage, col);
+            }
+          },
     );
 
     // End AI turn
@@ -5622,6 +5789,13 @@ class _TestMatchScreenState extends State<TestMatchScreen>
           backgroundColor: const Color(0xFF16213E),
           foregroundColor: Colors.white,
           actions: [
+            if (!match.isGameOver)
+              IconButton(
+                icon: const Icon(Icons.style),
+                tooltip: 'Deck',
+                onPressed: () => _showDeckDialog(match),
+              ),
+
             // DEBUG: Win Battle button (Campaign only)
             if ((widget.enemyDeck != null || widget.forceCampaignDeck) &&
                 !match.isGameOver)
@@ -7593,440 +7767,472 @@ class _TestMatchScreenState extends State<TestMatchScreen>
       builder: (context, candidateData, rejectedData) {
         final isBeingDraggedOver = candidateData.isNotEmpty;
 
-        return GestureDetector(
-          onTap: () =>
-              _onTileTapTYC3(row, col, canPlace, canMoveTo, canAttackBase),
-          child: Container(
-            margin: const EdgeInsets.all(2),
-            decoration: BoxDecoration(
-              color: isBeingDraggedOver
-                  ? Colors.green[100]!
-                  : (canMoveTo ? Colors.purple[50]! : bgColor),
-              border: Border.all(
-                color: isBeingDraggedOver ? Colors.green : borderColor,
-                width: isBeingDraggedOver ? 3 : borderWidth,
-              ),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Terrain tag (with fog of war for enemy base)
-                  if (tile.terrain != null)
-                    Builder(
-                      builder: (context) {
-                        // Fog of war: check if enemy base terrain is revealed
-                        final isEnemyBase = row == 0;
-                        bool showTerrain = true;
+        return Builder(
+          builder: (ctx) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted) return;
+              final rect = _globalRectForContext(ctx);
+              if (rect == Rect.zero) return;
+              _boardTileRects[_tileKey(row, col)] = rect;
+            });
 
-                        if (isEnemyBase) {
-                          // Fog of war is DYNAMIC - check current visibility
-                          final playerId = match.player.id;
+            return GestureDetector(
+              onTap: () =>
+                  _onTileTapTYC3(row, col, canPlace, canMoveTo, canAttackBase),
+              child: Container(
+                margin: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  color: isBeingDraggedOver
+                      ? Colors.green[100]!
+                      : (canMoveTo ? Colors.purple[50]! : bgColor),
+                  border: Border.all(
+                    color: isBeingDraggedOver ? Colors.green : borderColor,
+                    width: isBeingDraggedOver ? 3 : borderWidth,
+                  ),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Terrain tag (with fog of war for enemy base)
+                      if (tile.terrain != null)
+                        Builder(
+                          builder: (context) {
+                            // Fog of war: check if enemy base terrain is revealed
+                            final isEnemyBase = row == 0;
+                            bool showTerrain = true;
 
-                          // 1. Check if player has cards in middle of THIS lane
-                          final middleTileForLane = match.board.getTile(1, col);
-                          final hasPlayerCardInMiddle = middleTileForLane.cards
-                              .any((c) => c.ownerId == playerId && c.isAlive);
+                            if (isEnemyBase) {
+                              // Fog of war is DYNAMIC - check current visibility
+                              final playerId = match.player.id;
 
-                          // 2. Check if a scout in middle can see this lane
-                          bool scoutCanSee = false;
-                          for (int scoutCol = 0; scoutCol < 3; scoutCol++) {
-                            final scoutTile = match.board.getTile(1, scoutCol);
-                            final hasScout = scoutTile.cards.any(
-                              (c) =>
-                                  c.ownerId == playerId &&
-                                  c.isAlive &&
-                                  c.abilities.contains('scout'),
-                            );
-                            if (hasScout) {
-                              // Scout can see its own lane and adjacent lanes
-                              if (scoutCol == col) {
-                                scoutCanSee = true;
-                              } else if ((scoutCol - col).abs() == 1) {
-                                // Adjacent lane
-                                scoutCanSee = true;
-                              } else if (scoutCol == 1) {
-                                // Center scout can see all lanes
-                                scoutCanSee = true;
+                              // 1. Check if player has cards in middle of THIS lane
+                              final middleTileForLane = match.board.getTile(
+                                1,
+                                col,
+                              );
+                              final hasPlayerCardInMiddle = middleTileForLane
+                                  .cards
+                                  .any(
+                                    (c) => c.ownerId == playerId && c.isAlive,
+                                  );
+
+                              // 2. Check if a scout in middle can see this lane
+                              bool scoutCanSee = false;
+                              for (int scoutCol = 0; scoutCol < 3; scoutCol++) {
+                                final scoutTile = match.board.getTile(
+                                  1,
+                                  scoutCol,
+                                );
+                                final hasScout = scoutTile.cards.any(
+                                  (c) =>
+                                      c.ownerId == playerId &&
+                                      c.isAlive &&
+                                      c.abilities.contains('scout'),
+                                );
+                                if (hasScout) {
+                                  // Scout can see its own lane and adjacent lanes
+                                  if (scoutCol == col) {
+                                    scoutCanSee = true;
+                                  } else if ((scoutCol - col).abs() == 1) {
+                                    // Adjacent lane
+                                    scoutCanSee = true;
+                                  } else if (scoutCol == 1) {
+                                    // Center scout can see all lanes
+                                    scoutCanSee = true;
+                                  }
+                                }
                               }
+
+                              // Check permanent reveal
+                              final lanePos = [
+                                LanePosition.west,
+                                LanePosition.center,
+                                LanePosition.east,
+                              ][col];
+                              final isPermanentlyRevealed = match
+                                  .revealedEnemyBaseLanes
+                                  .contains(lanePos);
+
+                              // Show terrain if player has visibility via cards, scout, OR permanent reveal
+                              showTerrain =
+                                  hasPlayerCardInMiddle ||
+                                  scoutCanSee ||
+                                  isPermanentlyRevealed;
                             }
-                          }
 
-                          // Check permanent reveal
-                          final lanePos = [
-                            LanePosition.west,
-                            LanePosition.center,
-                            LanePosition.east,
-                          ][col];
-                          final isPermanentlyRevealed = match
-                              .revealedEnemyBaseLanes
-                              .contains(lanePos);
-
-                          // Show terrain if player has visibility via cards, scout, OR permanent reveal
-                          showTerrain =
-                              hasPlayerCardInMiddle ||
-                              scoutCanSee ||
-                              isPermanentlyRevealed;
-                        }
-
-                        return Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 4,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: showTerrain
-                                ? _getTerrainColor(tile.terrain!)
-                                : Colors.grey[600],
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: showTerrain
-                              ? Icon(
-                                  _getTerrainIcon(tile.terrain!),
-                                  size: 14,
-                                  color: Colors.white,
-                                )
-                              : const Text(
-                                  '?',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                        );
-                      },
-                    ),
-
-                  const SizedBox(height: 2),
-
-                  // Gravestones (destroyed cards)
-                  if (tile.gravestones.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 2),
-                      child: Wrap(
-                        spacing: 2,
-                        runSpacing: 2,
-                        alignment: WrapAlignment.center,
-                        children: tile.gravestones.map((gs) {
-                          final isPlayerCard = gs.ownerId == match.player.id;
-                          final chipColor = isPlayerCard
-                              ? Colors.blue[50]!
-                              : Colors.red[50]!;
-                          final borderColor = isPlayerCard
-                              ? Colors.blue[300]!
-                              : Colors.red[300]!;
-                          final textColor = isPlayerCard
-                              ? Colors.blue[900]!
-                              : Colors.red[900]!;
-
-                          return GestureDetector(
-                            onTap: () => _showCombatLogDialog(gs),
-                            child: Container(
+                            return Container(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 4,
-                                vertical: 1,
+                                vertical: 2,
                               ),
                               decoration: BoxDecoration(
-                                color: chipColor,
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: borderColor),
+                                color: showTerrain
+                                    ? _getTerrainColor(tile.terrain!)
+                                    : Colors.grey[600],
+                                borderRadius: BorderRadius.circular(4),
                               ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.sentiment_very_dissatisfied,
-                                    size: 10,
-                                    color: borderColor,
-                                  ),
-                                  const SizedBox(width: 2),
-                                  Text(
-                                    gs.cardName,
-                                    style: TextStyle(
-                                      fontSize: 9,
-                                      color: textColor,
-                                      fontWeight: FontWeight.bold,
+                              child: showTerrain
+                                  ? Icon(
+                                      _getTerrainIcon(tile.terrain!),
+                                      size: 14,
+                                      color: Colors.white,
+                                    )
+                                  : const Text(
+                                      '?',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                      ),
                                     ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                    ),
+                            );
+                          },
+                        ),
 
-                  // Cards on this tile
-                  if (cardsToShow.isEmpty)
-                    Text(
-                      row == 1 ? 'Middle' : tile.shortName,
-                      style: TextStyle(fontSize: 10, color: Colors.grey[500]),
-                    )
-                  else if (_useStackedCardUI)
-                    // NEW: Stacked card UI
-                    Expanded(
-                      child: _buildStackedCardsOnTile(
-                        cardsToShow,
-                        playerCardsAtTile,
-                        opponentCardsAtTile,
-                        stagedCardsOnTile,
-                        row,
-                        col,
-                        match,
-                      ),
-                    )
-                  else
-                    // OLD: ListView UI
-                    Expanded(
-                      child: ListView(
-                        shrinkWrap: true,
-                        padding: const EdgeInsets.symmetric(horizontal: 2),
-                        children: cardsToShow.map((card) {
-                          final isStaged = stagedCardsOnTile.contains(card);
-                          final isOpponent = opponentCardsAtTile.contains(card);
-                          final isPlayerCard = playerCardsAtTile.contains(card);
+                      const SizedBox(height: 2),
 
-                          // TYC3: No front/back - just show card index for reference
-                          String? positionLabel;
-                          bool isFrontCard = false;
-
-                          if (_useTYC3Mode) {
-                            // TYC3: Show if card is selected for action
-                            if (_selectedCardForAction == card) {
-                              positionLabel = '✓ SELECTED';
-                            } else if (isOpponent) {
-                              // Show if this is a valid target
-                              if (_validTargets.contains(card)) {
-                                positionLabel = 'TARGET';
-                              }
-                            }
-                          } else {
-                            // Legacy front/back logic
-                            if (isOpponent && opponentCardsAtTile.isNotEmpty) {
-                              final originalIndex = opponentCardsAtTile.indexOf(
-                                card,
-                              );
-                              isFrontCard = originalIndex == 0;
-                              if (opponentCardsAtTile.length > 1) {
-                                positionLabel = isFrontCard
-                                    ? '▼ FRONT'
-                                    : '▲ BACK';
-                              } else {
-                                positionLabel = '▼ FRONT';
-                              }
-                            } else if (isPlayerCard &&
-                                playerCardsAtTile.isNotEmpty) {
-                              final idx = playerCardsAtTile.indexOf(card);
-                              isFrontCard = idx == 0;
-                              if (playerCardsAtTile.length > 1) {
-                                positionLabel = isFrontCard
-                                    ? '▲ FRONT'
-                                    : '▼ BACK';
-                              } else {
-                                positionLabel = '▲ FRONT';
-                              }
-                            } else if (isStaged) {
-                              positionLabel = '📦 STAGED';
-                            }
-                          }
-
-                          // Check if this is the opponent's back card and it's concealed (legacy only)
-                          final isOpponentBackCard =
-                              !_useTYC3Mode &&
-                              isOpponent &&
-                              opponentCardsAtTile.length >= 2 &&
-                              opponentCardsAtTile.indexOf(card) == 1;
-                          final isConcealed =
-                              isOpponentBackCard && opponentBackCardConcealed;
-
-                          // Determine card color
-                          Color cardColor;
-                          Color labelColor;
-                          if (isStaged) {
-                            cardColor = Colors.amber[100]!;
-                            labelColor = Colors.orange[800]!;
-                          } else if (isOpponent) {
-                            cardColor = isConcealed
-                                ? Colors.grey[400]!
-                                : Colors.red[200]!;
-                            labelColor = Colors.red[800]!;
-                          } else if (isPlayerCard) {
-                            cardColor = Colors.blue[200]!;
-                            labelColor = Colors.blue[800]!;
-                          } else {
-                            cardColor = Colors.grey[200]!;
-                            labelColor = Colors.grey[600]!;
-                          }
-
-                          final rarityBorder = _getRarityBorderColor(card);
-
-                          // TYC3: Highlight selected card and valid targets
-                          final isSelected =
-                              _useTYC3Mode && _selectedCardForAction == card;
-                          final isValidTarget =
-                              _useTYC3Mode && _validTargets.contains(card);
-
-                          // Visual effect for hero ability damage boost
-                          final isDamageBoosted =
-                              isPlayerCard &&
-                              _matchManager.playerDamageBoost > 0;
-
-                          return Builder(
-                            builder: (ctx) {
-                              WidgetsBinding.instance.addPostFrameCallback((_) {
-                                if (!mounted) return;
-                                final rect = _globalRectForContext(ctx);
-                                if (rect == Rect.zero) return;
-                                final key = '${card.id}_$row,$col';
-                                _boardCardRects[key] = rect;
-                              });
+                      // Gravestones (destroyed cards)
+                      if (tile.gravestones.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 2),
+                          child: Wrap(
+                            spacing: 2,
+                            runSpacing: 2,
+                            alignment: WrapAlignment.center,
+                            children: tile.gravestones.map((gs) {
+                              final isPlayerCard =
+                                  gs.ownerId == match.player.id;
+                              final chipColor = isPlayerCard
+                                  ? Colors.blue[50]!
+                                  : Colors.red[50]!;
+                              final borderColor = isPlayerCard
+                                  ? Colors.blue[300]!
+                                  : Colors.red[300]!;
+                              final textColor = isPlayerCard
+                                  ? Colors.blue[900]!
+                                  : Colors.red[900]!;
 
                               return GestureDetector(
-                                onTap: () => _onCardTapTYC3(
-                                  card,
-                                  row,
-                                  col,
-                                  isPlayerCard,
-                                  isOpponent,
+                                onTap: () => _showCombatLogDialog(gs),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 4,
+                                    vertical: 1,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: chipColor,
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(color: borderColor),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.sentiment_very_dissatisfied,
+                                        size: 10,
+                                        color: borderColor,
+                                      ),
+                                      const SizedBox(width: 2),
+                                      Text(
+                                        gs.cardName,
+                                        style: TextStyle(
+                                          fontSize: 9,
+                                          color: textColor,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                                onLongPress: () => _showCardDetails(card),
-                                child: Stack(
-                                  children: [
-                                    Container(
-                                      margin: const EdgeInsets.symmetric(
-                                        vertical: 1,
-                                      ),
-                                      padding: const EdgeInsets.all(3),
-                                      decoration: BoxDecoration(
-                                        color: isSelected
-                                            ? Colors.yellow[200]!
-                                            : isValidTarget
-                                            ? Colors.orange[200]!
-                                            : cardColor,
-                                        borderRadius: BorderRadius.circular(4),
-                                        boxShadow: isDamageBoosted
-                                            ? [
-                                                BoxShadow(
-                                                  color: Colors.red.withOpacity(
-                                                    0.6,
-                                                  ),
-                                                  blurRadius: 8,
-                                                  spreadRadius: 2,
-                                                ),
-                                              ]
-                                            : null,
-                                        border: isSelected
-                                            ? Border.all(
-                                                color: Colors.yellow[700]!,
-                                                width: 3,
-                                              )
-                                            : isValidTarget
-                                            ? Border.all(
-                                                color: Colors.orange[700]!,
-                                                width: 2,
-                                              )
-                                            : isStaged
-                                            ? Border.all(
-                                                color: Colors.amber,
-                                                width: 2,
-                                              )
-                                            : Border.all(
-                                                color: rarityBorder,
-                                                width: _useTYC3Mode
-                                                    ? 1
-                                                    : (isFrontCard ? 2 : 1),
-                                              ),
-                                      ),
-                                      child: isConcealed
-                                          // Show hidden card placeholder
-                                          ? Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.center,
-                                              children: [
-                                                Text(
-                                                  positionLabel ?? '',
-                                                  style: TextStyle(
-                                                    fontSize: 7,
-                                                    fontWeight: FontWeight.bold,
-                                                    color: Colors.grey[600],
-                                                  ),
-                                                ),
-                                                const Text(
-                                                  '🔮 Hidden',
-                                                  style: TextStyle(
-                                                    fontSize: 9,
-                                                    fontWeight: FontWeight.bold,
-                                                    color: Colors.white,
-                                                  ),
-                                                ),
-                                              ],
-                                            )
-                                          // Show normal card info with position label
-                                          : Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                // Position label row
-                                                if (positionLabel != null)
-                                                  Container(
-                                                    padding:
-                                                        const EdgeInsets.symmetric(
-                                                          horizontal: 3,
-                                                          vertical: 1,
-                                                        ),
-                                                    margin:
-                                                        const EdgeInsets.only(
-                                                          bottom: 2,
-                                                        ),
-                                                    decoration: BoxDecoration(
-                                                      color: labelColor
-                                                          .withValues(
-                                                            alpha: 0.2,
-                                                          ),
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                            3,
-                                                          ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+
+                      // Cards on this tile
+                      if (cardsToShow.isEmpty)
+                        Text(
+                          row == 1 ? 'Middle' : tile.shortName,
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.grey[500],
+                          ),
+                        )
+                      else if (_useStackedCardUI)
+                        // NEW: Stacked card UI
+                        Expanded(
+                          child: _buildStackedCardsOnTile(
+                            cardsToShow,
+                            playerCardsAtTile,
+                            opponentCardsAtTile,
+                            stagedCardsOnTile,
+                            row,
+                            col,
+                            match,
+                          ),
+                        )
+                      else
+                        // OLD: ListView UI
+                        Expanded(
+                          child: ListView(
+                            shrinkWrap: true,
+                            padding: const EdgeInsets.symmetric(horizontal: 2),
+                            children: cardsToShow.map((card) {
+                              final isStaged = stagedCardsOnTile.contains(card);
+                              final isOpponent = opponentCardsAtTile.contains(
+                                card,
+                              );
+                              final isPlayerCard = playerCardsAtTile.contains(
+                                card,
+                              );
+
+                              // TYC3: No front/back - just show card index for reference
+                              String? positionLabel;
+                              bool isFrontCard = false;
+
+                              if (_useTYC3Mode) {
+                                // TYC3: Show if card is selected for action
+                                if (_selectedCardForAction == card) {
+                                  positionLabel = '✓ SELECTED';
+                                } else if (isOpponent) {
+                                  // Show if this is a valid target
+                                  if (_validTargets.contains(card)) {
+                                    positionLabel = 'TARGET';
+                                  }
+                                }
+                              } else {
+                                // Legacy front/back logic
+                                if (isOpponent &&
+                                    opponentCardsAtTile.isNotEmpty) {
+                                  final originalIndex = opponentCardsAtTile
+                                      .indexOf(card);
+                                  isFrontCard = originalIndex == 0;
+                                  if (opponentCardsAtTile.length > 1) {
+                                    positionLabel = isFrontCard
+                                        ? '▼ FRONT'
+                                        : '▲ BACK';
+                                  } else {
+                                    positionLabel = '▼ FRONT';
+                                  }
+                                } else if (isPlayerCard &&
+                                    playerCardsAtTile.isNotEmpty) {
+                                  final idx = playerCardsAtTile.indexOf(card);
+                                  isFrontCard = idx == 0;
+                                  if (playerCardsAtTile.length > 1) {
+                                    positionLabel = isFrontCard
+                                        ? '▲ FRONT'
+                                        : '▼ BACK';
+                                  } else {
+                                    positionLabel = '▲ FRONT';
+                                  }
+                                } else if (isStaged) {
+                                  positionLabel = '📦 STAGED';
+                                }
+                              }
+
+                              // Check if this is the opponent's back card and it's concealed (legacy only)
+                              final isOpponentBackCard =
+                                  !_useTYC3Mode &&
+                                  isOpponent &&
+                                  opponentCardsAtTile.length >= 2 &&
+                                  opponentCardsAtTile.indexOf(card) == 1;
+                              final isConcealed =
+                                  isOpponentBackCard &&
+                                  opponentBackCardConcealed;
+
+                              // Determine card color
+                              Color cardColor;
+                              Color labelColor;
+                              if (isStaged) {
+                                cardColor = Colors.amber[100]!;
+                                labelColor = Colors.orange[800]!;
+                              } else if (isOpponent) {
+                                cardColor = isConcealed
+                                    ? Colors.grey[400]!
+                                    : Colors.red[200]!;
+                                labelColor = Colors.red[800]!;
+                              } else if (isPlayerCard) {
+                                cardColor = Colors.blue[200]!;
+                                labelColor = Colors.blue[800]!;
+                              } else {
+                                cardColor = Colors.grey[200]!;
+                                labelColor = Colors.grey[600]!;
+                              }
+
+                              final rarityBorder = _getRarityBorderColor(card);
+
+                              // TYC3: Highlight selected card and valid targets
+                              final isSelected =
+                                  _useTYC3Mode &&
+                                  _selectedCardForAction == card;
+                              final isValidTarget =
+                                  _useTYC3Mode && _validTargets.contains(card);
+
+                              // Visual effect for hero ability damage boost
+                              final isDamageBoosted =
+                                  isPlayerCard &&
+                                  _matchManager.playerDamageBoost > 0;
+
+                              return Builder(
+                                builder: (ctx) {
+                                  WidgetsBinding.instance.addPostFrameCallback((
+                                    _,
+                                  ) {
+                                    if (!mounted) return;
+                                    final rect = _globalRectForContext(ctx);
+                                    if (rect == Rect.zero) return;
+                                    final key = '${card.id}_$row,$col';
+                                    _boardCardRects[key] = rect;
+                                  });
+
+                                  return GestureDetector(
+                                    onTap: () => _onCardTapTYC3(
+                                      card,
+                                      row,
+                                      col,
+                                      isPlayerCard,
+                                      isOpponent,
+                                    ),
+                                    onLongPress: () => _showCardDetails(card),
+                                    child: Stack(
+                                      children: [
+                                        Container(
+                                          margin: const EdgeInsets.symmetric(
+                                            vertical: 1,
+                                          ),
+                                          padding: const EdgeInsets.all(3),
+                                          decoration: BoxDecoration(
+                                            color: isSelected
+                                                ? Colors.yellow[200]!
+                                                : isValidTarget
+                                                ? Colors.orange[200]!
+                                                : cardColor,
+                                            borderRadius: BorderRadius.circular(
+                                              4,
+                                            ),
+                                            boxShadow: isDamageBoosted
+                                                ? [
+                                                    BoxShadow(
+                                                      color: Colors.red
+                                                          .withOpacity(0.6),
+                                                      blurRadius: 8,
+                                                      spreadRadius: 2,
                                                     ),
-                                                    child: Text(
-                                                      positionLabel,
+                                                  ]
+                                                : null,
+                                            border: isSelected
+                                                ? Border.all(
+                                                    color: Colors.yellow[700]!,
+                                                    width: 3,
+                                                  )
+                                                : isValidTarget
+                                                ? Border.all(
+                                                    color: Colors.orange[700]!,
+                                                    width: 2,
+                                                  )
+                                                : isStaged
+                                                ? Border.all(
+                                                    color: Colors.amber,
+                                                    width: 2,
+                                                  )
+                                                : Border.all(
+                                                    color: rarityBorder,
+                                                    width: _useTYC3Mode
+                                                        ? 1
+                                                        : (isFrontCard ? 2 : 1),
+                                                  ),
+                                          ),
+                                          child: isConcealed
+                                              // Show hidden card placeholder
+                                              ? Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.center,
+                                                  children: [
+                                                    Text(
+                                                      positionLabel ?? '',
                                                       style: TextStyle(
                                                         fontSize: 7,
                                                         fontWeight:
                                                             FontWeight.bold,
-                                                        color: labelColor,
+                                                        color: Colors.grey[600],
                                                       ),
                                                     ),
-                                                  ),
-                                                Row(
-                                                  mainAxisSize:
-                                                      MainAxisSize.min,
-                                                  children: [
-                                                    // Show damage as current/max
-                                                    _buildStatIconWithMax(
-                                                      Icons
-                                                          .local_fire_department,
-                                                      card.currentDamage +
-                                                          (isDamageBoosted
-                                                              ? 1
-                                                              : 0),
-                                                      card.damage,
-                                                      size: 10,
+                                                    const Text(
+                                                      '🔮 Hidden',
+                                                      style: TextStyle(
+                                                        fontSize: 9,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        color: Colors.white,
+                                                      ),
                                                     ),
-                                                    if (isDamageBoosted)
-                                                      Padding(
+                                                  ],
+                                                )
+                                              // Show normal card info with position label
+                                              : Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  children: [
+                                                    // Position label row
+                                                    if (positionLabel != null)
+                                                      Container(
                                                         padding:
-                                                            const EdgeInsets.only(
-                                                              left: 1,
+                                                            const EdgeInsets.symmetric(
+                                                              horizontal: 3,
+                                                              vertical: 1,
                                                             ),
+                                                        margin:
+                                                            const EdgeInsets.only(
+                                                              bottom: 2,
+                                                            ),
+                                                        decoration: BoxDecoration(
+                                                          color: labelColor
+                                                              .withValues(
+                                                                alpha: 0.2,
+                                                              ),
+                                                          borderRadius:
+                                                              BorderRadius.circular(
+                                                                3,
+                                                              ),
+                                                        ),
                                                         child: Text(
-                                                          '(+1)',
-                                                          style:
-                                                              const TextStyle(
+                                                          positionLabel,
+                                                          style: TextStyle(
+                                                            fontSize: 7,
+                                                            fontWeight:
+                                                                FontWeight.bold,
+                                                            color: labelColor,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    Row(
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
+                                                      children: [
+                                                        // Show damage as current/max
+                                                        _buildStatIconWithMax(
+                                                          Icons
+                                                              .local_fire_department,
+                                                          card.currentDamage +
+                                                              (isDamageBoosted
+                                                                  ? 1
+                                                                  : 0),
+                                                          card.damage,
+                                                          size: 10,
+                                                        ),
+                                                        if (isDamageBoosted)
+                                                          Padding(
+                                                            padding:
+                                                                const EdgeInsets.only(
+                                                                  left: 1,
+                                                                ),
+                                                            child: Text(
+                                                              '(+1)',
+                                                              style: const TextStyle(
                                                                 fontSize: 8,
                                                                 color:
                                                                     Colors.red,
@@ -8034,146 +8240,162 @@ class _TestMatchScreenState extends State<TestMatchScreen>
                                                                     FontWeight
                                                                         .bold,
                                                               ),
-                                                        ),
-                                                      ),
-                                                    // Show attack AP cost only if > 1
-                                                    if (card.attackAPCost >
-                                                        1) ...[
-                                                      Text(
-                                                        ' (${card.attackAPCost}',
-                                                        style: TextStyle(
-                                                          fontSize: 8,
-                                                          color: Colors
-                                                              .orange[700],
-                                                        ),
-                                                      ),
-                                                      Icon(
-                                                        Icons.bolt,
-                                                        size: 8,
-                                                        color:
-                                                            Colors.orange[700],
-                                                      ),
-                                                      Text(
-                                                        ')',
-                                                        style: TextStyle(
-                                                          fontSize: 8,
-                                                          color: Colors
-                                                              .orange[700],
-                                                        ),
-                                                      ),
-                                                    ],
-                                                    const SizedBox(width: 2),
-                                                    // Show HP as current/max
-                                                    _buildStatIconWithMax(
-                                                      Icons.favorite,
-                                                      card.currentHealth,
-                                                      card.health,
-                                                      size: 10,
-                                                    ),
-                                                    const SizedBox(width: 2),
-                                                    // TYC3: Show AP (current/max) and attack style icon
-                                                    if (_useTYC3Mode) ...[
-                                                      _buildStatIconWithMax(
-                                                        Icons.bolt,
-                                                        card.currentAP,
-                                                        card.maxAP,
-                                                        size: 10,
-                                                      ),
-                                                      const SizedBox(width: 2),
-                                                      // Attack style: melee (sword), ranged (bow), far_attack (cannon)
-                                                      _buildAttackStyleIcon(
-                                                        card,
-                                                        size: 10,
-                                                      ),
-                                                    ] else ...[
-                                                      _buildStatIcon(
-                                                        Icons.timer,
-                                                        card.tick,
-                                                        size: 10,
-                                                      ),
-                                                      const SizedBox(width: 2),
-                                                      _buildStatIcon(
-                                                        Icons.directions_run,
-                                                        card.moveSpeed,
-                                                        size: 10,
-                                                      ),
-                                                    ],
-                                                    // Element/Terrain icon
-                                                    if (card.element !=
-                                                        null) ...[
-                                                      const SizedBox(width: 2),
-                                                      Container(
-                                                        padding:
-                                                            const EdgeInsets.all(
-                                                              2,
                                                             ),
-                                                        decoration: BoxDecoration(
-                                                          color:
-                                                              _getTerrainColor(
+                                                          ),
+                                                        // Show attack AP cost only if > 1
+                                                        if (card.attackAPCost >
+                                                            1) ...[
+                                                          Text(
+                                                            ' (${card.attackAPCost}',
+                                                            style: TextStyle(
+                                                              fontSize: 8,
+                                                              color: Colors
+                                                                  .orange[700],
+                                                            ),
+                                                          ),
+                                                          Icon(
+                                                            Icons.bolt,
+                                                            size: 8,
+                                                            color: Colors
+                                                                .orange[700],
+                                                          ),
+                                                          Text(
+                                                            ')',
+                                                            style: TextStyle(
+                                                              fontSize: 8,
+                                                              color: Colors
+                                                                  .orange[700],
+                                                            ),
+                                                          ),
+                                                        ],
+                                                        const SizedBox(
+                                                          width: 2,
+                                                        ),
+                                                        // Show HP as current/max
+                                                        _buildStatIconWithMax(
+                                                          Icons.favorite,
+                                                          card.currentHealth,
+                                                          card.health,
+                                                          size: 10,
+                                                        ),
+                                                        const SizedBox(
+                                                          width: 2,
+                                                        ),
+                                                        // TYC3: Show AP (current/max) and attack style icon
+                                                        if (_useTYC3Mode) ...[
+                                                          _buildStatIconWithMax(
+                                                            Icons.bolt,
+                                                            card.currentAP,
+                                                            card.maxAP,
+                                                            size: 10,
+                                                          ),
+                                                          const SizedBox(
+                                                            width: 2,
+                                                          ),
+                                                          // Attack style: melee (sword), ranged (bow), far_attack (cannon)
+                                                          _buildAttackStyleIcon(
+                                                            card,
+                                                            size: 10,
+                                                          ),
+                                                        ] else ...[
+                                                          _buildStatIcon(
+                                                            Icons.timer,
+                                                            card.tick,
+                                                            size: 10,
+                                                          ),
+                                                          const SizedBox(
+                                                            width: 2,
+                                                          ),
+                                                          _buildStatIcon(
+                                                            Icons
+                                                                .directions_run,
+                                                            card.moveSpeed,
+                                                            size: 10,
+                                                          ),
+                                                        ],
+                                                        // Element/Terrain icon
+                                                        if (card.element !=
+                                                            null) ...[
+                                                          const SizedBox(
+                                                            width: 2,
+                                                          ),
+                                                          Container(
+                                                            padding:
+                                                                const EdgeInsets.all(
+                                                                  2,
+                                                                ),
+                                                            decoration: BoxDecoration(
+                                                              color:
+                                                                  _getTerrainColor(
+                                                                    card.element!,
+                                                                  ),
+                                                              borderRadius:
+                                                                  BorderRadius.circular(
+                                                                    3,
+                                                                  ),
+                                                            ),
+                                                            child: Icon(
+                                                              _getTerrainIcon(
                                                                 card.element!,
                                                               ),
-                                                          borderRadius:
-                                                              BorderRadius.circular(
-                                                                3,
-                                                              ),
-                                                        ),
-                                                        child: Icon(
-                                                          _getTerrainIcon(
-                                                            card.element!,
+                                                              size: 8,
+                                                              color:
+                                                                  Colors.white,
+                                                            ),
                                                           ),
-                                                          size: 8,
-                                                          color: Colors.white,
-                                                        ),
-                                                      ),
-                                                    ],
+                                                        ],
+                                                      ],
+                                                    ),
                                                   ],
                                                 ),
-                                              ],
-                                            ),
-                                    ),
-                                    // X button to remove staged cards
-                                    if (isStaged &&
-                                        match.currentPhase !=
-                                            MatchPhase.combatPhase)
-                                      Positioned(
-                                        top: 0,
-                                        right: 0,
-                                        child: GestureDetector(
-                                          onTap: () => _removeCardFromTile(
-                                            row,
-                                            col,
-                                            card,
-                                          ),
-                                          child: Container(
-                                            padding: const EdgeInsets.all(2),
-                                            decoration: BoxDecoration(
-                                              color: Colors.red,
-                                              shape: BoxShape.circle,
-                                              border: Border.all(
-                                                color: Colors.white,
-                                                width: 1,
+                                        ),
+                                        // X button to remove staged cards
+                                        if (isStaged &&
+                                            match.currentPhase !=
+                                                MatchPhase.combatPhase)
+                                          Positioned(
+                                            top: 0,
+                                            right: 0,
+                                            child: GestureDetector(
+                                              onTap: () => _removeCardFromTile(
+                                                row,
+                                                col,
+                                                card,
+                                              ),
+                                              child: Container(
+                                                padding: const EdgeInsets.all(
+                                                  2,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.red,
+                                                  shape: BoxShape.circle,
+                                                  border: Border.all(
+                                                    color: Colors.white,
+                                                    width: 1,
+                                                  ),
+                                                ),
+                                                child: const Icon(
+                                                  Icons.close,
+                                                  size: 10,
+                                                  color: Colors.white,
+                                                ),
                                               ),
                                             ),
-                                            child: const Icon(
-                                              Icons.close,
-                                              size: 10,
-                                              color: Colors.white,
-                                            ),
                                           ),
-                                        ),
-                                      ),
-                                  ],
-                                ),
+                                      ],
+                                    ),
+                                  );
+                                },
                               );
-                            },
-                          );
-                        }).toList(),
-                      ),
-                    ),
-                ],
+                            }).toList(),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
               ),
-            ),
-          ),
+            );
+          },
         );
       },
     );

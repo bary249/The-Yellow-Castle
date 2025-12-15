@@ -13,6 +13,7 @@ class SyncedCombatResult {
   final bool isBaseAttack; // true if attacking base, false if attacking card
   final String attackerName;
   final String? targetName; // null for base attacks
+  final String? targetId; // optional: ID of target card (for UI targeting)
   final int damageDealt;
   final int retaliationDamage;
   final bool targetDied;
@@ -25,11 +26,18 @@ class SyncedCombatResult {
   final String attackerOwnerId; // To determine if "my" card or opponent's
   final String? attackerId; // ID of the attacking card (for fog of war)
 
+  // Optional board positions for UI animations (arrow)
+  final int? attackerRow;
+  final int? attackerCol;
+  final int? targetRow;
+  final int? targetCol;
+
   SyncedCombatResult({
     required this.id,
     required this.isBaseAttack,
     required this.attackerName,
     this.targetName,
+    this.targetId,
     required this.damageDealt,
     this.retaliationDamage = 0,
     this.targetDied = false,
@@ -41,6 +49,10 @@ class SyncedCombatResult {
     required this.laneCol,
     required this.attackerOwnerId,
     this.attackerId,
+    this.attackerRow,
+    this.attackerCol,
+    this.targetRow,
+    this.targetCol,
   });
 
   Map<String, dynamic> toJson() => {
@@ -48,6 +60,7 @@ class SyncedCombatResult {
     'isBaseAttack': isBaseAttack,
     'attackerName': attackerName,
     'targetName': targetName,
+    'targetId': targetId,
     'damageDealt': damageDealt,
     'retaliationDamage': retaliationDamage,
     'targetDied': targetDied,
@@ -59,6 +72,10 @@ class SyncedCombatResult {
     'laneCol': laneCol,
     'attackerOwnerId': attackerOwnerId,
     'attackerId': attackerId,
+    'attackerRow': attackerRow,
+    'attackerCol': attackerCol,
+    'targetRow': targetRow,
+    'targetCol': targetCol,
   };
 
   factory SyncedCombatResult.fromJson(Map<String, dynamic> json) {
@@ -67,6 +84,7 @@ class SyncedCombatResult {
       isBaseAttack: json['isBaseAttack'] as bool,
       attackerName: json['attackerName'] as String,
       targetName: json['targetName'] as String?,
+      targetId: json['targetId'] as String?,
       damageDealt: json['damageDealt'] as int,
       retaliationDamage: json['retaliationDamage'] as int? ?? 0,
       targetDied: json['targetDied'] as bool? ?? false,
@@ -78,6 +96,10 @@ class SyncedCombatResult {
       laneCol: json['laneCol'] as int,
       attackerOwnerId: json['attackerOwnerId'] as String,
       attackerId: json['attackerId'] as String?,
+      attackerRow: json['attackerRow'] as int?,
+      attackerCol: json['attackerCol'] as int?,
+      targetRow: json['targetRow'] as int?,
+      targetCol: json['targetCol'] as int?,
     );
   }
 }

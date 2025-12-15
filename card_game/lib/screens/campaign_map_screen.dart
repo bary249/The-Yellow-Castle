@@ -999,7 +999,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
     return (base + modifier).clamp(1, 99);
   }
 
-  String _buildingSupplyBreakdownText(HomeTownBuilding building) {
+  String _buildingCurrentSupplyTimeText(HomeTownBuilding building) {
     if (building.id == _buildingSupplyDepotId) {
       return '';
     }
@@ -1007,47 +1007,65 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
     final modifier = _distanceSupplyModifierEncounters();
     final total = (base + modifier).clamp(1, 99);
     if (modifier == 0) {
-      return 'Supply: every $base encounter${base == 1 ? "" : "s"}';
-    } else if (modifier < 0) {
-      // Bonus (closer to home)
-      return 'Supply: $base $modifier = $total encounter${total == 1 ? "" : "s"} (closer to home)';
-    } else {
-      // Penalty (far from home)
-      return 'Supply: $base + $modifier = $total encounters (distance)';
+      return 'Current supply time: every $total encounter${total == 1 ? "" : "s"}';
     }
+    final sign = modifier > 0 ? '+' : '-';
+    return 'Current supply time: $base $sign ${modifier.abs()} = $total encounter${total == 1 ? "" : "s"}';
   }
 
-  String _buildingSupplyStatusText(HomeTownBuilding building) {
-    final pending = _campaign.pendingCardDeliveries
-        .where((d) => d.sourceBuildingId == building.id)
-        .toList();
-    if (pending.isNotEmpty) {
-      final d = pending.first;
-      final remaining = _campaign.encountersUntilDeliveryArrives(d);
-      final producingRemaining = _campaign.encountersUntilDeliveryProduced(d);
-      if (producingRemaining > 0) {
-        if (producingRemaining == 1) {
-          return 'Producing: ${d.card.name} (ready in 1 encounter)';
-        }
-        return 'Producing: ${d.card.name} (ready in $producingRemaining encounters)';
-      }
-
-      if (remaining <= 0) {
-        return 'Traveling: ${d.card.name} (arriving now)';
-      }
-      if (remaining == 1) {
-        return 'Traveling: ${d.card.name} (arrives in 1 encounter)';
-      }
-      return 'Traveling: ${d.card.name} (arrives in $remaining encounters)';
+  String _buildingProducingStatusText(HomeTownBuilding building) {
+    if (building.id == _buildingSupplyDepotId) {
+      return '';
     }
+    final producing = _campaign.pendingCardDeliveries
+        .where(
+          (d) =>
+              d.sourceBuildingId == building.id &&
+              _campaign.encountersUntilDeliveryProduced(d) > 0,
+        )
+        .toList();
+    if (producing.isEmpty) return '';
 
-    final interval = _buildingSupplyEveryEncounters(building);
-    final sinceLast =
-        _campaign.encounterNumber - building.lastCollectedEncounter;
-    final remaining = interval - sinceLast;
-    if (remaining <= 0) return 'Ready';
-    if (remaining == 1) return 'Ready in 1 encounter';
-    return 'Ready in $remaining encounters';
+    producing.sort(
+      (a, b) => _campaign
+          .encountersUntilDeliveryProduced(a)
+          .compareTo(_campaign.encountersUntilDeliveryProduced(b)),
+    );
+    final d = producing.first;
+    final producingRemaining = _campaign.encountersUntilDeliveryProduced(d);
+    if (producingRemaining == 1) {
+      return 'Producing: ${d.card.name} (ready in 1 encounter)';
+    }
+    return 'Producing: ${d.card.name} (ready in $producingRemaining encounters)';
+  }
+
+  String _buildingTravelingStatusText(HomeTownBuilding building) {
+    if (building.id == _buildingSupplyDepotId) {
+      return '';
+    }
+    final traveling = _campaign.pendingCardDeliveries
+        .where(
+          (d) =>
+              d.sourceBuildingId == building.id &&
+              _campaign.encountersUntilDeliveryProduced(d) <= 0,
+        )
+        .toList();
+    if (traveling.isEmpty) return '';
+
+    traveling.sort(
+      (a, b) => _campaign
+          .encountersUntilDeliveryArrives(a)
+          .compareTo(_campaign.encountersUntilDeliveryArrives(b)),
+    );
+    final d = traveling.first;
+    final remaining = _campaign.encountersUntilDeliveryArrives(d);
+    if (remaining <= 0) {
+      return 'Traveling: ${d.card.name} (arriving now)';
+    }
+    if (remaining == 1) {
+      return 'Traveling: ${d.card.name} (arrives in 1 encounter)';
+    }
+    return 'Traveling: ${d.card.name} (arrives in $remaining encounters)';
   }
 
   bool _canCollectBuilding(HomeTownBuilding building) {
@@ -1082,11 +1100,6 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
       }
 
       for (final b in _campaign.homeTownBuildings) {
-        final inFlight = _campaign.pendingCardDeliveries.any(
-          (d) => d.sourceBuildingId == b.id,
-        );
-        if (inFlight) continue;
-
         final interval = _buildingSupplyEveryEncounters(b);
         final sinceLast = _campaign.encounterNumber - b.lastCollectedEncounter;
         final remaining = interval - sinceLast;
@@ -1489,13 +1502,6 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
   }) async {
     if (!_canCollectBuilding(building)) return null;
 
-    final hasInFlightDelivery = _campaign.pendingCardDeliveries.any(
-      (d) => d.sourceBuildingId == building.id,
-    );
-    if (hasInFlightDelivery && building.id != _buildingSupplyDepotId) {
-      return null;
-    }
-
     if (building.id == _buildingTrainingGroundsId) {
       final candidates = ShopInventory.getCardsForAct(_campaign.act);
       if (candidates.isNotEmpty) {
@@ -1692,12 +1698,6 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
         continue;
       }
 
-      // Card buildings: if ready and no in-flight delivery, start production.
-      final inFlight = _campaign.pendingCardDeliveries.any(
-        (d) => d.sourceBuildingId == b.id,
-      );
-      if (inFlight) continue;
-
       // If a delivery just arrived for this building, start the next cycle
       // immediately (no “stale” encounter), even if the distance-based interval
       // increased since the previous cycle started.
@@ -1825,7 +1825,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
                       final canAfford = _campaign.gold >= effectiveCost;
 
                       final previewBuilding = HomeTownBuilding(id: id);
-                      final supplyText = _buildingSupplyBreakdownText(
+                      final supplyText = _buildingCurrentSupplyTimeText(
                         previewBuilding,
                       );
 
@@ -2138,8 +2138,9 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
                           subtitle: Text(
                             [
                               _homeTownBuildingDescription(b.id),
-                              _buildingSupplyBreakdownText(b),
-                              _buildingSupplyStatusText(b),
+                              _buildingProducingStatusText(b),
+                              _buildingCurrentSupplyTimeText(b),
+                              _buildingTravelingStatusText(b),
                             ].where((s) => s.trim().isNotEmpty).join('\n'),
                             style: const TextStyle(color: Colors.white70),
                           ),
