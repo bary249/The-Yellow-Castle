@@ -5614,15 +5614,15 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
         floatingActionButton: _useTYC3Mode
             ? _buildTYC3ActionButton(match)
             : match.currentPhase == MatchPhase.combatPhase
-                // During combat: show skip button (combat auto-advances, but ENTER skips all)
-                ? FloatingActionButton.extended(
-                    onPressed: () => _matchManager.skipToEnd(),
-                    label: const Text('Skip Combat (ENTER)'),
-                    icon: const Icon(Icons.fast_forward),
-                    backgroundColor: Colors.red[700],
-                    heroTag: 'skip',
-                  )
-                : _buildSubmitButton(match),
+            // During combat: show skip button (combat auto-advances, but ENTER skips all)
+            ? FloatingActionButton.extended(
+                onPressed: () => _matchManager.skipToEnd(),
+                label: const Text('Skip Combat (ENTER)'),
+                icon: const Icon(Icons.fast_forward),
+                backgroundColor: Colors.red[700],
+                heroTag: 'skip',
+              )
+            : _buildSubmitButton(match),
       ),
     );
   }
@@ -6712,8 +6712,7 @@ class _TestMatchScreenState extends State<TestMatchScreen> {
               ),
             ),
           ],
-          );
-      })(),
+        ),
       ),
     );
   }
