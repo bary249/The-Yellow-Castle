@@ -69,6 +69,7 @@
 - Home Town buildings can have a **supply time** measured in **encounters** (cooldown between collects).
 - Story Mode starts with a basic **Training Grounds** building in the Home Town.
 - Advanced Home Town buildings can deliver **higher rarity** cards with a **longer** supply time.
+- Supply time can also be increased based on **distance from Home Town**.
 
 - Campaign mode also has **consumables** (e.g. healing, remove-card) that are stored in the campaign inventory and can be equipped/used between encounters.
 

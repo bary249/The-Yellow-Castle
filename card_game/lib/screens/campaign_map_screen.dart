@@ -715,19 +715,40 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     }
   }
 
-  int _buildingSupplyEveryEncounters(HomeTownBuilding building) {
-    switch (building.id) {
-      case _buildingTrainingGroundsId:
-        return 1;
-      case _buildingSupplyDepotId:
-        return 1;
-      case _buildingOfficersAcademyId:
-        return 3;
-      case _buildingWarCollegeId:
-        return 4;
-      default:
-        return 1;
+  int _distanceSupplyPenaltyEncounters() {
+    final townLat = _campaign.homeTownLat;
+    final townLng = _campaign.homeTownLng;
+    final travelLat = _campaign.lastTravelLat;
+    final travelLng = _campaign.lastTravelLng;
+    if (townLat == null ||
+        townLng == null ||
+        travelLat == null ||
+        travelLng == null) {
+      return 0;
     }
+
+    final distanceMeters = const Distance()(
+      LatLng(travelLat, travelLng),
+      LatLng(townLat, townLng),
+    );
+    final km = distanceMeters / 1000.0;
+    if (km < 80) return 0;
+    if (km < 180) return 1;
+    if (km < 320) return 2;
+    if (km < 500) return 3;
+    return 4;
+  }
+
+  int _buildingSupplyEveryEncounters(HomeTownBuilding building) {
+    final penalty = _distanceSupplyPenaltyEncounters();
+    final base = switch (building.id) {
+      _buildingTrainingGroundsId => 1,
+      _buildingSupplyDepotId => 1,
+      _buildingOfficersAcademyId => 3,
+      _buildingWarCollegeId => 4,
+      _ => 1,
+    };
+    return base + penalty;
   }
 
   String _buildingSupplyStatusText(HomeTownBuilding building) {

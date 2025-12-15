@@ -113,6 +113,7 @@ This document captures the **implemented and intended logic** of the game, mappe
 - Home Town buildings can have a **supply time** measured in **encounters** (cooldown between collects).
 - Story Mode starts with a basic **Training Grounds** building in the Home Town.
 - Advanced Home Town buildings can deliver **higher rarity** cards with a **longer** supply time.
+- Supply time can also be increased based on **distance from Home Town**.
 
 **Implemented campaign bonuses:**
 - **Gold per battle bonus**: `CampaignState.goldPerBattleBonus` (e.g. `relic_gold_purse` => +10 gold per battle reward).

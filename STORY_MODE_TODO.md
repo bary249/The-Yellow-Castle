@@ -8,7 +8,7 @@ Changes to Story mode:
 6. ✅ The buildings in the home town that provide cards, have a "supply time" to them, that considers each encounter as an iteration.
 7. ✅ Every campaign home town starts with basic common cards training grounds, that provide cards each encounter.
 8. ✅ The advanced buildable buildings provide cards in higher rarity, but slower supply time.
-9. The distance of the hero from the home town (base node) also affects supply time.
+9. ✅ The distance of the hero from the home town (base node) also affects supply time.
 10. Hero Progression nodes should also have perks for the home town, that can be unlocked as the hero progresses.
 11. A dialog should pop for the player each time a new card/gold/item/relic is provided to the player from their home town.
 12. Winning enctouner nodes,s should provide gold, and a pre-determined offer of items/relics/buildings (the buildings should be mainly around reducing the supply time of home town buildings) based on the node type (city/battle grounds/defence).
