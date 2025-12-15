@@ -134,9 +134,11 @@ class _CampaignDeckScreenState extends State<CampaignDeckScreen>
               .where((c) => c.element == _selectedElementFilter)
               .toList();
 
+    final pendingDeliveries = widget.campaign.pendingCardDeliveries;
+
     filteredCards.sort((a, b) => a.name.compareTo(b.name));
 
-    if (filteredCards.isEmpty) {
+    if (filteredCards.isEmpty && pendingDeliveries.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -157,18 +159,77 @@ class _CampaignDeckScreenState extends State<CampaignDeckScreen>
       );
     }
 
-    return GridView.builder(
+    return ListView(
       padding: const EdgeInsets.all(16),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        childAspectRatio: 0.7,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-      ),
-      itemCount: filteredCards.length,
-      itemBuilder: (context, index) {
-        return _buildCardItem(filteredCards[index], inDeck: false);
-      },
+      children: [
+        if (pendingDeliveries.isNotEmpty) ...[
+          Text(
+            'Incoming Deliveries',
+            style: TextStyle(
+              color: Colors.amber[300],
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+          ...pendingDeliveries.map((d) {
+            final remaining = widget.campaign.encountersUntilDeliveryArrives(d);
+            final etaText = remaining == 0
+                ? 'Arriving now'
+                : (remaining == 1
+                      ? 'Arrives in 1 encounter'
+                      : 'Arrives in $remaining encounters');
+
+            return Card(
+              color: Colors.grey[850],
+              margin: const EdgeInsets.only(bottom: 10),
+              child: ListTile(
+                leading: const Icon(
+                  Icons.local_shipping,
+                  color: Colors.greenAccent,
+                ),
+                title: Text(
+                  d.card.name,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                subtitle: Text(
+                  etaText,
+                  style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                ),
+              ),
+            );
+          }),
+          const SizedBox(height: 16),
+        ],
+        if (filteredCards.isNotEmpty) ...[
+          Text(
+            'Reserves',
+            style: TextStyle(
+              color: Colors.amber[300],
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3,
+              childAspectRatio: 0.7,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+            ),
+            itemCount: filteredCards.length,
+            itemBuilder: (context, index) {
+              return _buildCardItem(filteredCards[index], inDeck: false);
+            },
+          ),
+        ],
+      ],
     );
   }
 

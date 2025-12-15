@@ -1023,6 +1023,17 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
   }
 
   String _buildingSupplyStatusText(HomeTownBuilding building) {
+    final pending = _campaign.pendingCardDeliveries
+        .where((d) => d.sourceBuildingId == building.id)
+        .toList();
+    if (pending.isNotEmpty) {
+      final d = pending.first;
+      final remaining = _campaign.encountersUntilDeliveryArrives(d);
+      if (remaining <= 0) return 'Arriving now';
+      if (remaining == 1) return 'Arrives in 1 encounter';
+      return 'Arrives in $remaining encounters';
+    }
+
     final interval = _buildingSupplyEveryEncounters(building);
     final sinceLast =
         _campaign.encounterNumber - building.lastCollectedEncounter;
@@ -1230,19 +1241,35 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
   }) async {
     if (!_canCollectBuilding(building)) return null;
 
+    final hasInFlightDelivery = _campaign.pendingCardDeliveries.any(
+      (d) => d.sourceBuildingId == building.id,
+    );
+    if (hasInFlightDelivery && building.id != _buildingSupplyDepotId) {
+      return null;
+    }
+
     if (building.id == _buildingTrainingGroundsId) {
       final candidates = ShopInventory.getCardsForAct(_campaign.act);
       if (candidates.isNotEmpty) {
         candidates.shuffle(_random);
         final card = candidates.first;
+        final arrivesAt =
+            _campaign.encounterNumber +
+            _buildingSupplyEveryEncounters(building);
         setState(() {
-          _campaign.addCard(card);
+          _campaign.enqueueCardDelivery(
+            sourceBuildingId: building.id,
+            card: card,
+            arrivesAtEncounter: arrivesAt,
+          );
           building.lastCollectedEncounter = _campaign.encounterNumber;
         });
         await _saveCampaign();
+        final remaining = arrivesAt - _campaign.encounterNumber;
         final event = RewardEvent(
           title: 'Training Grounds',
-          message: 'Delivered: ${card.name}',
+          message:
+              'Production started: ${card.name} (ETA: $remaining encounters)',
           icon: Icons.military_tech,
           iconColor: Colors.greenAccent,
         );
@@ -1290,14 +1317,23 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
       if (candidates.isNotEmpty) {
         candidates.shuffle(_random);
         final card = candidates.first;
+        final arrivesAt =
+            _campaign.encounterNumber +
+            _buildingSupplyEveryEncounters(building);
         setState(() {
-          _campaign.addCard(card);
+          _campaign.enqueueCardDelivery(
+            sourceBuildingId: building.id,
+            card: card,
+            arrivesAtEncounter: arrivesAt,
+          );
           building.lastCollectedEncounter = _campaign.encounterNumber;
         });
         await _saveCampaign();
+        final remaining = arrivesAt - _campaign.encounterNumber;
         final event = RewardEvent(
           title: 'Officers Academy',
-          message: 'Delivered: ${card.name}',
+          message:
+              'Production started: ${card.name} (ETA: $remaining encounters)',
           icon: Icons.school,
           iconColor: Colors.lightBlueAccent,
         );
@@ -1321,14 +1357,23 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
       if (candidates.isNotEmpty) {
         candidates.shuffle(_random);
         final card = candidates.first;
+        final arrivesAt =
+            _campaign.encounterNumber +
+            _buildingSupplyEveryEncounters(building);
         setState(() {
-          _campaign.addCard(card);
+          _campaign.enqueueCardDelivery(
+            sourceBuildingId: building.id,
+            card: card,
+            arrivesAtEncounter: arrivesAt,
+          );
           building.lastCollectedEncounter = _campaign.encounterNumber;
         });
         await _saveCampaign();
+        final remaining = arrivesAt - _campaign.encounterNumber;
         final event = RewardEvent(
           title: 'War College',
-          message: 'Delivered: ${card.name}',
+          message:
+              'Production started: ${card.name} (ETA: $remaining encounters)',
           icon: Icons.auto_awesome,
           iconColor: Colors.purpleAccent,
         );
@@ -1358,8 +1403,48 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
 
     final events = <RewardEvent>[];
 
+    // Step 1: Move arrived deliveries into Reserves.
+    final arrived = _campaign.collectArrivedDeliveries();
+    if (arrived.isNotEmpty) {
+      for (final d in arrived) {
+        final title = 'Delivery Arrived';
+        final message =
+            '${d.card.name} (from ${_homeTownBuildingName(d.sourceBuildingId)})';
+        final event = RewardEvent(
+          title: title,
+          message: message,
+          icon: Icons.local_shipping,
+          iconColor: Colors.greenAccent,
+        );
+        events.add(event);
+        if (showDialogs) {
+          await _showHomeTownDeliveryDialog(
+            title: event.title,
+            message: event.message,
+            icon: event.icon,
+            iconColor: event.iconColor,
+          );
+        }
+      }
+      await _saveCampaign();
+    }
+
     for (final b in buildings) {
+      if (b.id == _buildingSupplyDepotId) {
+        if (!_canCollectBuilding(b)) continue;
+        final event = await _collectBuilding(b, showDialog: showDialogs);
+        if (event != null) events.add(event);
+        if (!mounted) return <RewardEvent>[];
+        continue;
+      }
+
+      // Card buildings: if ready and no in-flight delivery, start production.
       if (!_canCollectBuilding(b)) continue;
+      final inFlight = _campaign.pendingCardDeliveries.any(
+        (d) => d.sourceBuildingId == b.id,
+      );
+      if (inFlight) continue;
+
       final event = await _collectBuilding(b, showDialog: showDialogs);
       if (event != null) events.add(event);
       if (!mounted) return <RewardEvent>[];

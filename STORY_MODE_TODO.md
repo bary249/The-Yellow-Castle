@@ -29,7 +29,8 @@ Changes to Story mode:
 27. ✅ Remove the 3 card selection after every encounter and before first encounter.
 28. ✅ Keep the first item selection, phrase as "what you choose to take on you journey"
 29. ✅ The new building screen in the home town needs to display all information of this building, which cards it provides and thier production time.
-30. Allow the player to "return" the hero 1 node back, but it always comes with a small random "bad" result (lost cards/gold), but it counts as an iteration in the path, shortens supply time, and the player can return to the previous node as many times as they want.
-31. I want the player to see thier cards production line in thier inventoryu, so they will see which players are going to be added, and see how many enocunters it will take for them to be added.And they will only be able to add them to the deck once they "arrive"
+30. ✅ Allow the player to "return" the hero 1 node back, but it always comes with a small random "bad" result (lost cards/gold), but it counts as an iteration in the path, shortens supply time, and the player can return to the previous node as many times as they want.
+31. ✅ I want the player to see thier cards production line in thier inventoryu, so they will see which players are going to be added, and see how many enocunters it will take for them to be added.And they will only be able to add them to the deck once they "arrive"
 32. If cards are moved to reserves, beacuse of a random event, the player should be able to move them back to the deck, but it will cost them gold or they will have to wait for 1 encounters.
+33. Add a "decesed" card tab to the edit deck page, where cards that were destoryed in battle are stored.
 

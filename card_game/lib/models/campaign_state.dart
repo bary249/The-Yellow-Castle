@@ -69,6 +69,40 @@ class Encounter {
   );
 }
 
+class PendingCardDelivery {
+  final String id;
+  final String sourceBuildingId;
+  final GameCard card;
+  final int scheduledAtEncounter;
+  final int arrivesAtEncounter;
+
+  const PendingCardDelivery({
+    required this.id,
+    required this.sourceBuildingId,
+    required this.card,
+    required this.scheduledAtEncounter,
+    required this.arrivesAtEncounter,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'sourceBuildingId': sourceBuildingId,
+    'card': card.toJson(),
+    'scheduledAtEncounter': scheduledAtEncounter,
+    'arrivesAtEncounter': arrivesAtEncounter,
+  };
+
+  factory PendingCardDelivery.fromJson(Map<String, dynamic> json) =>
+      PendingCardDelivery(
+        id: json['id'] as String,
+        sourceBuildingId: json['sourceBuildingId'] as String,
+        card: GameCard.fromJson(json['card'] as Map<String, dynamic>),
+        scheduledAtEncounter:
+            (json['scheduledAtEncounter'] as num?)?.toInt() ?? 0,
+        arrivesAtEncounter: (json['arrivesAtEncounter'] as num?)?.toInt() ?? 0,
+      );
+}
+
 class HomeTownBuilding {
   final String id;
   int level;
@@ -120,6 +154,7 @@ class CampaignState {
   List<GameCard> deck;
   List<GameCard> destroyedDeckCards;
   List<GameCard> inventory;
+  List<PendingCardDelivery> pendingCardDeliveries;
   List<String> relics;
   List<String> activeRelics;
   String? startingRelicId;
@@ -162,6 +197,7 @@ class CampaignState {
     required this.deck,
     List<GameCard>? destroyedDeckCards,
     List<GameCard>? inventory,
+    List<PendingCardDelivery>? pendingCardDeliveries,
     List<String>? relics,
     List<String>? activeRelics,
     this.startingRelicId,
@@ -190,6 +226,7 @@ class CampaignState {
     List<TravelPoint>? visitedNodes,
     DateTime? lastUpdated,
   }) : inventory = inventory ?? [],
+       pendingCardDeliveries = pendingCardDeliveries ?? <PendingCardDelivery>[],
        destroyedDeckCards = destroyedDeckCards ?? [],
        relics = relics ?? [],
        activeRelics =
@@ -347,6 +384,44 @@ class CampaignState {
     deck = [...deck, card];
   }
 
+  void addCardToReserves(GameCard card) {
+    inventory = [...inventory, card];
+  }
+
+  void enqueueCardDelivery({
+    required String sourceBuildingId,
+    required GameCard card,
+    required int arrivesAtEncounter,
+  }) {
+    final delivery = PendingCardDelivery(
+      id: 'delivery_${DateTime.now().millisecondsSinceEpoch}_${pendingCardDeliveries.length}',
+      sourceBuildingId: sourceBuildingId,
+      card: card,
+      scheduledAtEncounter: encounterNumber,
+      arrivesAtEncounter: arrivesAtEncounter,
+    );
+    pendingCardDeliveries = [...pendingCardDeliveries, delivery];
+  }
+
+  List<PendingCardDelivery> collectArrivedDeliveries() {
+    if (pendingCardDeliveries.isEmpty) return <PendingCardDelivery>[];
+    final arrived = pendingCardDeliveries
+        .where((d) => d.arrivesAtEncounter <= encounterNumber)
+        .toList();
+    if (arrived.isEmpty) return <PendingCardDelivery>[];
+    pendingCardDeliveries = pendingCardDeliveries
+        .where((d) => d.arrivesAtEncounter > encounterNumber)
+        .toList();
+    for (final d in arrived) {
+      addCardToReserves(d.card);
+    }
+    return arrived;
+  }
+
+  int encountersUntilDeliveryArrives(PendingCardDelivery d) {
+    return (d.arrivesAtEncounter - encounterNumber).clamp(0, 999999);
+  }
+
   void removeCard(String cardId) {
     final card = deck.firstWhere(
       (c) => c.id == cardId,
@@ -428,6 +503,9 @@ class CampaignState {
     'deck': deck.map((c) => c.toJson()).toList(),
     'destroyedDeckCards': destroyedDeckCards.map((c) => c.toJson()).toList(),
     'inventory': inventory.map((c) => c.toJson()).toList(),
+    'pendingCardDeliveries': pendingCardDeliveries
+        .map((d) => d.toJson())
+        .toList(),
     'relics': relics,
     'activeRelics': activeRelics,
     'startingRelicId': startingRelicId,
@@ -468,13 +546,24 @@ class CampaignState {
     deck: (json['deck'] as List)
         .map((c) => GameCard.fromJson(c as Map<String, dynamic>))
         .toList(),
-    destroyedDeckCards: (json['destroyedDeckCards'] as List?)
-        ?.map((c) => GameCard.fromJson(c as Map<String, dynamic>))
-        .toList(),
-    inventory: (json['inventory'] as List?)
-        ?.map((c) => GameCard.fromJson(c as Map<String, dynamic>))
-        .toList(),
-    relics: (json['relics'] as List?)?.map((e) => e as String).toList(),
+    destroyedDeckCards:
+        (json['destroyedDeckCards'] as List?)
+            ?.map((e) => GameCard.fromJson(e as Map<String, dynamic>))
+            .toList() ??
+        [],
+    inventory:
+        (json['inventory'] as List?)
+            ?.map((e) => GameCard.fromJson(e as Map<String, dynamic>))
+            .toList() ??
+        [],
+    pendingCardDeliveries:
+        (json['pendingCardDeliveries'] as List?)
+            ?.map(
+              (e) => PendingCardDelivery.fromJson(e as Map<String, dynamic>),
+            )
+            .toList() ??
+        <PendingCardDelivery>[],
+    relics: (json['relics'] as List?)?.whereType<String>().toList() ?? [],
     activeRelics: (json['activeRelics'] as List?)
         ?.map((e) => e as String)
         .toList(),
