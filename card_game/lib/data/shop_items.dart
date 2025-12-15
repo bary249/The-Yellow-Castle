@@ -104,6 +104,14 @@ class ShopInventory {
         effect: 'map_relic',
       ),
       const ShopItem(
+        id: 'relic_supply_routes',
+        name: 'Supply Routes',
+        description: 'Reduce Home Town supply distance penalty by 1 encounter',
+        cost: 90,
+        type: ShopItemType.relic,
+        effect: 'supply_distance_penalty_minus_1',
+      ),
+      const ShopItem(
         id: 'relic_gold_purse',
         name: 'War Chest',
         description: '+10 gold after each battle',

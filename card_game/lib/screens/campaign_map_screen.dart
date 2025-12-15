@@ -975,7 +975,11 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
         ? 3
         : 4;
     final reduction = _homeTownReduceDistancePenalty ? 1 : 0;
-    return (basePenalty - reduction).clamp(0, basePenalty).toInt();
+    final relicReduction = _campaign.isRelicActive('relic_supply_routes')
+        ? 1
+        : 0;
+    final totalReduction = reduction + relicReduction;
+    return (basePenalty - totalReduction).clamp(0, basePenalty).toInt();
   }
 
   double? _distanceToHomeTownKm() {
