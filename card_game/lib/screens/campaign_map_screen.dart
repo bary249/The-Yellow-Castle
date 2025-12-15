@@ -16,6 +16,20 @@ import 'progression_screen.dart';
 import '../services/campaign_persistence_service.dart';
 import '../data/napoleon_progression.dart';
 
+class RewardEvent {
+  final String title;
+  final String message;
+  final IconData icon;
+  final Color iconColor;
+
+  const RewardEvent({
+    required this.title,
+    required this.message,
+    required this.icon,
+    required this.iconColor,
+  });
+}
+
 /// Campaign screen - Book chapter selection style
 class CampaignMapScreen extends StatefulWidget {
   final String leaderId;
@@ -63,6 +77,78 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     if (discountPercent <= 0) return cost;
     final discounted = (cost * (100 - discountPercent)) / 100.0;
     return discounted.round().clamp(0, cost);
+  }
+
+  RewardEvent _goldEvent(int amount) {
+    final prefix = amount >= 0 ? '+' : '';
+    return RewardEvent(
+      title: 'Gold',
+      message: '$prefix$amount Gold',
+      icon: Icons.monetization_on,
+      iconColor: Colors.amber,
+    );
+  }
+
+  Future<void> _showCelebrationDialog({
+    required String title,
+    required List<RewardEvent> events,
+  }) async {
+    if (events.isEmpty) return;
+    final navigator = Navigator.of(context);
+    if (!mounted) return;
+    await showDialog<void>(
+      context: navigator.context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF2D2D2D),
+        title: Text(title, style: const TextStyle(color: Colors.white)),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView(
+            shrinkWrap: true,
+            children: events
+                .map(
+                  (e) => Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(e.icon, color: e.iconColor, size: 18),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                e.title,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                e.message,
+                                style: const TextStyle(color: Colors.white70),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+                .toList(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -903,10 +989,13 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     );
   }
 
-  Future<void> _applyEncounterOffer(Encounter encounter) async {
+  Future<RewardEvent?> _applyEncounterOffer(
+    Encounter encounter, {
+    bool showDialog = true,
+  }) async {
     final type = encounter.offerType;
     final id = encounter.offerId;
-    if (type == null || id == null || id.isEmpty) return;
+    if (type == null || id == null || id.isEmpty) return null;
     final amount = encounter.offerAmount ?? 1;
 
     String message = '';
@@ -949,16 +1038,25 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
       icon = Icons.apartment;
       iconColor = Colors.tealAccent;
     } else {
-      return;
+      return null;
     }
 
     await _saveCampaign();
-    await _showEncounterRewardDialog(
+    final event = RewardEvent(
       title: 'Reward',
       message: message,
       icon: icon,
       iconColor: iconColor,
     );
+    if (showDialog) {
+      await _showEncounterRewardDialog(
+        title: event.title,
+        message: event.message,
+        icon: event.icon,
+        iconColor: event.iconColor,
+      );
+    }
+    return event;
   }
 
   String _encounterOfferLabel(Encounter encounter) {
@@ -1011,8 +1109,11 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     }
   }
 
-  Future<void> _collectBuilding(HomeTownBuilding building) async {
-    if (!_canCollectBuilding(building)) return;
+  Future<RewardEvent?> _collectBuilding(
+    HomeTownBuilding building, {
+    bool showDialog = true,
+  }) async {
+    if (!_canCollectBuilding(building)) return null;
 
     if (building.id == _buildingTrainingGroundsId) {
       final candidates = ShopInventory.getCardsForAct(_campaign.act);
@@ -1024,14 +1125,23 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
           building.lastCollectedEncounter = _campaign.encounterNumber;
         });
         await _saveCampaign();
-        await _showHomeTownDeliveryDialog(
+        final event = RewardEvent(
           title: 'Training Grounds',
           message: 'Delivered: ${card.name}',
           icon: Icons.military_tech,
           iconColor: Colors.greenAccent,
         );
+        if (showDialog) {
+          await _showHomeTownDeliveryDialog(
+            title: event.title,
+            message: event.message,
+            icon: event.icon,
+            iconColor: event.iconColor,
+          );
+        }
+        return event;
       }
-      return;
+      return null;
     }
 
     if (building.id == _buildingSupplyDepotId) {
@@ -1041,13 +1151,21 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
         building.lastCollectedEncounter = _campaign.encounterNumber;
       });
       await _saveCampaign();
-      await _showHomeTownDeliveryDialog(
+      final event = RewardEvent(
         title: 'Supply Depot',
         message: 'Delivered: +15 Gold',
         icon: Icons.monetization_on,
         iconColor: Colors.amber,
       );
-      return;
+      if (showDialog) {
+        await _showHomeTownDeliveryDialog(
+          title: event.title,
+          message: event.message,
+          icon: event.icon,
+          iconColor: event.iconColor,
+        );
+      }
+      return event;
     }
 
     if (building.id == _buildingOfficersAcademyId) {
@@ -1062,14 +1180,23 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
           building.lastCollectedEncounter = _campaign.encounterNumber;
         });
         await _saveCampaign();
-        await _showHomeTownDeliveryDialog(
+        final event = RewardEvent(
           title: 'Officers Academy',
           message: 'Delivered: ${card.name}',
           icon: Icons.school,
           iconColor: Colors.lightBlueAccent,
         );
+        if (showDialog) {
+          await _showHomeTownDeliveryDialog(
+            title: event.title,
+            message: event.message,
+            icon: event.icon,
+            iconColor: event.iconColor,
+          );
+        }
+        return event;
       }
-      return;
+      return null;
     }
 
     if (building.id == _buildingWarCollegeId) {
@@ -1084,28 +1211,119 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
           building.lastCollectedEncounter = _campaign.encounterNumber;
         });
         await _saveCampaign();
-        await _showHomeTownDeliveryDialog(
+        final event = RewardEvent(
           title: 'War College',
           message: 'Delivered: ${card.name}',
           icon: Icons.auto_awesome,
           iconColor: Colors.purpleAccent,
         );
+        if (showDialog) {
+          await _showHomeTownDeliveryDialog(
+            title: event.title,
+            message: event.message,
+            icon: event.icon,
+            iconColor: event.iconColor,
+          );
+        }
+        return event;
       }
-      return;
+      return null;
     }
+
+    return null;
   }
 
-  Future<void> _autoCollectHomeTownDeliveries() async {
-    if (!mounted) return;
+  Future<List<RewardEvent>> _autoCollectHomeTownDeliveries({
+    bool showDialogs = true,
+  }) async {
+    if (!mounted) return <RewardEvent>[];
 
     final buildings = _campaign.homeTownBuildings;
-    if (buildings.isEmpty) return;
+    if (buildings.isEmpty) return <RewardEvent>[];
+
+    final events = <RewardEvent>[];
 
     for (final b in buildings) {
       if (!_canCollectBuilding(b)) continue;
-      await _collectBuilding(b);
-      if (!mounted) return;
+      final event = await _collectBuilding(b, showDialog: showDialogs);
+      if (event != null) events.add(event);
+      if (!mounted) return <RewardEvent>[];
     }
+
+    return events;
+  }
+
+  RewardEvent? _applyRandomStoryOutcome(Encounter encounter) {
+    final lat = _campaign.lastTravelLat ?? 0;
+    final lng = _campaign.lastTravelLng ?? 0;
+    final seedLat = (lat.abs() * 1000).round();
+    final seedLng = (lng.abs() * 1000).round();
+    final seed = encounter.id.hashCode ^ (seedLat * 1000003) ^ seedLng ^ 0x26;
+    final rng = Random(seed);
+
+    final roll = rng.nextDouble();
+    if (roll < 0.40) return null;
+
+    // Positive outcomes
+    if (roll < 0.70) {
+      if (rng.nextBool()) {
+        final gold = 10 + rng.nextInt(11); // 10-20
+        setState(() {
+          _campaign.addGold(gold);
+        });
+        _saveCampaign();
+        return RewardEvent(
+          title: 'Fortune',
+          message: 'Found +$gold Gold on the march',
+          icon: Icons.attach_money,
+          iconColor: Colors.amber,
+        );
+      }
+
+      final candidates = ShopInventory.getCardsForAct(_campaign.act);
+      if (candidates.isEmpty) return null;
+      candidates.shuffle(rng);
+      final card = candidates.first;
+      setState(() {
+        _campaign.addCard(card);
+      });
+      _saveCampaign();
+      return RewardEvent(
+        title: 'Reinforcements',
+        message: 'Mercenaries join you: ${card.name}',
+        icon: Icons.group_add,
+        iconColor: Colors.greenAccent,
+      );
+    }
+
+    // Negative outcomes
+    if (rng.nextBool()) {
+      final goldLoss = 5 + rng.nextInt(11); // 5-15
+      setState(() {
+        _campaign.spendGold(goldLoss.clamp(0, _campaign.gold));
+      });
+      _saveCampaign();
+      return RewardEvent(
+        title: 'Setback',
+        message: 'Supplies lost: -$goldLoss Gold',
+        icon: Icons.money_off,
+        iconColor: Colors.redAccent,
+      );
+    }
+
+    if (_campaign.deck.isEmpty) return null;
+    final idx = rng.nextInt(_campaign.deck.length);
+    final card = _campaign.deck[idx];
+    setState(() {
+      _campaign.removeCard(card.id);
+    });
+    _saveCampaign();
+    return RewardEvent(
+      title: 'Illness',
+      message: '${card.name} is moved to Reserves',
+      icon: Icons.sick,
+      iconColor: Colors.orangeAccent,
+    );
   }
 
   Future<void> _showBuildBuildingDialog() async {
@@ -1716,16 +1934,32 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
           TextButton(
             onPressed: () async {
               Navigator.pop(context);
+              final rewardEvents = <RewardEvent>[];
               setState(() {
                 _campaign.addGold(goldReward);
                 _campaign.completeEncounter();
                 _generateNewChoices();
               });
+              rewardEvents.add(_goldEvent(goldReward));
               await _saveCampaign();
-              await _applyEncounterOffer(encounter);
+              final offerEvent = await _applyEncounterOffer(
+                encounter,
+                showDialog: false,
+              );
+              if (offerEvent != null) rewardEvents.add(offerEvent);
               await _maybeDiscoverMapRelicAfterEncounter(encounter);
               await _showStoryAfterEncounter(encounter);
-              await _autoCollectHomeTownDeliveries();
+              final storyOutcome = _applyRandomStoryOutcome(encounter);
+              if (storyOutcome != null) rewardEvents.add(storyOutcome);
+              final deliveries = await _autoCollectHomeTownDeliveries(
+                showDialogs: false,
+              );
+              rewardEvents.addAll(deliveries);
+              await _saveCampaign();
+              await _showCelebrationDialog(
+                title: 'Rewards',
+                events: rewardEvents,
+              );
             },
             child: const Text('Claim'),
           ),
@@ -1818,14 +2052,20 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
       _saveCampaign();
 
       if (won) {
+        final rewardEvents = <RewardEvent>[];
         await _awardBattleLegacyPoints(encounter);
         final int reward =
             (encounter.goldReward ?? 15) + _campaign.goldPerBattleBonus;
         setState(() {
           _campaign.addGold(reward);
         });
+        rewardEvents.add(_goldEvent(reward));
 
-        await _applyEncounterOffer(encounter);
+        final offerEvent = await _applyEncounterOffer(
+          encounter,
+          showDialog: false,
+        );
+        if (offerEvent != null) rewardEvents.add(offerEvent);
 
         // Show card reward selection
         if (mounted) {
@@ -1874,7 +2114,17 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
         });
         await _saveCampaign();
         await _showStoryAfterEncounter(encounter);
-        await _autoCollectHomeTownDeliveries();
+        final storyOutcome = _applyRandomStoryOutcome(encounter);
+        if (storyOutcome != null) rewardEvents.add(storyOutcome);
+        final deliveries = await _autoCollectHomeTownDeliveries(
+          showDialogs: false,
+        );
+        rewardEvents.addAll(deliveries);
+        await _saveCampaign();
+        await _showCelebrationDialog(
+          title: 'After-Action Report',
+          events: rewardEvents,
+        );
       } else {
         if (_campaign.health <= 0) {
           await _showGameOver();
@@ -2695,13 +2945,24 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                   child: ElevatedButton(
                     onPressed: () async {
                       Navigator.pop(context);
+                      final rewardEvents = <RewardEvent>[];
                       setState(() {
                         _campaign.completeEncounter();
                         _generateNewChoices();
                       });
                       _saveCampaign();
                       await _showStoryAfterEncounter(encounter);
-                      await _autoCollectHomeTownDeliveries();
+                      final storyOutcome = _applyRandomStoryOutcome(encounter);
+                      if (storyOutcome != null) rewardEvents.add(storyOutcome);
+                      final deliveries = await _autoCollectHomeTownDeliveries(
+                        showDialogs: false,
+                      );
+                      rewardEvents.addAll(deliveries);
+                      await _saveCampaign();
+                      await _showCelebrationDialog(
+                        title: 'After-Action Report',
+                        events: rewardEvents,
+                      );
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.grey[700],
@@ -3052,6 +3313,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
           ElevatedButton(
             onPressed: () async {
               Navigator.pop(context);
+              final rewardEvents = <RewardEvent>[];
               setState(() {
                 _campaign.heal(healAmount);
                 _campaign.completeEncounter();
@@ -3062,7 +3324,17 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
               );
               await _saveCampaign();
               await _showStoryAfterEncounter(encounter);
-              await _autoCollectHomeTownDeliveries();
+              final storyOutcome = _applyRandomStoryOutcome(encounter);
+              if (storyOutcome != null) rewardEvents.add(storyOutcome);
+              final deliveries = await _autoCollectHomeTownDeliveries(
+                showDialogs: false,
+              );
+              rewardEvents.addAll(deliveries);
+              await _saveCampaign();
+              await _showCelebrationDialog(
+                title: 'After-Action Report',
+                events: rewardEvents,
+              );
             },
             child: Text('Rest (+$healAmount HP)'),
           ),
@@ -3116,15 +3388,30 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
           TextButton(
             onPressed: () async {
               Navigator.pop(context);
+              final rewardEvents = <RewardEvent>[];
               setState(() {
                 _campaign.completeEncounter();
                 _generateNewChoices();
               });
               await _saveCampaign();
-              await _applyEncounterOffer(encounter);
+              final offerEvent = await _applyEncounterOffer(
+                encounter,
+                showDialog: false,
+              );
+              if (offerEvent != null) rewardEvents.add(offerEvent);
               await _maybeDiscoverMapRelicAfterEncounter(encounter);
               await _showStoryAfterEncounter(encounter);
-              await _autoCollectHomeTownDeliveries();
+              final storyOutcome = _applyRandomStoryOutcome(encounter);
+              if (storyOutcome != null) rewardEvents.add(storyOutcome);
+              final deliveries = await _autoCollectHomeTownDeliveries(
+                showDialogs: false,
+              );
+              rewardEvents.addAll(deliveries);
+              await _saveCampaign();
+              await _showCelebrationDialog(
+                title: 'Rewards',
+                events: rewardEvents,
+              );
             },
             child: const Text('Continue'),
           ),
