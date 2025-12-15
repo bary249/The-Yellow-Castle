@@ -35,5 +35,6 @@ Changes to Story mode:
 33. ✅ Add a "decesed" card tab to the edit deck page, where cards that were destoryed in battle are stored.
 34. ✅ Campagin menu itmes shoudl be Edit deck, Relics (constant passive buffs), Items (Consumables), Town. Legacy should be in the user menu, and return node should be on the map or somehwere else.
 35. ✅ Always show wich card is being produced in the home town, in the home town building.
-36. If a player losses or retreats form an enoucnter or boss fight, they should have more enocunter possbilites in order to get stronger via gold and items or supply chain.
+36. ✅ If a player losses or retreats form an enoucnter or boss fight, they should have more enocunter possbilites in order to get stronger via gold and items or supply chain.
 37. Make sure merchants and "shop" encounters are placed closer to the current hero location, or in betweren the hero and the next cluster of encounters.   
+38. never give buildings as enconuter to 

@@ -191,6 +191,8 @@ class CampaignState {
   /// for free once encounterNumber >= the gated value.
   Map<String, int> gatedReserveCards;
 
+  int recoveryEncountersRemaining;
+
   CampaignState({
     required this.id,
     required this.leaderId,
@@ -230,6 +232,7 @@ class CampaignState {
     List<TravelPoint>? travelHistory,
     List<TravelPoint>? visitedNodes,
     Map<String, int>? gatedReserveCards,
+    this.recoveryEncountersRemaining = 0,
     DateTime? lastUpdated,
   }) : inventory = inventory ?? [],
        gatedReserveCards = gatedReserveCards ?? <String, int>{},
@@ -514,6 +517,17 @@ class CampaignState {
 
   void completeEncounter() {
     encounterNumber++;
+    if (recoveryEncountersRemaining > 0) {
+      recoveryEncountersRemaining--;
+    }
+    clearExpiredGates();
+  }
+
+  void enterRecoveryMode({int encounters = 2}) {
+    if (encounters <= 0) return;
+    if (recoveryEncountersRemaining < encounters) {
+      recoveryEncountersRemaining = encounters;
+    }
   }
 
   void setPendingDefenseEncounter(Encounter encounter) {
@@ -577,6 +591,7 @@ class CampaignState {
     'travelHistory': travelHistory.map((p) => p.toJson()).toList(),
     'visitedNodes': visitedNodes.map((p) => p.toJson()).toList(),
     'gatedReserveCards': gatedReserveCards,
+    'recoveryEncountersRemaining': recoveryEncountersRemaining,
     'lastUpdated': lastUpdated.toIso8601String(),
   };
 
@@ -667,6 +682,8 @@ class CampaignState {
     gatedReserveCards: (json['gatedReserveCards'] as Map?)?.map(
       (key, value) => MapEntry(key as String, (value as num).toInt()),
     ),
+    recoveryEncountersRemaining:
+        (json['recoveryEncountersRemaining'] as num?)?.toInt() ?? 0,
     lastUpdated: json['lastUpdated'] != null
         ? DateTime.parse(json['lastUpdated'] as String)
         : null,
@@ -742,6 +759,31 @@ class EncounterGenerator {
         choices.add(_generateEncounter(otherTypes[i], encounterNumber, i));
       }
     }
+
+    choices.shuffle(_random);
+    return choices;
+  }
+
+  List<Encounter> generateRecoveryChoices(int encounterNumber) {
+    final choices = <Encounter>[];
+
+    choices.add(
+      Encounter(
+        id: 'recovery_battle_${encounterNumber}_0',
+        type: EncounterType.battle,
+        title: 'Skirmish (Recovery)',
+        description: 'A smaller enemy force you can defeat to regain momentum.',
+        difficulty: BattleDifficulty.easy,
+        goldReward: 8 + (act * 5),
+        offerType: 'consumable',
+        offerId: _randomConsumableOfferId(),
+        offerAmount: 1,
+      ),
+    );
+    choices.add(_generateEncounter(EncounterType.shop, encounterNumber, 0));
+    choices.add(_generateEncounter(EncounterType.rest, encounterNumber, 0));
+    choices.add(_generateEncounter(EncounterType.event, encounterNumber, 1));
+    choices.add(_generateEncounter(EncounterType.treasure, encounterNumber, 0));
 
     choices.shuffle(_random);
     return choices;

@@ -1866,6 +1866,24 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
   void _generateNewChoices() {
     final pendingDefense = _campaign.pendingDefenseEncounter;
 
+    if (_campaign.recoveryEncountersRemaining > 0) {
+      final choices = _generator.generateRecoveryChoices(
+        _campaign.encounterNumber,
+      );
+      if (pendingDefense != null) {
+        final alreadyIncluded = choices.any((e) => e.id == pendingDefense.id);
+        if (!alreadyIncluded) {
+          if (choices.isEmpty) {
+            choices.add(pendingDefense);
+          } else {
+            choices[choices.length - 1] = pendingDefense;
+          }
+        }
+      }
+      _campaign.currentChoices = choices;
+      return;
+    }
+
     if (_campaign.isBossTime) {
       // Time for the boss!
       final boss = _generator.generateBoss();
@@ -2361,6 +2379,20 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
       } else {
         if (_campaign.health <= 0) {
           await _showGameOver();
+        } else {
+          setState(() {
+            _campaign.enterRecoveryMode(encounters: 2);
+            _generateNewChoices();
+          });
+          await _saveCampaign();
+          if (!mounted) return;
+          await _showEncounterRewardDialog(
+            title: 'Defeat',
+            message:
+                'You survived, but your army is battered. You can regroup and seek supplies.',
+            icon: Icons.warning,
+            iconColor: Colors.redAccent,
+          );
         }
       }
     } else {
@@ -2409,6 +2441,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
                     Navigator.pop(context);
                     setState(() {
                       _campaign.spendGold(20);
+                      _campaign.enterRecoveryMode(encounters: 1);
                       _generateNewChoices(); // Refresh encounters
                     });
                     _saveCampaign();
@@ -2504,6 +2537,20 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
         _saveCampaign();
         if (_campaign.health <= 0) {
           await _showGameOver();
+        } else {
+          setState(() {
+            _campaign.enterRecoveryMode(encounters: 2);
+            _generateNewChoices();
+          });
+          await _saveCampaign();
+          if (!mounted) return;
+          await _showEncounterRewardDialog(
+            title: 'Setback',
+            message:
+                'You fell back from the boss fight. Gather strength and supplies before returning.',
+            icon: Icons.warning,
+            iconColor: Colors.orangeAccent,
+          );
         }
       }
     } else {
