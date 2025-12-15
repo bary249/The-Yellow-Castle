@@ -3712,6 +3712,43 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     return const LatLng(45.2, 8.6);
   }
 
+  LatLng _centerOfLatLngs(List<LatLng> points) {
+    if (points.isEmpty) return _act1ItalyCenter();
+    double lat = 0;
+    double lng = 0;
+    for (final p in points) {
+      lat += p.latitude;
+      lng += p.longitude;
+    }
+    return LatLng(lat / points.length, lng / points.length);
+  }
+
+  LatLng _shopPositionBetweenHeroAndCluster({
+    required Encounter encounter,
+    required LatLng defaultPos,
+    required LatLng? heroPos,
+    required LatLng clusterCenter,
+  }) {
+    if (heroPos == null) return defaultPos;
+    if (encounter.type != EncounterType.shop) return defaultPos;
+
+    // Deterministic jitter so the shop doesn't overlap other markers.
+    final seed = encounter.id.hashCode ^ (_campaign.encounterNumber * 1009);
+    final rng = Random(seed);
+
+    // Interpolate: closer to hero, but still on the way to the main cluster.
+    const t = 0.35;
+    var lat =
+        heroPos.latitude + (clusterCenter.latitude - heroPos.latitude) * t;
+    var lng =
+        heroPos.longitude + (clusterCenter.longitude - heroPos.longitude) * t;
+
+    lat += (rng.nextDouble() - 0.5) * 0.25;
+    lng += (rng.nextDouble() - 0.5) * 0.25;
+
+    return LatLng(lat, lng);
+  }
+
   // For MVP: map the *currentChoices* (2-3 encounters) to plausible real locations
   // that progress generally toward Milan. We keep it deterministic per chapter.
   List<LatLng> _act1CandidateLocationsForChapter(int chapterIndex) {
@@ -3902,6 +3939,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     final locations = _act1CandidateLocationsForChapter(
       _campaign.encounterNumber,
     );
+    final clusterCenter = _centerOfLatLngs(locations);
     final travelPoints = _campaign.travelHistory
         .map((p) => LatLng(p.lat, p.lng))
         .toList();
@@ -4062,6 +4100,16 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
     for (int i = 0; i < choices.length; i++) {
       final encounter = choices[i];
       LatLng pos = locations[i % locations.length];
+
+      // Place shop encounters closer to the current hero location / between the
+      // hero and the next encounter cluster.
+      pos = _shopPositionBetweenHeroAndCluster(
+        encounter: encounter,
+        defaultPos: pos,
+        heroPos: heroPos,
+        clusterCenter: clusterCenter,
+      );
+
       if (encounter.isDefense &&
           _campaign.pendingDefenseLat != null &&
           _campaign.pendingDefenseLng != null) {
