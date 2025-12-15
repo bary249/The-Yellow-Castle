@@ -71,6 +71,7 @@
 - Advanced Home Town buildings can deliver **higher rarity** cards with a **longer** supply time.
 - Supply time can also be increased based on **distance from Home Town**.
 - Hero progression unlocks can also grant **Home Town perks**.
+- When a Home Town building delivers a reward, the game shows what arrived.
 
 - Campaign mode also has **consumables** (e.g. healing, remove-card) that are stored in the campaign inventory and can be equipped/used between encounters.
 

@@ -800,6 +800,39 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
         interval;
   }
 
+  Future<void> _showHomeTownDeliveryDialog({
+    required String title,
+    required String message,
+    required IconData icon,
+    required Color iconColor,
+  }) async {
+    final navigator = Navigator.of(context);
+    if (!mounted) return;
+    await showDialog<void>(
+      context: navigator.context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF2D2D2D),
+        title: Row(
+          children: [
+            Icon(icon, color: iconColor),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(title, style: const TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+        content: Text(message, style: const TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _collectBuilding(HomeTownBuilding building) async {
     if (!_canCollectBuilding(building)) return;
 
@@ -813,11 +846,12 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
           building.lastCollectedEncounter = _campaign.encounterNumber;
         });
         await _saveCampaign();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Training Grounds delivered: ${card.name}')),
-          );
-        }
+        await _showHomeTownDeliveryDialog(
+          title: 'Training Grounds',
+          message: 'Delivered: ${card.name}',
+          icon: Icons.military_tech,
+          iconColor: Colors.greenAccent,
+        );
       }
       return;
     }
@@ -829,11 +863,12 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
         building.lastCollectedEncounter = _campaign.encounterNumber;
       });
       await _saveCampaign();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Supply Depot delivered: +15 Gold')),
-        );
-      }
+      await _showHomeTownDeliveryDialog(
+        title: 'Supply Depot',
+        message: 'Delivered: +15 Gold',
+        icon: Icons.monetization_on,
+        iconColor: Colors.amber,
+      );
       return;
     }
 
@@ -849,11 +884,12 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
           building.lastCollectedEncounter = _campaign.encounterNumber;
         });
         await _saveCampaign();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Officers Academy delivered: ${card.name}')),
-          );
-        }
+        await _showHomeTownDeliveryDialog(
+          title: 'Officers Academy',
+          message: 'Delivered: ${card.name}',
+          icon: Icons.school,
+          iconColor: Colors.lightBlueAccent,
+        );
       }
       return;
     }
@@ -870,11 +906,12 @@ class _CampaignMapScreenState extends State<CampaignMapScreen> {
           building.lastCollectedEncounter = _campaign.encounterNumber;
         });
         await _saveCampaign();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('War College delivered: ${card.name}')),
-          );
-        }
+        await _showHomeTownDeliveryDialog(
+          title: 'War College',
+          message: 'Delivered: ${card.name}',
+          icon: Icons.auto_awesome,
+          iconColor: Colors.purpleAccent,
+        );
       }
       return;
     }

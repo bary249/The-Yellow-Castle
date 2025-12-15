@@ -115,6 +115,7 @@ This document captures the **implemented and intended logic** of the game, mappe
 - Advanced Home Town buildings can deliver **higher rarity** cards with a **longer** supply time.
 - Supply time can also be increased based on **distance from Home Town**.
 - Hero progression unlocks can also grant **Home Town perks** (e.g. building cost discounts, improved logistics).
+- When a Home Town building delivers a reward, the UI can show a dialog to confirm what arrived.
 
 **Implemented campaign bonuses:**
 - **Gold per battle bonus**: `CampaignState.goldPerBattleBonus` (e.g. `relic_gold_purse` => +10 gold per battle reward).
