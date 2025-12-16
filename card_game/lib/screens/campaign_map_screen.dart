@@ -153,13 +153,15 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
     return discounted.round().clamp(0, cost);
   }
 
-  /// 1/5 chance to permanently destroy a random card from deck
+  /// Chance to permanently destroy a random card from deck when waiting.
+  /// - 1/3 normally
+  /// - 1/2 if player has 0 gold
   /// Returns a RewardEvent if a card was destroyed, null otherwise
   RewardEvent? _tryRandomCardDeath() {
     if (_campaign.deck.isEmpty) return null;
 
-    // 1 in 5 chance (20%)
-    if (_random.nextInt(5) != 0) return null;
+    final denominator = _campaign.gold <= 0 ? 2 : 3;
+    if (_random.nextInt(denominator) != 0) return null;
 
     final idx = _random.nextInt(_campaign.deck.length);
     final card = _campaign.deck[idx];
@@ -369,7 +371,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
 
     rewardEvents.add(_applyReturnPenalty());
 
-    // 1/5 chance to lose a card permanently
+    // Chance to lose a card permanently (1/3, or 1/2 if gold is 0)
     final cardDeath = _tryRandomCardDeath();
     if (cardDeath != null) {
       rewardEvents.add(cardDeath);
