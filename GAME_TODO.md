@@ -71,6 +71,7 @@
 - [x] Basic navigation and node completion
 - [x] Connect battles to actual enemy decks (Act 1 Austrian deck)
 - [x] Act transitions: carry over cards/relics/items/buildings; revive all cards; restore base HP; update Home Town + map theater per act (Acts 2-3)
+- [x] Between-acts map animation: hero marches on the map to the next act start with camera follow (skippable)
 - [ ] Test path generation and navigation
 
 ### Phase 6: Shops & Rest Sites

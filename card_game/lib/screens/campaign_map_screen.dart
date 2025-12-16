@@ -59,6 +59,10 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
   final CampaignPersistenceService _persistence = CampaignPersistenceService();
   final MapController _mapController = MapController();
 
+  AnimationController? _betweenActsController;
+  bool _isBetweenActsAnimating = false;
+  LatLng? _betweenActsHeroPos;
+
   bool _isValidConsumableOfferId(String id) {
     return ShopInventory.getAllConsumables().any((e) => e.id == id);
   }
@@ -524,6 +528,77 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
   void initState() {
     super.initState();
     _initCampaign();
+  }
+
+  @override
+  void dispose() {
+    _betweenActsController?.dispose();
+    super.dispose();
+  }
+
+  LatLng? _currentHeroPos() {
+    final townLat = _campaign.homeTownLat;
+    final townLng = _campaign.homeTownLng;
+    if (_campaign.lastTravelLat != null && _campaign.lastTravelLng != null) {
+      return LatLng(_campaign.lastTravelLat!, _campaign.lastTravelLng!);
+    }
+    if (townLat != null && townLng != null) {
+      return LatLng(townLat, townLng);
+    }
+    return null;
+  }
+
+  Future<void> _playBetweenActsAnimation({
+    required LatLng from,
+    required LatLng to,
+  }) async {
+    _betweenActsController?.dispose();
+    _betweenActsHeroPos = from;
+    _isBetweenActsAnimating = true;
+
+    final controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 7),
+    );
+    _betweenActsController = controller;
+
+    void tick() {
+      if (!mounted) return;
+      final t = Curves.easeInOut.transform(controller.value);
+      final pos = LatLng(
+        from.latitude + ((to.latitude - from.latitude) * t),
+        from.longitude + ((to.longitude - from.longitude) * t),
+      );
+      setState(() {
+        _betweenActsHeroPos = pos;
+      });
+
+      final zoom = _mapController.camera.zoom;
+      _mapController.move(pos, zoom);
+    }
+
+    controller.addListener(tick);
+    tick();
+
+    try {
+      await controller.forward();
+    } finally {
+      if (mounted) {
+        controller.removeListener(tick);
+        setState(() {
+          _isBetweenActsAnimating = false;
+          _betweenActsHeroPos = null;
+        });
+      }
+    }
+  }
+
+  void _skipBetweenActsAnimation() {
+    final c = _betweenActsController;
+    if (c == null) return;
+    if (!_isBetweenActsAnimating) return;
+    c.stop();
+    c.value = 1.0;
   }
 
   Future<void> _refreshHomeTownProgressionPerks() async {
@@ -3521,7 +3596,9 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
     );
   }
 
-  void _completeActTransition() {
+  Future<void> _completeActTransition() async {
+    final from = _currentHeroPos();
+
     setState(() {
       _campaign.nextAct();
       // Re-initialize generator for the new act
@@ -3530,8 +3607,17 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
     });
     _initHomeTownIfNeeded();
     _initMapRelicIfNeeded();
-    _refreshHomeTownProgressionPerks();
-    _saveCampaign();
+    await _refreshHomeTownProgressionPerks();
+    await _saveCampaign();
+
+    final toLat = _campaign.homeTownLat;
+    final toLng = _campaign.homeTownLng;
+    final to = (toLat != null && toLng != null) ? LatLng(toLat, toLng) : null;
+
+    if (from != null && to != null && mounted) {
+      await _playBetweenActsAnimation(from: from, to: to);
+    }
+    if (!mounted) return;
     _showActIntroDialog();
   }
 
@@ -5297,12 +5383,8 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
     }
 
     // Hero marker: last travel position (fallback to Home Town).
-    LatLng? heroPos;
-    if (_campaign.lastTravelLat != null && _campaign.lastTravelLng != null) {
-      heroPos = LatLng(_campaign.lastTravelLat!, _campaign.lastTravelLng!);
-    } else if (townLat != null && townLng != null) {
-      heroPos = LatLng(townLat, townLng);
-    }
+    LatLng? heroPos = _isBetweenActsAnimating ? _betweenActsHeroPos : null;
+    heroPos ??= _currentHeroPos();
     if (heroPos != null) {
       markers.add(
         Marker(
@@ -5584,6 +5666,57 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
                 ),
               ],
             ),
+            if (_isBetweenActsAnimating)
+              Positioned.fill(
+                child: Stack(
+                  children: [
+                    ModalBarrier(
+                      dismissible: false,
+                      color: Colors.black.withValues(alpha: 0.35),
+                    ),
+                    Positioned(
+                      left: 12,
+                      right: 12,
+                      top: 12,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.75),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.white24),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.directions_walk,
+                              color: Colors.white,
+                              size: 18,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Marching to Act ${_campaign.act}...',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: _skipBetweenActsAnimation,
+                              child: const Text('Skip'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             Positioned(
               left: 12,
               right: 12,
