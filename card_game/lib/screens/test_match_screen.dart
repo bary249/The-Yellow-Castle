@@ -4953,6 +4953,9 @@ class _TestMatchScreenState extends State<TestMatchScreen>
     int secondsLeft = 10;
     Timer? timer;
 
+    // Only use timer in online mode - PvE has no time pressure
+    final useTimer = _isOnlineMode;
+
     // Wait for the dialog to close
     final result = await showDialog<List<int>>(
       context: context,
@@ -4960,20 +4963,22 @@ class _TestMatchScreenState extends State<TestMatchScreen>
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setStateDialog) {
-            // Start timer once
-            timer ??= Timer.periodic(const Duration(seconds: 1), (t) {
-              if (secondsLeft > 0) {
-                if (mounted) {
-                  setStateDialog(() {
-                    secondsLeft--;
-                  });
+            // Start timer once (only in online mode)
+            if (useTimer) {
+              timer ??= Timer.periodic(const Duration(seconds: 1), (t) {
+                if (secondsLeft > 0) {
+                  if (mounted) {
+                    setStateDialog(() {
+                      secondsLeft--;
+                    });
+                  }
+                } else {
+                  t.cancel();
+                  // Auto-confirm with selection if time runs out
+                  Navigator.of(context).pop(selectedIndices.toList());
                 }
-              } else {
-                t.cancel();
-                // Auto-confirm with selection if time runs out
-                Navigator.of(context).pop(selectedIndices.toList());
-              }
-            });
+              });
+            }
 
             return AlertDialog(
               backgroundColor: Colors.brown[50],
@@ -4981,13 +4986,14 @@ class _TestMatchScreenState extends State<TestMatchScreen>
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text('Mulligan Phase'),
-                  Text(
-                    '$secondsLeft s',
-                    style: const TextStyle(
-                      color: Colors.red,
-                      fontWeight: FontWeight.bold,
+                  if (useTimer)
+                    Text(
+                      '$secondsLeft s',
+                      style: const TextStyle(
+                        color: Colors.red,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                  ),
                 ],
               ),
               content: SizedBox(
