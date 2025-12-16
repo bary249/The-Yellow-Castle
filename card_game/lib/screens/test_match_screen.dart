@@ -8921,15 +8921,28 @@ class _TestMatchScreenState extends State<TestMatchScreen>
               );
 
               // Wrap player cards with Draggable for drag-and-drop targeting
+              // If this card is a valid heal target (for medic), also make it targetable
               if (isPlayerCard && !isStaged) {
-                cardWidget = _buildDraggableCard(
-                  card,
-                  row,
-                  col,
-                  cardWidget,
-                  actualCardWidth,
-                  cardHeight,
-                );
+                if (isValidTarget) {
+                  // This is a valid heal target - wrap with both DragTarget and tap handler
+                  cardWidget = _buildTargetableCard(
+                    card,
+                    row,
+                    col,
+                    cardWidget,
+                    isValidTarget,
+                  );
+                } else {
+                  // Normal player card - just draggable
+                  cardWidget = _buildDraggableCard(
+                    card,
+                    row,
+                    col,
+                    cardWidget,
+                    actualCardWidth,
+                    cardHeight,
+                  );
+                }
               }
               // Wrap opponent cards with DragTarget for receiving attacks
               else if (isOpponent) {
