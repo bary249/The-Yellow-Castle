@@ -556,8 +556,15 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
     required LatLng to,
   }) async {
     _betweenActsController?.dispose();
-    _betweenActsHeroPos = from;
-    _isBetweenActsAnimating = true;
+
+    // Must call setState to show the animation overlay immediately
+    setState(() {
+      _betweenActsHeroPos = from;
+      _isBetweenActsAnimating = true;
+    });
+
+    // Center map on starting position
+    _mapController.move(from, _mapController.camera.zoom);
 
     final controller = AnimationController(
       vsync: this,
@@ -3633,6 +3640,9 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
 
   Future<void> _completeActTransition() async {
     final from = _currentHeroPos();
+    debugPrint(
+      '[ACT TRANSITION] from=$from (lastTravel=${_campaign.lastTravelLat},${_campaign.lastTravelLng})',
+    );
 
     setState(() {
       _campaign.nextAct();
@@ -3648,9 +3658,15 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
     final toLat = _campaign.homeTownLat;
     final toLng = _campaign.homeTownLng;
     final to = (toLat != null && toLng != null) ? LatLng(toLat, toLng) : null;
+    debugPrint('[ACT TRANSITION] to=$to (homeTown=$toLat,$toLng)');
 
     if (from != null && to != null && mounted) {
+      debugPrint('[ACT TRANSITION] Playing march animation from $from to $to');
       await _playBetweenActsAnimation(from: from, to: to);
+    } else {
+      debugPrint(
+        '[ACT TRANSITION] Skipping animation: from=$from, to=$to, mounted=$mounted',
+      );
     }
     if (!mounted) return;
     _showActIntroDialog();

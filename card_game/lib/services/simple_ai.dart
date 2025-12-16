@@ -74,8 +74,11 @@ class SimpleAI {
     final maxCards = matchManager.maxCardsThisTurn;
     int cardsPlaced = 0;
 
-    // Shuffle hand for variety
-    final shuffledHand = hand.toList()..shuffle(_random);
+    // Prioritize boss cards (id starts with "boss_"), then shuffle the rest
+    final bossCards = hand.where((c) => c.id.startsWith('boss_')).toList();
+    final nonBossCards = hand.where((c) => !c.id.startsWith('boss_')).toList();
+    nonBossCards.shuffle(_random);
+    final shuffledHand = [...bossCards, ...nonBossCards];
 
     for (final card in shuffledHand) {
       if (cardsPlaced >= maxCards) break;
