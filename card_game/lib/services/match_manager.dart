@@ -1615,6 +1615,18 @@ class MatchManager {
       return false;
     }
 
+    // Special case: Playing a medic from hand onto your base tile can
+    // immediately heal an injured friendly unit on that tile, without paying
+    // the placement AP cost (only the heal AP is spent).
+    final isBasePlacement = row == baseRow;
+    final isMedic = _isMedic(card);
+    final injuredFriendlyOnTile = tile.cards
+        .where(
+          (c) =>
+              c.isAlive && c.ownerId == active.id && c.currentHealth < c.health,
+        )
+        .toList();
+
     // Remove card from hand
     if (!active.playCard(card)) {
       _log('❌ Card not in hand');
@@ -1626,10 +1638,15 @@ class MatchManager {
     _currentMatch!.cardsPlayedThisTurn++;
 
     // Initialize card's AP and set owner
-    // Card starts with maxAP - 1 (placing costs 1 AP)
+    // Default: Card starts with maxAP - 1 (placing costs 1 AP)
     // If placed on middle row, costs 2 AP (place + move)
-    final apCost = (row == middleRow) ? 2 : 1;
-    card.currentAP = card.maxAP - apCost;
+    final shouldInstantHeal =
+        isBasePlacement &&
+        isMedic &&
+        injuredFriendlyOnTile.isNotEmpty &&
+        card.maxAP >= card.attackAPCost;
+    final apCost = shouldInstantHeal ? 0 : (row == middleRow ? 2 : 1);
+    card.currentAP = (card.maxAP - apCost).clamp(0, card.maxAP);
     card.ownerId = active.id;
 
     final owner = isPlayer ? 'Player' : 'Opponent';
@@ -1639,6 +1656,17 @@ class MatchManager {
     _log(
       '✅ [$owner] Placed ${card.name} (${card.damage}/${card.health}) at ($row, $col)$placementNote',
     );
+
+    if (shouldInstantHeal) {
+      // Heal the most-injured friendly unit on this tile.
+      injuredFriendlyOnTile.sort((a, b) {
+        final missingA = a.health - a.currentHealth;
+        final missingB = b.health - b.currentHealth;
+        return missingB - missingA;
+      });
+      final target = injuredFriendlyOnTile.first;
+      healCardTYC3(card, target, row, col, row, col);
+    }
 
     // Check for relic pickup at placement tile (in case placed on middle)
     _checkRelicPickup(row, col, card.ownerId!);

@@ -28,14 +28,32 @@ class ShopItem {
 /// Shop inventory generator
 class ShopInventory {
   /// Generate random shop items for the given act
-  static List<ShopItem> generateForAct(int act) {
+  static List<ShopItem> generateForAct(
+    int act, {
+    bool betterShops = false,
+    bool emperorUnlocked = false,
+  }) {
     final items = <ShopItem>[];
 
-    // Add 3 random cards
-    final availableCards = getCardsForAct(act);
+    final availableCards = getCardsForAct(
+      act,
+      emperorUnlocked: emperorUnlocked,
+    );
     availableCards.shuffle();
-    for (int i = 0; i < 3 && i < availableCards.length; i++) {
-      final card = availableCards[i];
+    final cardCount = betterShops ? 4 : 3;
+
+    final rareOrBetter = availableCards.where((c) => c.rarity >= 2).toList();
+    final selectedCards = <GameCard>[];
+    if (betterShops && rareOrBetter.isNotEmpty) {
+      selectedCards.add(rareOrBetter.first);
+    }
+    for (final c in availableCards) {
+      if (selectedCards.length >= cardCount) break;
+      if (selectedCards.any((s) => s.id == c.id)) continue;
+      selectedCards.add(c);
+    }
+
+    for (final card in selectedCards) {
       items.add(
         ShopItem(
           id: 'card_${card.id}',
@@ -59,6 +77,9 @@ class ShopInventory {
     relics.shuffle();
     if (relics.isNotEmpty) {
       items.add(relics.first);
+      if (betterShops && relics.length > 1) {
+        items.add(relics[1]);
+      }
     }
 
     return items;
@@ -159,7 +180,10 @@ class ShopInventory {
     ];
   }
 
-  static List<GameCard> getCardsForAct(int act) {
+  static List<GameCard> getCardsForAct(
+    int act, {
+    bool emperorUnlocked = false,
+  }) {
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     switch (act) {
       case 1:
@@ -175,11 +199,11 @@ class ShopInventory {
           napoleonGrenadier(110 + timestamp % 1000),
           napoleonCuirassier(111 + timestamp % 1000),
           napoleonHussar(112 + timestamp % 1000),
-          napoleonYoungGuard(113 + timestamp % 1000),
-          napoleonChasseur(114 + timestamp % 1000),
+          if (emperorUnlocked) napoleonYoungGuard(113 + timestamp % 1000),
+          if (emperorUnlocked) napoleonChasseur(114 + timestamp % 1000),
           napoleonHorseArtillery(115 + timestamp % 1000),
           // Epic (rarity 3)
-          napoleonOldGuard(120 + timestamp % 1000),
+          if (emperorUnlocked) napoleonOldGuard(120 + timestamp % 1000),
           napoleonMarshalNey(121 + timestamp % 1000),
           napoleonPolishLancer(122 + timestamp % 1000),
         ];
@@ -196,8 +220,9 @@ class ShopInventory {
           napoleonHussar(112 + timestamp % 1000),
           napoleonHorseArtillery(113 + timestamp % 1000),
           // Epic (rarity 3)
-          napoleonOldGuard(120 + timestamp % 1000),
+          if (emperorUnlocked) napoleonOldGuard(120 + timestamp % 1000),
           napoleonGrandBattery(121 + timestamp % 1000),
+          if (emperorUnlocked) napoleonsGuard(),
         ];
       default:
         return [
@@ -210,8 +235,9 @@ class ShopInventory {
           napoleonCuirassier(111 + timestamp % 1000),
           napoleonHussar(112 + timestamp % 1000),
           // Epic (rarity 3)
-          napoleonOldGuard(120 + timestamp % 1000),
+          if (emperorUnlocked) napoleonOldGuard(120 + timestamp % 1000),
           napoleonMarshalNey(121 + timestamp % 1000),
+          if (emperorUnlocked) napoleonsGuard(),
         ];
     }
   }

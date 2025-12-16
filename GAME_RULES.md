@@ -303,6 +303,12 @@ For each **tick** in each lane:
 | **conceal_back** | When front card with a back card, hides back card identity from enemy |
 | **scout** | Reveals enemy base tiles in adjacent lanes (see Fog of War section) |
 
+### 7.4 Medic Special Rule (Play-to-Heal)
+- If you play a **Medic** card from hand directly onto **your base tile** (row closest to your hand) and that tile contains an **injured friendly unit**:
+  - The Medic **does not pay the placement AP cost**.
+  - The Medic immediately **heals one injured friendly unit on that same tile**, spending **only the heal AP cost** (same as attack AP cost).
+- Medics **never heal cards in hand**.
+
 The UI will show these abilities as **keywords** on the card with full descriptions in the deck editor.
 
 ---

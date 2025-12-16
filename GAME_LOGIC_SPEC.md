@@ -158,6 +158,19 @@ This document captures the **implemented and intended logic** of the game, mappe
   - `playerDamageBonus` is applied by increasing `GameCard.damage` for every card in the player's deck for that match.
   - This does **not** change the core combat rules; it is a pre-match deck stat modifier used by campaign mode.
 
+---
+
+### 1.5 Medic Action (TYC3)
+
+- Medics are units with a `medic_X` ability.
+- Healing is an **action** that spends AP (uses the same AP cost as attack).
+- **Play-to-Heal special case:**
+  - If a Medic is played from hand directly onto the player's **base tile** and that tile contains an **injured friendly unit**, the Medic:
+    - does **not** pay the placement AP cost
+    - immediately heals **one** injured friendly unit on that same tile
+    - spends **only** the heal AP cost
+  - Medics do **not** heal cards in hand.
+
 **Campaign inventory & activation:**
 - Campaign tracks owned relics and an `activeRelics` subset. Only **active** relics apply their bonuses.
 - Campaign also tracks consumables as counts (inventory vs equipped/active).

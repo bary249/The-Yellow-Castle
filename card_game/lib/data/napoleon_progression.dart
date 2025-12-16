@@ -343,6 +343,7 @@ class NapoleonProgressionState {
       'grand_armee',
       'shop_discount_15',
       'starting_grenadier',
+      'emperor_unlock',
     };
 
     bool isImplemented(String effect) {

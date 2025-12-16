@@ -63,6 +63,9 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
   bool _isBetweenActsAnimating = false;
   LatLng? _betweenActsHeroPos;
 
+  bool _napoleonEmperorUnlocked = false;
+  bool _napoleonBetterShops = false;
+
   bool _isValidConsumableOfferId(String id) {
     return ShopInventory.getAllConsumables().any((e) => e.id == id);
   }
@@ -608,6 +611,8 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
         _homeTownBuildDiscountPercent = 0;
         _homeTownReduceDistancePenalty = false;
         _campaign.supplyDistancePenaltyReduction = 0;
+        _napoleonEmperorUnlocked = false;
+        _napoleonBetterShops = false;
       });
       return;
     }
@@ -624,6 +629,8 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
       _campaign.supplyDistancePenaltyReduction = _homeTownReduceDistancePenalty
           ? 1
           : 0;
+      _napoleonEmperorUnlocked = state.hasEffect('emperor_unlock');
+      _napoleonBetterShops = state.hasEffect('continental_system');
     });
   }
 
@@ -947,7 +954,10 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
 
     if (!mounted) return;
 
-    final rewardPool = ShopInventory.getCardsForAct(_campaign.act);
+    final rewardPool = ShopInventory.getCardsForAct(
+      _campaign.act,
+      emperorUnlocked: _isEmperorUnlocked(),
+    );
     GameCard? rewardCard;
     if (rewardPool.isNotEmpty) {
       rewardPool.shuffle(_random);
@@ -1070,7 +1080,19 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
     if (mods.heroAbilityDamageBoost > 0) {
       labels.add('Bonus: Hero ability +${mods.heroAbilityDamageBoost} damage');
     }
+    if (widget.leaderId == 'napoleon' && _napoleonEmperorUnlocked) {
+      labels.add('Mastery: Emperor of France (+1 HP to all units)');
+      labels.add('Mastery: Imperial Guard units unlocked');
+    }
+    if (widget.leaderId == 'napoleon' && _napoleonBetterShops) {
+      labels.add('Mastery: Continental System (better shop inventory)');
+    }
     return labels;
+  }
+
+  bool _isEmperorUnlocked() {
+    if (widget.leaderId != 'napoleon') return false;
+    return _napoleonEmperorUnlocked;
   }
 
   String _homeTownBuildingName(String id) {
@@ -1380,6 +1402,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
                   decoration: BoxDecoration(
                     color: Colors.grey[800],
                     borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.white24),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1907,6 +1930,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
       // Training Grounds produces only common cards (rarity 1)
       final candidates = ShopInventory.getCardsForAct(
         _campaign.act,
+        emperorUnlocked: _isEmperorUnlocked(),
       ).where((c) => c.rarity == 1).toList();
       if (candidates.isNotEmpty) {
         candidates.shuffle(_random);
@@ -1957,6 +1981,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
     if (building.id == _buildingOfficersAcademyId) {
       final allCandidates = ShopInventory.getCardsForAct(
         _campaign.act,
+        emperorUnlocked: _isEmperorUnlocked(),
       ).where((c) => c.rarity == 2).toList();
       if (allCandidates.isEmpty) return null;
 
@@ -2025,6 +2050,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
     if (building.id == _buildingWarCollegeId) {
       final allCandidates = ShopInventory.getCardsForAct(
         _campaign.act,
+        emperorUnlocked: _isEmperorUnlocked(),
       ).where((c) => c.rarity == 3).toList();
       if (allCandidates.isEmpty) return null;
 
@@ -2262,7 +2288,10 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
         );
       }
 
-      final candidates = ShopInventory.getCardsForAct(_campaign.act);
+      final candidates = ShopInventory.getCardsForAct(
+        _campaign.act,
+        emperorUnlocked: _isEmperorUnlocked(),
+      );
       if (candidates.isEmpty) return null;
       candidates.shuffle(rng);
       final card = candidates.first;
@@ -2353,6 +2382,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
                       } else if (id == _buildingOfficersAcademyId) {
                         final candidates = ShopInventory.getCardsForAct(
                           _campaign.act,
+                          emperorUnlocked: _isEmperorUnlocked(),
                         ).where((c) => c.rarity == 2).toList();
                         final examples = candidates
                             .take(3)
@@ -2365,6 +2395,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
                       } else if (id == _buildingWarCollegeId) {
                         final candidates = ShopInventory.getCardsForAct(
                           _campaign.act,
+                          emperorUnlocked: _isEmperorUnlocked(),
                         ).where((c) => c.rarity == 3).toList();
                         final examples = candidates
                             .take(3)
@@ -3231,6 +3262,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
 
     final int defenseDamageBonus = encounter.isDefense ? 1 : 0;
     final int defenseHealthBonus = encounter.isDefense ? 1 : 0;
+    final int emperorHpBonus = _isEmperorUnlocked() ? 1 : 0;
     final buffLabels = _campaignBuffLabelsForBattle(
       mods: mods,
       defenseDamageBonus: defenseDamageBonus,
@@ -3254,7 +3286,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
           customDeck: _campaign.deck,
           predefinedTerrainsOverride: predefinedTerrainsOverride,
           playerDamageBonus: _campaign.globalDamageBonus + defenseDamageBonus,
-          playerCardHealthBonus: defenseHealthBonus,
+          playerCardHealthBonus: defenseHealthBonus + emperorHpBonus,
           extraStartingDraw: mods.extraStartingDraw,
           artilleryDamageBonus: mods.artilleryDamageBonus,
           cannonHealthBonus: _campaign.isRelicActive('campaign_map_relic')
@@ -3491,6 +3523,8 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
       playerTerrains: HeroLibrary.napoleon().terrainAffinities,
     );
 
+    final int emperorHpBonus = _isEmperorUnlocked() ? 1 : 0;
+
     if (!mounted) return;
     final navigator = Navigator.of(context);
     final result = await navigator.push<Map<String, dynamic>>(
@@ -3505,6 +3539,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
           playerCurrentHealth: _campaign.health,
           playerMaxHealth: _campaign.maxHealth,
           playerDamageBonus: _campaign.globalDamageBonus,
+          playerCardHealthBonus: emperorHpBonus,
           extraStartingDraw: mods.extraStartingDraw,
           artilleryDamageBonus: mods.artilleryDamageBonus,
           cannonHealthBonus: _campaign.isRelicActive('campaign_map_relic')
@@ -3953,7 +3988,11 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
   }
 
   void _openShop(Encounter encounter) async {
-    final shopItems = ShopInventory.generateForAct(_campaign.act);
+    final shopItems = ShopInventory.generateForAct(
+      _campaign.act,
+      betterShops: widget.leaderId == 'napoleon' && _napoleonBetterShops,
+      emperorUnlocked: _isEmperorUnlocked(),
+    );
 
     NapoleonProgressionModifiers mods = const NapoleonProgressionModifiers();
     if (widget.leaderId == 'napoleon') {
