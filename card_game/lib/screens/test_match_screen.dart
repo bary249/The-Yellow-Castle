@@ -5223,17 +5223,23 @@ class _TestMatchScreenState extends State<TestMatchScreen>
           cards: widget.customDeck!.map((c) => c.clone()).toList(),
           skipValidation: true,
         );
+        // Ensure deck is shuffled for each new battle
+        playerDeck.shuffle();
         debugPrint(
-          '🎖️ CAMPAIGN MODE: Using provided campaign deck (${widget.customDeck!.length} cards)',
+          '🎖️ CAMPAIGN MODE: Using provided campaign deck (${widget.customDeck!.length} cards, shuffled)',
         );
       } else if (playerHero.id == 'napoleon') {
         playerDeck = Deck.napoleon(playerId: id);
-        debugPrint('🎖️ CAMPAIGN MODE: Using Napoleon starter deck (25 cards)');
+        playerDeck.shuffle();
+        debugPrint(
+          '🎖️ CAMPAIGN MODE: Using Napoleon starter deck (25 cards, shuffled)',
+        );
       } else {
         // Fallback for other campaign heroes
         playerDeck = Deck.starter(playerId: id);
+        playerDeck.shuffle();
         debugPrint(
-          '🎖️ CAMPAIGN MODE: Using starter deck for ${playerHero.name}',
+          '🎖️ CAMPAIGN MODE: Using starter deck for ${playerHero.name} (shuffled)',
         );
       }
     } else if (_isOnlineMode && _selectedOnlineDeck != null) {
