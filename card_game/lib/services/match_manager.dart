@@ -2931,11 +2931,32 @@ class MatchManager {
       ...getReachableTiles(card, fromRow, fromCol),
     ];
 
+    _log(
+      '🏥 Medic ${card.name} at ($fromRow,$fromCol) AP=${card.currentAP}, checking ${positions.length} positions',
+    );
+
     for (final pos in positions) {
       final apAfterMove = card.currentAP - pos.apCost;
-      if (apAfterMove < card.attackAPCost) continue;
+      if (apAfterMove < card.attackAPCost) {
+        _log(
+          '   Skip (${pos.row},${pos.col}): not enough AP after move ($apAfterMove < ${card.attackAPCost})',
+        );
+        continue;
+      }
 
       final tile = _currentMatch!.board.getTile(pos.row, pos.col);
+      _log('   Tile (${pos.row},${pos.col}): ${tile.cards.length} cards');
+
+      for (final c in tile.cards) {
+        final isAlive = c.isAlive;
+        final isFriendly = c.ownerId == card.ownerId;
+        final isNotSelf = c.id != card.id;
+        final isInjured = c.currentHealth < c.health;
+        _log(
+          '      ${c.name}: alive=$isAlive, friendly=$isFriendly, notSelf=$isNotSelf, injured=$isInjured (${c.currentHealth}/${c.health})',
+        );
+      }
+
       final friendlyInjured = tile.cards
           .where(
             (c) =>
@@ -2954,10 +2975,12 @@ class MatchManager {
             col: pos.col,
             moveCost: pos.apCost,
           ));
+          _log('   ✓ Found heal target: ${t.name}');
         }
       }
     }
 
+    _log('🏥 Total heal targets: ${targets.length}');
     return targets;
   }
 
