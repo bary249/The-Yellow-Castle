@@ -166,7 +166,7 @@ GameCard archer(int index) => GameCard(
   element: null, // Neutral
   abilities: const ['archer', 'ranged'],
   cost: 2,
-  rarity: 1,
+  rarity: 2, // Ranged units are at least Rare
 );
 
 // Deprecated Adapters for Backward Compatibility (Map to new types)
@@ -660,7 +660,7 @@ GameCard napoleonFieldCannon(int index) => GameCard(
   element: null,
   abilities: const ['ranged'], // No retaliation
   cost: 2,
-  rarity: 1, // Common
+  rarity: 2, // Ranged units are at least Rare
 );
 
 /// Sapper - Combat engineer providing fortification
@@ -1702,7 +1702,7 @@ GameCard austrianArtillery(int index) => GameCard(
   element: null,
   abilities: const ['ranged'],
   cost: 2,
-  rarity: 1,
+  rarity: 2, // Ranged units are at least Rare
 );
 
 /// Austrian Officer - Provides command buff
@@ -2029,7 +2029,7 @@ GameCard camelGun(int index) => GameCard(
   element: null,
   abilities: const ['ranged'],
   cost: 2,
-  rarity: 1,
+  rarity: 2, // Ranged units are at least Rare
 );
 
 /// Build a randomized Act 2 enemy deck based on difficulty

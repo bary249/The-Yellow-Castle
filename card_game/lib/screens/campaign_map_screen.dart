@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_map_cancellable_tile_provider/flutter_map_cancellable_tile_provider.dart';
 import 'package:latlong2/latlong.dart';
 import '../models/campaign_state.dart';
 import '../models/deck.dart';
@@ -1134,6 +1135,110 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
       default:
         return '';
     }
+  }
+
+  /// Returns all cards that a building can produce for the current act.
+  List<GameCard> _getBuildableCardsForBuilding(String buildingId) {
+    switch (buildingId) {
+      case _buildingTrainingGroundsId:
+        return ShopInventory.getCardsForAct(
+          _campaign.act,
+          emperorUnlocked: _isEmperorUnlocked(),
+        ).where((c) => c.rarity == 1).toList();
+      case _buildingOfficersAcademyId:
+        return ShopInventory.getCardsForAct(
+          _campaign.act,
+          emperorUnlocked: _isEmperorUnlocked(),
+        ).where((c) => c.rarity == 2).toList();
+      case _buildingWarCollegeId:
+        return ShopInventory.getCardsForAct(
+          _campaign.act,
+          emperorUnlocked: _isEmperorUnlocked(),
+        ).where((c) => c.rarity == 3).toList();
+      case _buildingMedicCorpsId:
+        final timestamp = DateTime.now().millisecondsSinceEpoch;
+        return [
+          switch (_campaign.act) {
+            2 => advancedMedic(timestamp),
+            3 => expertMedic(timestamp),
+            _ => basicMedic(timestamp),
+          },
+        ];
+      default:
+        return [];
+    }
+  }
+
+  Future<void> _showBuildingUnitsDialog(String buildingId) async {
+    final cards = _getBuildableCardsForBuilding(buildingId);
+    final buildingName = _homeTownBuildingName(buildingId);
+
+    if (cards.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No units available for this building.')),
+      );
+      return;
+    }
+
+    // Sort by name for easier browsing
+    cards.sort((a, b) => a.name.compareTo(b.name));
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF2D2D2D),
+        title: Text(
+          '$buildingName - Available Units',
+          style: const TextStyle(color: Colors.white),
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          height: 400,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: cards.length,
+            itemBuilder: (context, index) {
+              final card = cards[index];
+              final rarityColor = switch (card.rarity) {
+                1 => Colors.grey,
+                2 => Colors.blue,
+                3 => Colors.purple,
+                _ => Colors.amber,
+              };
+              return ListTile(
+                onTap: () => _showCardDetailsDialog(card),
+                leading: Container(
+                  width: 8,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: rarityColor,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+                title: Text(
+                  card.name,
+                  style: const TextStyle(color: Colors.white),
+                ),
+                subtitle: Text(
+                  '${card.damage}/${card.health} • ${card.element ?? "neutral"}',
+                  style: const TextStyle(color: Colors.white70, fontSize: 12),
+                ),
+                trailing: const Icon(
+                  Icons.chevron_right,
+                  color: Colors.white38,
+                ),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
   }
 
   int _homeTownBuildCost(String id) {
@@ -2421,50 +2526,83 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
                         producesText = 'Produces: $medicName (healer unit)';
                       }
 
+                      final hasViewableUnits = id != _buildingSupplyDepotId;
+
                       return Card(
                         color: Colors.grey[850],
-                        child: ListTile(
-                          title: Text(
-                            _homeTownBuildingName(id),
-                            style: const TextStyle(color: Colors.white),
-                          ),
-                          subtitle: Text(
-                            producesText,
-                            style: const TextStyle(color: Colors.white70),
-                          ),
-                          trailing: ElevatedButton(
-                            onPressed: canAfford
-                                ? () async {
-                                    setState(() {
-                                      _campaign.spendGold(effectiveCost);
-                                      // Set lastCollectedEncounter to -99 so building can start producing immediately
-                                      _campaign.homeTownBuildings = [
-                                        ..._campaign.homeTownBuildings,
-                                        HomeTownBuilding(
-                                          id: id,
-                                          lastCollectedEncounter: -99,
-                                        ),
-                                      ];
-                                    });
-                                    await _saveCampaign();
-                                    // Trigger production immediately for new building
-                                    await _autoCollectHomeTownDeliveries(
-                                      showDialogs: true,
-                                    );
-                                    if (!context.mounted) return;
-                                    Navigator.pop(context);
-                                  }
-                                : null,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: canAfford
-                                  ? Colors.amber[700]
-                                  : Colors.grey,
-                              foregroundColor: canAfford
-                                  ? Colors.black
-                                  : Colors.white,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            ListTile(
+                              title: Text(
+                                _homeTownBuildingName(id),
+                                style: const TextStyle(color: Colors.white),
+                              ),
+                              subtitle: Text(
+                                producesText,
+                                style: const TextStyle(color: Colors.white70),
+                              ),
+                              trailing: ElevatedButton(
+                                onPressed: canAfford
+                                    ? () async {
+                                        setState(() {
+                                          _campaign.spendGold(effectiveCost);
+                                          // Set lastCollectedEncounter to -99 so building can start producing immediately
+                                          _campaign.homeTownBuildings = [
+                                            ..._campaign.homeTownBuildings,
+                                            HomeTownBuilding(
+                                              id: id,
+                                              lastCollectedEncounter: -99,
+                                            ),
+                                          ];
+                                        });
+                                        await _saveCampaign();
+                                        // Trigger production immediately for new building
+                                        await _autoCollectHomeTownDeliveries(
+                                          showDialogs: true,
+                                        );
+                                        if (!context.mounted) return;
+                                        Navigator.pop(context);
+                                      }
+                                    : null,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: canAfford
+                                      ? Colors.amber[700]
+                                      : Colors.grey,
+                                  foregroundColor: canAfford
+                                      ? Colors.black
+                                      : Colors.white,
+                                ),
+                                child: Text('Build ($effectiveCost)'),
+                              ),
                             ),
-                            child: Text('Build ($effectiveCost)'),
-                          ),
+                            if (hasViewableUnits)
+                              Padding(
+                                padding: const EdgeInsets.only(
+                                  left: 16,
+                                  right: 16,
+                                  bottom: 8,
+                                ),
+                                child: SizedBox(
+                                  width: double.infinity,
+                                  child: OutlinedButton.icon(
+                                    onPressed: () =>
+                                        _showBuildingUnitsDialog(id),
+                                    icon: const Icon(Icons.list, size: 16),
+                                    label: const Text('View Units'),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: Colors.white70,
+                                      side: const BorderSide(
+                                        color: Colors.white24,
+                                      ),
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 6,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
                       );
                     },
@@ -2712,63 +2850,102 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
                       }
                       final currentCard = (producing ?? traveling)?.card;
 
+                      final hasViewableUnits = b.id != _buildingSupplyDepotId;
+
                       return Card(
                         color: Colors.grey[850],
                         margin: const EdgeInsets.symmetric(vertical: 6),
-                        child: ListTile(
-                          onTap: isProductionBuilding && currentCard != null
-                              ? () => _showCardDetailsDialog(currentCard)
-                              : null,
-                          title: Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  _homeTownBuildingName(b.id),
-                                  style: const TextStyle(color: Colors.white),
-                                ),
-                              ),
-                              if (isProductionBuilding && currentCard != null)
-                                const Icon(
-                                  Icons.info_outline,
-                                  color: Colors.white38,
-                                  size: 16,
-                                ),
-                            ],
-                          ),
-                          subtitle: Text(
-                            [
-                              _homeTownBuildingDescription(b.id),
-                              _buildingProducingStatusText(b),
-                              _buildingTravelingStatusText(b),
-                            ].where((s) => s.trim().isNotEmpty).join('\n'),
-                            style: const TextStyle(color: Colors.white70),
-                          ),
-                          trailing: isProductionBuilding
-                              ? Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      canCollect
-                                          ? Icons.local_shipping
-                                          : Icons.schedule,
-                                      color: canCollect
-                                          ? Colors.greenAccent
-                                          : Colors.white54,
-                                      size: 20,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      '${prodTime}e',
-                                      style: TextStyle(
-                                        color: canCollect
-                                            ? Colors.greenAccent
-                                            : Colors.white54,
-                                        fontSize: 12,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            ListTile(
+                              onTap: isProductionBuilding && currentCard != null
+                                  ? () => _showCardDetailsDialog(currentCard)
+                                  : null,
+                              title: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      _homeTownBuildingName(b.id),
+                                      style: const TextStyle(
+                                        color: Colors.white,
                                       ),
                                     ),
-                                  ],
-                                )
-                              : Icon(Icons.attach_money, color: Colors.amber),
+                                  ),
+                                  if (isProductionBuilding &&
+                                      currentCard != null)
+                                    const Icon(
+                                      Icons.info_outline,
+                                      color: Colors.white38,
+                                      size: 16,
+                                    ),
+                                ],
+                              ),
+                              subtitle: Text(
+                                [
+                                  _homeTownBuildingDescription(b.id),
+                                  _buildingProducingStatusText(b),
+                                  _buildingTravelingStatusText(b),
+                                ].where((s) => s.trim().isNotEmpty).join('\n'),
+                                style: const TextStyle(color: Colors.white70),
+                              ),
+                              trailing: isProductionBuilding
+                                  ? Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          canCollect
+                                              ? Icons.local_shipping
+                                              : Icons.schedule,
+                                          color: canCollect
+                                              ? Colors.greenAccent
+                                              : Colors.white54,
+                                          size: 20,
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          '${prodTime}e',
+                                          style: TextStyle(
+                                            color: canCollect
+                                                ? Colors.greenAccent
+                                                : Colors.white54,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ],
+                                    )
+                                  : Icon(
+                                      Icons.attach_money,
+                                      color: Colors.amber,
+                                    ),
+                            ),
+                            if (hasViewableUnits)
+                              Padding(
+                                padding: const EdgeInsets.only(
+                                  left: 16,
+                                  right: 16,
+                                  bottom: 8,
+                                ),
+                                child: SizedBox(
+                                  width: double.infinity,
+                                  child: OutlinedButton.icon(
+                                    onPressed: () =>
+                                        _showBuildingUnitsDialog(b.id),
+                                    icon: const Icon(Icons.list, size: 16),
+                                    label: const Text('View Units'),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: Colors.white70,
+                                      side: const BorderSide(
+                                        color: Colors.white24,
+                                      ),
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 6,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
                       );
                     }),
@@ -5703,6 +5880,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
                 TileLayer(
                   urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                   userAgentPackageName: 'card_game',
+                  tileProvider: CancellableNetworkTileProvider(),
                 ),
                 if (routeShadowPolylines.isNotEmpty)
                   PolylineLayer(polylines: routeShadowPolylines),
