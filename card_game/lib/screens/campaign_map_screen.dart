@@ -541,6 +541,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
 
   @override
   void dispose() {
+    _saveDebounceTimer?.cancel();
     _betweenActsController?.dispose();
     super.dispose();
   }
@@ -1023,7 +1024,40 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
     );
   }
 
+  static const _saveThrottleMs = 2000; // Minimum 2 seconds between saves
+
   Future<void> _saveCampaign() async {
+    // Cancel any pending debounced save
+    _saveDebounceTimer?.cancel();
+
+    final now = DateTime.now();
+    final timeSinceLastSave = _lastSaveTime == null
+        ? _saveThrottleMs
+        : now.difference(_lastSaveTime!).inMilliseconds;
+
+    if (timeSinceLastSave >= _saveThrottleMs) {
+      // Enough time has passed, save immediately
+      _lastSaveTime = now;
+      _savePending = false;
+      await _persistence.saveCampaign(_campaign);
+    } else {
+      // Too soon, debounce the save
+      _savePending = true;
+      final delay = _saveThrottleMs - timeSinceLastSave;
+      _saveDebounceTimer = Timer(Duration(milliseconds: delay), () async {
+        if (_savePending && mounted) {
+          _lastSaveTime = DateTime.now();
+          _savePending = false;
+          await _persistence.saveCampaign(_campaign);
+        }
+      });
+    }
+  }
+
+  Future<void> _saveCampaignImmediate() async {
+    _saveDebounceTimer?.cancel();
+    _savePending = false;
+    _lastSaveTime = DateTime.now();
     await _persistence.saveCampaign(_campaign);
   }
 
