@@ -2355,15 +2355,37 @@ class MatchManager {
           if (ability.startsWith('fortify_')) {
             shield += int.tryParse(ability.split('_').last) ?? 0;
           }
-          if (ability.startsWith('command_')) {
-            final val = int.tryParse(ability.split('_').last) ?? 0;
-            damage += val;
-            shield += val;
-          }
+          // command_ is now tile-local (handled by calculateTileCommandBonus)
         }
       }
     }
     return (damage: damage, shield: shield);
+  }
+
+  /// TYC3: Calculate command bonus for a unit from adjacent friendly units on the same tile
+  /// command_1 = +2 damage bonus to other units on the same tile
+  int calculateTileCommandBonus(GameCard attacker, int row, int col) {
+    if (_currentMatch == null) return 0;
+
+    final tile = _currentMatch!.board.getTile(row, col);
+    int bonus = 0;
+
+    // Get other friendly cards on this tile (not the attacker itself)
+    final friendlyCards = tile.cards.where(
+      (c) => c.isAlive && c.ownerId == attacker.ownerId && c != attacker,
+    );
+
+    for (final card in friendlyCards) {
+      for (final ability in card.abilities) {
+        if (ability.startsWith('command_')) {
+          // command_1 = +2, command_2 = +4, etc.
+          final level = int.tryParse(ability.split('_').last) ?? 0;
+          bonus += level * 2;
+        }
+      }
+    }
+
+    return bonus;
   }
 
   /// TYC3: Attack a target card
@@ -2461,8 +2483,15 @@ class MatchManager {
       '   Position: ($attackerRow,$attackerCol) → ($targetRow,$targetCol) | Terrain: ${tileTerrain ?? "none"}',
     );
 
-    // Calculate lane buffs (Inspire, Fortify, Command)
+    // Calculate lane buffs (Inspire, Fortify)
     final laneBuffs = calculateLaneBuffsTYC3(attackerCol, attacker.ownerId!);
+
+    // Calculate tile command bonus (from adjacent units with command ability)
+    final tileCommandBonus = calculateTileCommandBonus(
+      attacker,
+      attackerRow,
+      attackerCol,
+    );
 
     // Resolve the attack (pass hero damage boost if player is attacking)
     final result = _combatResolver.resolveAttackTYC3(
@@ -2471,7 +2500,7 @@ class MatchManager {
       isPlayerAttacking: isPlayerAttacking,
       tileTerrain: tileTerrain,
       playerDamageBoost: isPlayerAttacking ? playerDamageBoost : 0,
-      laneDamageBonus: laneBuffs.damage,
+      laneDamageBonus: laneBuffs.damage + tileCommandBonus,
       laneShieldBonus: laneBuffs.shield,
     );
 
@@ -2652,13 +2681,32 @@ class MatchManager {
     // Calculate lane buffs
     final laneBuffs = calculateLaneBuffsTYC3(attackerCol, attacker.ownerId!);
 
+    // Find attacker row for tile command bonus
+    int attackerRow = 1; // Default to middle
+    for (int r = 0; r < 3; r++) {
+      if (_currentMatch!.board
+          .getTile(r, attackerCol)
+          .cards
+          .any((card) => card.id == attacker.id)) {
+        attackerRow = r;
+        break;
+      }
+    }
+
+    // Calculate tile command bonus (from adjacent units with command ability)
+    final tileCommandBonus = calculateTileCommandBonus(
+      attacker,
+      attackerRow,
+      attackerCol,
+    );
+
     return _combatResolver.previewAttackTYC3(
       attacker,
       target,
       isPlayerAttacking: isPlayerTurn,
       tileTerrain: tileTerrain,
       playerDamageBoost: isPlayerTurn ? playerDamageBoost : 0,
-      laneDamageBonus: laneBuffs.damage,
+      laneDamageBonus: laneBuffs.damage + tileCommandBonus,
       laneShieldBonus: laneBuffs.shield,
     );
   }

@@ -21,6 +21,7 @@ These interactions trigger automatically when specific unit classes battle each 
 *   **Fury X**: Adds **+X** to Damage dealt (both on attack and retaliation).
 *   **Shield X**: Reduces all incoming damage by **X** (minimum 0).
 *   **Thorns X**: Deals **X** damage to any attacker after combat resolves.
+*   **Command X**: Grants **+2X Damage** to all other friendly units on the same tile. (e.g., Command 1 = +2 damage to adjacent allies)
 
 ### Utility Abilities
 *   **Scout**: Provides vision of adjacent lanes, revealing units hidden by Fog of War.

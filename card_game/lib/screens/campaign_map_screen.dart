@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
@@ -66,6 +67,10 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
 
   bool _napoleonEmperorUnlocked = false;
   bool _napoleonBetterShops = false;
+
+  Timer? _saveDebounceTimer;
+  bool _savePending = false;
+  DateTime? _lastSaveTime;
 
   bool _isValidConsumableOfferId(String id) {
     return ShopInventory.getAllConsumables().any((e) => e.id == id);
@@ -4745,8 +4750,46 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
       return 'Can heal friendly units for $amount HP';
     }
 
-    // Cannon ability
-    if (ability == 'cannon') return 'Artillery unit with extended attack range';
+    // Command ability - tile-local damage buff
+    if (ability.startsWith('command_')) {
+      final level = int.tryParse(ability.split('_').last) ?? 1;
+      final bonus = level * 2;
+      return 'Grants +$bonus damage to other friendly units on the same tile';
+    }
+
+    // Fury ability - damage boost per attack
+    if (ability.startsWith('fury_')) {
+      final amount = ability.split('_').last;
+      return 'Gains +$amount damage for each attack made this turn';
+    }
+
+    // Inspire ability - lane-wide damage buff
+    if (ability.startsWith('inspire_')) {
+      final amount = ability.split('_').last;
+      return 'Grants +$amount damage to all friendly units in this lane';
+    }
+
+    // Fortify ability - lane-wide shield buff
+    if (ability.startsWith('fortify_')) {
+      final amount = ability.split('_').last;
+      return 'Grants +$amount shield to all friendly units in this lane';
+    }
+
+    // Shield ability - damage reduction
+    if (ability.startsWith('shield_')) {
+      final amount = ability.split('_').last;
+      return 'Reduces incoming damage by $amount';
+    }
+    if (ability == 'shield') return 'Reduces incoming damage';
+
+    // Ranged abilities
+    if (ability == 'ranged')
+      return 'Attacks without receiving retaliation damage';
+    if (ability == 'archer') return 'Ranged attacker, weak against cavalry';
+    if (ability == 'cannon')
+      return 'Artillery unit, attacks at long range without retaliation';
+    if (ability == 'long_range')
+      return 'Can attack from base row to enemy base row';
 
     // Range abilities
     if (ability.startsWith('range_')) {
@@ -4754,11 +4797,26 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
       return 'Attack range of $range tiles';
     }
 
-    // Other common abilities
+    // Movement/Combat abilities
     if (ability == 'charge') return 'Can move and attack in the same turn';
-    if (ability == 'shield') return 'Reduces incoming damage';
-    if (ability == 'first_strike') return 'Attacks first in combat';
+    if (ability == 'first_strike')
+      return 'Attacks first in combat, may kill before retaliation';
     if (ability == 'counter') return 'Deals damage when attacked';
+    if (ability == 'cleave')
+      return 'Attacks hit all enemy units on the target tile';
+    if (ability == 'scout')
+      return 'Reveals enemy base tile in this lane when entering middle row';
+
+    // Cavalry abilities
+    if (ability == 'cavalry') return 'Fast unit, deals +4 damage to archers';
+
+    // Defensive abilities
+    if (ability == 'guard') return 'Protective unit that intercepts attacks';
+    if (ability == 'taunt') return 'Enemies must attack this unit first';
+
+    // Special unit abilities
+    if (ability == 'hero') return 'Unique hero unit with special powers';
+    if (ability == 'boss') return 'Powerful boss enemy';
 
     return 'Special ability';
   }
@@ -5090,6 +5148,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
                               Row(
                                 children: [
                                   FloatingActionButton.extended(
+                                    heroTag: 'wait_encounter',
                                     onPressed: _waitOneEncounter,
                                     backgroundColor: Colors.blueGrey[700],
                                     icon: const Icon(
@@ -5104,6 +5163,7 @@ class _CampaignMapScreenState extends State<CampaignMapScreen>
                                   if (_campaign.visitedNodes.length >= 2) ...[
                                     const SizedBox(width: 12),
                                     FloatingActionButton.extended(
+                                      heroTag: 'return_previous',
                                       onPressed: _returnToPreviousNode,
                                       backgroundColor: Colors.orange[700],
                                       icon: const Icon(

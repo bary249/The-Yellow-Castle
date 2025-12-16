@@ -387,7 +387,9 @@ For `tick` from 1 to 5:
 3. **Lane-wide Buffs**
    - `inspire_X`: +X damage to ALL allies in this lane.
    - `fortify_X`: +X shield to ALL allies in this lane.
-   - `command_X`: +X damage AND +X shield to all allies in lane.
+
+4. **Tile-local Buffs**
+   - `command_X`: +2X damage to other friendly units on the SAME TILE (not lane-wide).
 
 4. **Shield** `shield_X`
    - If `target.abilities` contains `shield_X` → reduce damage by X (min 1).
