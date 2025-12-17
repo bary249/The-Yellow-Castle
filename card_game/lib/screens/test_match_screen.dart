@@ -332,15 +332,16 @@ class _TestMatchScreenState extends State<TestMatchScreen>
       );
     } else if (effect == 'cannon_hp_1') {
       _abilityTestingCannonHealthBonus += 1;
-      delta = const _TestingModifierDelta(
-        id: 'campaign_map_relic',
-        name: 'Map Relic',
+      delta = _TestingModifierDelta(
+        id: relic.id,
+        name: relic.name,
         cannonHealthBonus: 1,
       );
     }
 
     if (delta.id.isNotEmpty) {
       _abilityTestingAppliedRelics[delta.id] = delta;
+      _applyTestingDeltaToPlayerState(delta);
     }
   }
 
@@ -349,6 +350,17 @@ class _TestMatchScreenState extends State<TestMatchScreen>
     if (match == null) return;
     final delta = _abilityTestingAppliedRelics.remove(relicId);
     if (delta == null) return;
+
+    _applyTestingDeltaToPlayerState(
+      _TestingModifierDelta(
+        id: delta.id,
+        name: delta.name,
+        playerDamageBonus: -delta.playerDamageBonus,
+        playerCardHealthBonus: -delta.playerCardHealthBonus,
+        artilleryDamageBonus: -delta.artilleryDamageBonus,
+        cannonHealthBonus: -delta.cannonHealthBonus,
+      ),
+    );
 
     _abilityTestingPlayerDamageBonus -= delta.playerDamageBonus;
     _abilityTestingPlayerCardHealthBonus -= delta.playerCardHealthBonus;
@@ -523,6 +535,9 @@ class _TestMatchScreenState extends State<TestMatchScreen>
     }
 
     _abilityTestingAppliedLegacyBuffs[id] = delta;
+    if (delta.reversible) {
+      _applyTestingDeltaToPlayerState(delta);
+    }
   }
 
   void _removeAbilityTestingLegacyBuff(String id) {
@@ -543,6 +558,17 @@ class _TestMatchScreenState extends State<TestMatchScreen>
       }
       return;
     }
+
+    _applyTestingDeltaToPlayerState(
+      _TestingModifierDelta(
+        id: delta.id,
+        name: delta.name,
+        playerDamageBonus: -delta.playerDamageBonus,
+        playerCardHealthBonus: -delta.playerCardHealthBonus,
+        artilleryDamageBonus: -delta.artilleryDamageBonus,
+        cannonHealthBonus: -delta.cannonHealthBonus,
+      ),
+    );
 
     _abilityTestingPlayerDamageBonus -= delta.playerDamageBonus;
     _abilityTestingPlayerCardHealthBonus -= delta.playerCardHealthBonus;
@@ -1791,6 +1817,67 @@ class _TestMatchScreenState extends State<TestMatchScreen>
 
   bool _isValidTargetCard(GameCard card) {
     return _validTargets.any((t) => t.id == card.id);
+  }
+
+  void _applyTestingDeltaToPlayerState(_TestingModifierDelta delta) {
+    final match = _matchManager.currentMatch;
+    if (match == null) return;
+
+    final playerId = match.player.id;
+
+    GameCard updateCard(GameCard c) {
+      final isArtillery = _isArtilleryCard(c);
+      final dmgDelta =
+          delta.playerDamageBonus +
+          (isArtillery ? delta.artilleryDamageBonus : 0);
+      final hpDelta =
+          delta.playerCardHealthBonus +
+          (isArtillery ? delta.cannonHealthBonus : 0);
+
+      final newDamage = max(0, c.damage + dmgDelta);
+      final newHealth = max(1, c.health + hpDelta);
+
+      final updated = c.copyWith(damage: newDamage, health: newHealth);
+      updated.ownerId = c.ownerId;
+      updated.currentAP = c.currentAP;
+      updated.currentHealth = (c.currentHealth + hpDelta).clamp(0, newHealth);
+      return updated;
+    }
+
+    for (int i = 0; i < match.player.hand.length; i++) {
+      final c = match.player.hand[i];
+      if (c.ownerId != playerId) continue;
+      match.player.hand[i] = updateCard(c);
+    }
+
+    for (int row = 0; row < 3; row++) {
+      for (int col = 0; col < 3; col++) {
+        final tile = match.board.getTile(row, col);
+        for (int i = 0; i < tile.cards.length; i++) {
+          final c = tile.cards[i];
+          if (c.ownerId != playerId) continue;
+          tile.cards[i] = updateCard(c);
+        }
+      }
+    }
+
+    final updatedDeckCards = match.player.deck.cards.map((c) {
+      final isArtillery = _isArtilleryCard(c);
+      final dmgDelta =
+          delta.playerDamageBonus +
+          (isArtillery ? delta.artilleryDamageBonus : 0);
+      final hpDelta =
+          delta.playerCardHealthBonus +
+          (isArtillery ? delta.cannonHealthBonus : 0);
+
+      final newDamage = max(0, c.damage + dmgDelta);
+      final newHealth = max(1, c.health + hpDelta);
+      final updated = c.copyWith(damage: newDamage, health: newHealth);
+      updated.currentHealth = newHealth;
+      return updated;
+    }).toList();
+
+    match.player.deck.replaceCards(updatedDeckCards);
   }
 
   /// Get the heal amount for a medic card
