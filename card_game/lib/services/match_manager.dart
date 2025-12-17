@@ -2923,13 +2923,12 @@ class MatchManager {
     if (!useTurnBasedSystem) return [];
     if (!_isMedic(card)) return [];
 
+    if (card.currentAP < card.attackAPCost) return [];
+
     final targets = <({GameCard target, int row, int col, int moveCost})>[];
 
-    // Get all positions we can reach (including current position with 0 move cost)
-    final positions = [
-      (row: fromRow, col: fromCol, apCost: 0),
-      ...getReachableTiles(card, fromRow, fromCol),
-    ];
+    // For now healing is only allowed on the SAME TILE (see healCardTYC3).
+    final positions = [(row: fromRow, col: fromCol, apCost: 0)];
 
     _log(
       '🏥 Medic ${card.name} at ($fromRow,$fromCol) AP=${card.currentAP}, checking ${positions.length} positions',
@@ -2957,17 +2956,13 @@ class MatchManager {
         );
       }
 
-      final friendlyInjured = tile.cards
+      final friendlyAliveNotSelf = tile.cards
           .where(
-            (c) =>
-                c.isAlive &&
-                c.ownerId == card.ownerId &&
-                c.id != card.id &&
-                c.currentHealth < c.health,
+            (c) => c.isAlive && c.ownerId == card.ownerId && c.id != card.id,
           )
           .toList();
 
-      for (final t in friendlyInjured) {
+      for (final t in friendlyAliveNotSelf) {
         if (!targets.any((e) => e.target.id == t.id)) {
           targets.add((
             target: t,

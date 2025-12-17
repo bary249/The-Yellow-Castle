@@ -23,6 +23,8 @@ import '../services/deck_storage_service.dart';
 import '../services/combat_resolver.dart' show AttackResult;
 import '../services/online_game_manager.dart';
 import 'deck_selection_screen.dart';
+import '../data/card_library.dart';
+import '../data/shop_items.dart';
 
 /// Test screen for playing a match vs AI opponent or online multiplayer
 class TestMatchScreen extends StatefulWidget {
@@ -53,6 +55,8 @@ class TestMatchScreen extends StatefulWidget {
   final List<String> campaignBuffLabels;
   final List<String> campaignBuffLabelsForBuffsDialog;
 
+  final bool abilityTestingMode;
+
   const TestMatchScreen({
     super.key,
     this.selectedHero,
@@ -74,6 +78,7 @@ class TestMatchScreen extends StatefulWidget {
     this.opponentPriorityCardIds = const [],
     this.campaignBuffLabels = const [],
     this.campaignBuffLabelsForBuffsDialog = const [],
+    this.abilityTestingMode = false,
   });
 
   @override
@@ -94,6 +99,30 @@ class _CardFocusSwitchTarget {
   });
 }
 
+class _TestingModifierDelta {
+  final String id;
+  final String name;
+  final int playerDamageBonus;
+  final int playerCardHealthBonus;
+  final int artilleryDamageBonus;
+  final int cannonHealthBonus;
+  final int heroAbilityDamageBoost;
+  final int baseHpBonus;
+  final bool reversible;
+
+  const _TestingModifierDelta({
+    required this.id,
+    required this.name,
+    this.playerDamageBonus = 0,
+    this.playerCardHealthBonus = 0,
+    this.artilleryDamageBonus = 0,
+    this.cannonHealthBonus = 0,
+    this.heroAbilityDamageBoost = 0,
+    this.baseHpBonus = 0,
+    this.reversible = true,
+  });
+}
+
 class _TestMatchScreenState extends State<TestMatchScreen>
     with SingleTickerProviderStateMixin {
   final MatchManager _matchManager = MatchManager();
@@ -105,6 +134,16 @@ class _TestMatchScreenState extends State<TestMatchScreen>
   final Set<String> _campaignDestroyedPlayerCardIds = <String>{};
   final Map<String, int> _fallenPlayerCardCounts = <String, int>{};
 
+  int _abilityTestingHeroAbilityDamageBoost = 0;
+  int _abilityTestingPlayerDamageBonus = 0;
+  int _abilityTestingPlayerCardHealthBonus = 0;
+  int _abilityTestingArtilleryDamageBonus = 0;
+  int _abilityTestingCannonHealthBonus = 0;
+  final Map<String, _TestingModifierDelta> _abilityTestingAppliedRelics =
+      <String, _TestingModifierDelta>{};
+  final Map<String, _TestingModifierDelta> _abilityTestingAppliedLegacyBuffs =
+      <String, _TestingModifierDelta>{};
+
   bool _isArtilleryCard(GameCard card) {
     if (card.abilities.contains('cannon')) return true;
     if (card.attackRange >= 2) return true;
@@ -112,7 +151,620 @@ class _TestMatchScreenState extends State<TestMatchScreen>
     if (lowerName.contains('cannon') || lowerName.contains('artillery')) {
       return true;
     }
+
     return false;
+  }
+
+  bool get _isAbilityTestingMode => widget.abilityTestingMode && !_isOnlineMode;
+
+  GameCard _createAbilityTestingCardInstance(
+    GameCard base,
+    String uniqueSuffix,
+  ) {
+    final isArtillery = _isArtilleryCard(base);
+    final artilleryDmgBonus = isArtillery
+        ? _abilityTestingArtilleryDamageBonus
+        : 0;
+    final cannonHpBonus = isArtillery ? _abilityTestingCannonHealthBonus : 0;
+    final totalDmgBonus = _abilityTestingPlayerDamageBonus + artilleryDmgBonus;
+    final totalHpBonus = _abilityTestingPlayerCardHealthBonus + cannonHpBonus;
+
+    final newDamage = base.damage + totalDmgBonus;
+    final newHealth = base.health + totalHpBonus;
+
+    final instance = base.copyWith(
+      id: '${base.id}_$uniqueSuffix',
+      damage: newDamage,
+      health: newHealth,
+    );
+
+    instance.currentHealth = newHealth;
+    return instance;
+  }
+
+  List<GameCard> _abilityTestingAllCards() {
+    final cards = <GameCard>[];
+
+    // Deck-builder pool
+    cards.addAll(buildFullCardPool());
+
+    // Campaign pools
+    cards.addAll(buildNapoleonCampaignCardPool());
+
+    // Enemy decks (contain additional card types like boss/enemy units)
+    cards.addAll(buildRandomizedAct1Deck(5));
+    cards.addAll(buildRandomizedAct2Deck(5));
+    cards.addAll(buildRandomizedAct3Deck(5));
+
+    // Ensure medics are always present in the testing pool
+    cards.add(basicMedic(0));
+    cards.add(advancedMedic(0));
+    cards.add(expertMedic(0));
+
+    return cards;
+  }
+
+  Future<void> _abilityTestingClearHand() async {
+    final match = _matchManager.currentMatch;
+    if (match == null) return;
+
+    setState(() {
+      match.player.hand.clear();
+      _clearStaging();
+      _clearTYC3Selection();
+    });
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Cleared all cards in hand.')));
+  }
+
+  Future<void> _showAbilityTestingCardPicker() async {
+    final match = _matchManager.currentMatch;
+    if (match == null) return;
+
+    final allCards = _abilityTestingAllCards();
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.grey[900],
+      builder: (context) {
+        String query = '';
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final filtered = query.isEmpty
+                ? allCards
+                : allCards.where((c) {
+                    final q = query.toLowerCase();
+                    final name = c.name.toLowerCase();
+                    final id = c.id.toLowerCase();
+                    final abilities = c.abilities.join(' ').toLowerCase();
+                    return name.contains(q) ||
+                        id.contains(q) ||
+                        abilities.contains(q);
+                  }).toList();
+
+            return SafeArea(
+              child: SizedBox(
+                height: MediaQuery.of(context).size.height * 0.8,
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: TextField(
+                        decoration: const InputDecoration(
+                          hintText: 'Search cards...',
+                          filled: true,
+                        ),
+                        onChanged: (v) => setSheetState(() => query = v),
+                      ),
+                    ),
+                    Expanded(
+                      child: ListView.builder(
+                        itemCount: filtered.length,
+                        itemBuilder: (context, index) {
+                          final card = filtered[index];
+                          return ListTile(
+                            title: Text(
+                              card.name,
+                              style: const TextStyle(color: Colors.white),
+                            ),
+                            subtitle: Text(
+                              '${card.element ?? "Neutral"} • DMG:${card.damage} HP:${card.health} • Cost:${card.cost}',
+                              style: const TextStyle(color: Colors.white54),
+                            ),
+                            trailing: IconButton(
+                              icon: const Icon(
+                                Icons.add,
+                                color: Colors.white70,
+                              ),
+                              onPressed: () {
+                                final unique =
+                                    '${DateTime.now().millisecondsSinceEpoch}_${index}';
+                                final instance =
+                                    _createAbilityTestingCardInstance(
+                                      card,
+                                      unique,
+                                    );
+                                setState(() {
+                                  match.player.hand.add(instance);
+                                });
+                              },
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _applyAbilityTestingRelic(ShopItem relic) {
+    final match = _matchManager.currentMatch;
+    if (match == null) return;
+    if (_abilityTestingAppliedRelics.containsKey(relic.id)) return;
+
+    final effect = relic.effect;
+    if (effect == null) return;
+
+    var delta = const _TestingModifierDelta(id: '', name: '');
+    if (effect.startsWith('damage_boost_')) {
+      final v = int.tryParse(effect.split('_').last) ?? 0;
+      _abilityTestingPlayerDamageBonus += v;
+      delta = _TestingModifierDelta(
+        id: relic.id,
+        name: relic.name,
+        playerDamageBonus: v,
+      );
+    } else if (effect.startsWith('max_hp_')) {
+      final v = int.tryParse(effect.split('_').last) ?? 0;
+      match.player.baseHP += v;
+      delta = _TestingModifierDelta(
+        id: relic.id,
+        name: relic.name,
+        baseHpBonus: v,
+      );
+    } else if (effect == 'cannon_hp_1') {
+      _abilityTestingCannonHealthBonus += 1;
+      delta = const _TestingModifierDelta(
+        id: 'campaign_map_relic',
+        name: 'Map Relic',
+        cannonHealthBonus: 1,
+      );
+    }
+
+    if (delta.id.isNotEmpty) {
+      _abilityTestingAppliedRelics[delta.id] = delta;
+    }
+  }
+
+  void _removeAbilityTestingRelic(String relicId) {
+    final match = _matchManager.currentMatch;
+    if (match == null) return;
+    final delta = _abilityTestingAppliedRelics.remove(relicId);
+    if (delta == null) return;
+
+    _abilityTestingPlayerDamageBonus -= delta.playerDamageBonus;
+    _abilityTestingPlayerCardHealthBonus -= delta.playerCardHealthBonus;
+    _abilityTestingArtilleryDamageBonus -= delta.artilleryDamageBonus;
+    _abilityTestingCannonHealthBonus -= delta.cannonHealthBonus;
+    _abilityTestingHeroAbilityDamageBoost -= delta.heroAbilityDamageBoost;
+    if (delta.baseHpBonus != 0) {
+      match.player.baseHP -= delta.baseHpBonus;
+      if (match.player.baseHP < 0) {
+        match.player.baseHP = 0;
+      }
+    }
+  }
+
+  void _toggleAbilityTestingRelic(ShopItem relic) {
+    if (_abilityTestingAppliedRelics.containsKey(relic.id)) {
+      _removeAbilityTestingRelic(relic.id);
+    } else {
+      _applyAbilityTestingRelic(relic);
+    }
+  }
+
+  Future<void> _showAbilityTestingRelicPicker() async {
+    final match = _matchManager.currentMatch;
+    if (match == null) return;
+
+    final relics = [
+      ...ShopInventory.getAllRelics(),
+      ...ShopInventory.getAllLegendaryRelics(),
+    ];
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.grey[900],
+      builder: (context) {
+        String query = '';
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final filtered = query.isEmpty
+                ? relics
+                : relics
+                      .where(
+                        (r) =>
+                            r.name.toLowerCase().contains(
+                              query.toLowerCase(),
+                            ) ||
+                            r.description.toLowerCase().contains(
+                              query.toLowerCase(),
+                            ),
+                      )
+                      .toList();
+
+            return SafeArea(
+              child: SizedBox(
+                height: MediaQuery.of(context).size.height * 0.75,
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: TextField(
+                        decoration: const InputDecoration(
+                          hintText: 'Search relics...',
+                          filled: true,
+                        ),
+                        onChanged: (v) => setSheetState(() => query = v),
+                      ),
+                    ),
+                    Expanded(
+                      child: ListView.builder(
+                        itemCount: filtered.length,
+                        itemBuilder: (context, index) {
+                          final relic = filtered[index];
+                          final isApplied = _abilityTestingAppliedRelics
+                              .containsKey(relic.id);
+                          return ListTile(
+                            title: Text(
+                              relic.name,
+                              style: const TextStyle(color: Colors.white),
+                            ),
+                            subtitle: Text(
+                              relic.description,
+                              style: const TextStyle(color: Colors.white54),
+                            ),
+                            trailing: IconButton(
+                              icon: Icon(
+                                isApplied ? Icons.remove_circle : Icons.add,
+                                color: isApplied
+                                    ? Colors.greenAccent
+                                    : Colors.white70,
+                              ),
+                              onPressed: () {
+                                setState(() {
+                                  _toggleAbilityTestingRelic(relic);
+                                });
+                                setSheetState(() {});
+                              },
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _applyAbilityTestingLegacyBuff(String id) {
+    final match = _matchManager.currentMatch;
+    if (match == null) return;
+    if (_abilityTestingAppliedLegacyBuffs.containsKey(id)) return;
+
+    _TestingModifierDelta delta;
+
+    switch (id) {
+      case 'buff_global_damage_1':
+        _abilityTestingPlayerDamageBonus += 1;
+        delta = const _TestingModifierDelta(
+          id: 'buff_global_damage_1',
+          name: 'Global Damage +1',
+          playerDamageBonus: 1,
+        );
+        break;
+      case 'buff_global_hp_1':
+        _abilityTestingPlayerCardHealthBonus += 1;
+        delta = const _TestingModifierDelta(
+          id: 'buff_global_hp_1',
+          name: 'Global HP +1',
+          playerCardHealthBonus: 1,
+        );
+        break;
+      case 'buff_artillery_damage_1':
+        _abilityTestingArtilleryDamageBonus += 1;
+        delta = const _TestingModifierDelta(
+          id: 'buff_artillery_damage_1',
+          name: 'Artillery Damage +1',
+          artilleryDamageBonus: 1,
+        );
+        break;
+      case 'buff_cannon_hp_1':
+        _abilityTestingCannonHealthBonus += 1;
+        delta = const _TestingModifierDelta(
+          id: 'buff_cannon_hp_1',
+          name: 'Cannon HP +1',
+          cannonHealthBonus: 1,
+        );
+        break;
+      case 'buff_extra_draw_2':
+        final drawn = match.player.deck.drawCards(2);
+        match.player.hand.addAll(drawn);
+        delta = const _TestingModifierDelta(
+          id: 'buff_extra_draw_2',
+          name: 'Draw 2 cards now',
+          reversible: false,
+        );
+        break;
+      case 'buff_hero_ability_boost_2':
+        _abilityTestingHeroAbilityDamageBoost += 2;
+        delta = const _TestingModifierDelta(
+          id: 'buff_hero_ability_boost_2',
+          name: 'Hero ability damage boost +2',
+          heroAbilityDamageBoost: 2,
+        );
+        break;
+      default:
+        delta = _TestingModifierDelta(id: id, name: id);
+    }
+
+    _abilityTestingAppliedLegacyBuffs[id] = delta;
+  }
+
+  void _removeAbilityTestingLegacyBuff(String id) {
+    final match = _matchManager.currentMatch;
+    if (match == null) return;
+    final delta = _abilityTestingAppliedLegacyBuffs.remove(id);
+    if (delta == null) return;
+
+    if (!delta.reversible) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${delta.name} removed (cannot undo already applied effect).',
+            ),
+          ),
+        );
+      }
+      return;
+    }
+
+    _abilityTestingPlayerDamageBonus -= delta.playerDamageBonus;
+    _abilityTestingPlayerCardHealthBonus -= delta.playerCardHealthBonus;
+    _abilityTestingArtilleryDamageBonus -= delta.artilleryDamageBonus;
+    _abilityTestingCannonHealthBonus -= delta.cannonHealthBonus;
+    _abilityTestingHeroAbilityDamageBoost -= delta.heroAbilityDamageBoost;
+    if (delta.baseHpBonus != 0) {
+      match.player.baseHP -= delta.baseHpBonus;
+      if (match.player.baseHP < 0) {
+        match.player.baseHP = 0;
+      }
+    }
+  }
+
+  void _toggleAbilityTestingLegacyBuff(String id) {
+    if (_abilityTestingAppliedLegacyBuffs.containsKey(id)) {
+      _removeAbilityTestingLegacyBuff(id);
+    } else {
+      _applyAbilityTestingLegacyBuff(id);
+    }
+  }
+
+  Future<void> _showAbilityTestingBuffPicker() async {
+    final match = _matchManager.currentMatch;
+    if (match == null) return;
+
+    final buffs = <({String id, String name, String description})>[
+      (
+        id: 'buff_global_damage_1',
+        name: 'Global Damage +1',
+        description: 'Newly added cards get +1 DMG',
+      ),
+      (
+        id: 'buff_global_hp_1',
+        name: 'Global HP +1',
+        description: 'Newly added cards get +1 HP',
+      ),
+      (
+        id: 'buff_artillery_damage_1',
+        name: 'Artillery Damage +1',
+        description: 'Newly added artillery/cannons get +1 DMG',
+      ),
+      (
+        id: 'buff_cannon_hp_1',
+        name: 'Cannon HP +1',
+        description: 'Newly added artillery/cannons get +1 HP',
+      ),
+      (
+        id: 'buff_extra_draw_2',
+        name: 'Draw 2 cards now',
+        description: 'Immediately draw 2 from your deck',
+      ),
+      (
+        id: 'buff_hero_ability_boost_2',
+        name: 'Hero ability damage boost +2',
+        description: 'Boosts the hero ability damage bonus (testing)',
+      ),
+    ];
+
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.grey[900],
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final buff in buffs)
+              ListTile(
+                title: Text(
+                  buff.name,
+                  style: const TextStyle(color: Colors.white),
+                ),
+                subtitle: Text(
+                  buff.description,
+                  style: const TextStyle(color: Colors.white54),
+                ),
+                trailing: Icon(
+                  _abilityTestingAppliedLegacyBuffs.containsKey(buff.id)
+                      ? Icons.check
+                      : Icons.add,
+                  color: _abilityTestingAppliedLegacyBuffs.containsKey(buff.id)
+                      ? Colors.greenAccent
+                      : Colors.white70,
+                ),
+                onTap: () {
+                  setState(() {
+                    _toggleAbilityTestingLegacyBuff(buff.id);
+                  });
+                  Navigator.pop(context);
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showAbilityTestingAppliedModifiersDialog() async {
+    final relicsText = _abilityTestingAppliedRelics.isEmpty
+        ? 'None'
+        : _abilityTestingAppliedRelics.values.map((e) => e.name).join('\n');
+    final buffsText = _abilityTestingAppliedLegacyBuffs.isEmpty
+        ? 'None'
+        : _abilityTestingAppliedLegacyBuffs.values
+              .map((e) => e.name)
+              .join('\n');
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Testing modifiers (this battle)'),
+        content: SingleChildScrollView(
+          child: Text(
+            'Relics:\n$relicsText\n\nLegacy buffs:\n$buffsText\n\nCurrent testing bonuses:\n'
+            'Global DMG +$_abilityTestingPlayerDamageBonus\n'
+            'Global HP +$_abilityTestingPlayerCardHealthBonus\n'
+            'Artillery DMG +$_abilityTestingArtilleryDamageBonus\n'
+            'Cannon HP +$_abilityTestingCannonHealthBonus\n'
+            'Hero ability boost +$_abilityTestingHeroAbilityDamageBoost',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showAbilityTestingToolsMenu() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.grey[900],
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.add, color: Colors.white70),
+              title: const Text(
+                'Add cards to hand',
+                style: TextStyle(color: Colors.white),
+              ),
+              subtitle: const Text(
+                'Choose specific cards to add',
+                style: TextStyle(color: Colors.white54),
+              ),
+              onTap: () async {
+                Navigator.pop(context);
+                await _showAbilityTestingCardPicker();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.backspace, color: Colors.white70),
+              title: const Text(
+                'Remove all cards in hand',
+                style: TextStyle(color: Colors.white),
+              ),
+              subtitle: const Text(
+                'Clears your hand (testing mode)',
+                style: TextStyle(color: Colors.white54),
+              ),
+              onTap: () async {
+                Navigator.pop(context);
+                await _abilityTestingClearHand();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.auto_awesome, color: Colors.white70),
+              title: const Text(
+                'Add relics',
+                style: TextStyle(color: Colors.white),
+              ),
+              subtitle: const Text(
+                'Choose specific relics to apply',
+                style: TextStyle(color: Colors.white54),
+              ),
+              onTap: () async {
+                Navigator.pop(context);
+                await _showAbilityTestingRelicPicker();
+              },
+            ),
+            ListTile(
+              leading: const Icon(
+                Icons.workspace_premium,
+                color: Colors.white70,
+              ),
+              title: const Text(
+                'Add legacy buffs',
+                style: TextStyle(color: Colors.white),
+              ),
+              subtitle: const Text(
+                'Choose which buffs to apply in this battle',
+                style: TextStyle(color: Colors.white54),
+              ),
+              onTap: () async {
+                Navigator.pop(context);
+                await _showAbilityTestingBuffPicker();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.list_alt, color: Colors.white70),
+              title: const Text(
+                'View applied testing modifiers',
+                style: TextStyle(color: Colors.white),
+              ),
+              subtitle: const Text(
+                'See which relics/buffs are active in this battle',
+                style: TextStyle(color: Colors.white54),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                _showAbilityTestingAppliedModifiersDialog();
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
   }
 
   String? _playerId;
@@ -1135,6 +1787,10 @@ class _TestMatchScreenState extends State<TestMatchScreen>
   /// Check if a card is a medic (has medic_X ability)
   bool _isMedic(GameCard card) {
     return card.abilities.any((a) => a.startsWith('medic_'));
+  }
+
+  bool _isValidTargetCard(GameCard card) {
+    return _validTargets.any((t) => t.id == card.id);
   }
 
   /// Get the heal amount for a medic card
@@ -3358,7 +4014,7 @@ class _TestMatchScreenState extends State<TestMatchScreen>
     }
 
     // If we have a card selected and this is a valid target, attack or heal it
-    if (_selectedCardForAction != null && _validTargets.contains(card)) {
+    if (_selectedCardForAction != null && _isValidTargetCard(card)) {
       if (_isMedic(_selectedCardForAction!)) {
         _healTargetTYC3(card, row, col);
       } else {
@@ -3391,12 +4047,21 @@ class _TestMatchScreenState extends State<TestMatchScreen>
       _selectedCardCol = col;
 
       if (card.currentAP > 0) {
-        final reachableTargets = _matchManager.getReachableAttackTargets(
-          card,
-          row,
-          col,
-        );
-        _validTargets = reachableTargets.map((t) => t.target).toList();
+        if (_isMedic(card)) {
+          final healTargets = _matchManager.getReachableHealTargets(
+            card,
+            row,
+            col,
+          );
+          _validTargets = healTargets.map((t) => t.target).toList();
+        } else {
+          final reachableTargets = _matchManager.getReachableAttackTargets(
+            card,
+            row,
+            col,
+          );
+          _validTargets = reachableTargets.map((t) => t.target).toList();
+        }
       } else {
         _validTargets = [];
       }
@@ -6325,17 +6990,37 @@ class _TestMatchScreenState extends State<TestMatchScreen>
           ],
         ),
         floatingActionButton: _useTYC3Mode
-            ? _buildTYC3ActionButton(match)
+            ? (_isAbilityTestingMode
+                  ? Builder(
+                      builder: (context) {
+                        final actionButton = _buildTYC3ActionButton(match);
+                        return Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            FloatingActionButton.small(
+                              onPressed: _showAbilityTestingToolsMenu,
+                              tooltip: 'Ability Testing Tools',
+                              backgroundColor: Colors.deepPurple[700],
+                              heroTag: 'abilityTestingTools',
+                              child: const Icon(Icons.build, size: 22),
+                            ),
+                            if (actionButton != null) ...[
+                              const SizedBox(height: 10),
+                              actionButton,
+                            ],
+                          ],
+                        );
+                      },
+                    )
+                  : _buildTYC3ActionButton(match))
             : match.currentPhase == MatchPhase.combatPhase
             // During combat: show skip button (combat auto-advances, but ENTER skips all)
             ? FloatingActionButton.extended(
                 onPressed: () => _matchManager.skipToEnd(),
                 label: const Text('Skip Combat (ENTER)'),
                 icon: const Icon(Icons.fast_forward),
-                backgroundColor: Colors.red[700],
-                heroTag: 'skip',
               )
-            : _buildSubmitButton(match),
+            : null,
       ),
     );
   }
@@ -6517,47 +7202,6 @@ class _TestMatchScreenState extends State<TestMatchScreen>
       backgroundColor: Colors.grey,
       heroTag: 'waiting',
     );
-  }
-
-  Widget? _buildSubmitButton(MatchState match) {
-    if (match.isGameOver) return null;
-
-    // Online mode: show waiting state
-    if (_isOnlineMode) {
-      if (_waitingForOpponent) {
-        return FloatingActionButton.extended(
-          onPressed: null,
-          label: const Text('Waiting for opponent...'),
-          icon: const SizedBox(
-            width: 16,
-            height: 16,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-            ),
-          ),
-          backgroundColor: Colors.grey,
-        );
-      } else if (_mySubmitted) {
-        return FloatingActionButton.extended(
-          onPressed: null,
-          label: const Text('Turn Submitted'),
-          icon: const Icon(Icons.check),
-          backgroundColor: Colors.green[700],
-        );
-      }
-    }
-
-    // Show submit button if not yet submitted
-    if (!match.playerSubmitted) {
-      return FloatingActionButton.extended(
-        onPressed: _submitTurn,
-        label: Text(_isOnlineMode ? 'Submit Turn' : 'Submit Turn'),
-        icon: const Icon(Icons.send),
-      );
-    }
-
-    return null;
   }
 
   Widget _buildGameOver(MatchState match) {
@@ -7801,13 +8445,21 @@ class _TestMatchScreenState extends State<TestMatchScreen>
             ? () {
                 final success = _matchManager.activatePlayerHeroAbility();
                 if (success) {
+                  final testingBoost = _isAbilityTestingMode
+                      ? _abilityTestingHeroAbilityDamageBoost
+                      : 0;
+                  final campaignBoost = widget.heroAbilityDamageBoost;
+                  final boost = (campaignBoost > testingBoost)
+                      ? campaignBoost
+                      : testingBoost;
                   if (!_isOnlineMode &&
-                      widget.forceCampaignDeck &&
                       hero.abilityType == HeroAbilityType.drawCards &&
-                      widget.heroAbilityDamageBoost > 0) {
+                      boost > 0) {
                     _matchManager.addPlayerDamageBoostThisTurn(
-                      widget.heroAbilityDamageBoost,
-                      source: 'Inspiring Presence',
+                      boost,
+                      source: _isAbilityTestingMode
+                          ? 'Testing: Hero ability boost'
+                          : 'Inspiring Presence',
                     );
                   }
                   setState(() {});
@@ -8459,9 +9111,11 @@ class _TestMatchScreenState extends State<TestMatchScreen>
                                 // TYC3: Show if card is selected for action
                                 if (_selectedCardForAction == card) {
                                   positionLabel = '✓ SELECTED';
-                                } else if (isOpponent) {
-                                  // Show if this is a valid target
-                                  if (_validTargets.contains(card)) {
+                                } else {
+                                  // Show if this is a valid target (heal or attack)
+                                  if (_validTargets.any(
+                                    (c) => c.id == card.id,
+                                  )) {
                                     positionLabel = 'TARGET';
                                   }
                                 }
@@ -8531,7 +9185,7 @@ class _TestMatchScreenState extends State<TestMatchScreen>
                                   _useTYC3Mode &&
                                   _selectedCardForAction == card;
                               final isValidTarget =
-                                  _useTYC3Mode && _validTargets.contains(card);
+                                  _useTYC3Mode && _isValidTargetCard(card);
 
                               // Visual effect for hero ability damage boost
                               final isDamageBoosted =
@@ -8903,7 +9557,7 @@ class _TestMatchScreenState extends State<TestMatchScreen>
 
               // Check states
               final isSelected = _selectedCardForAction == card;
-              final isValidTarget = _validTargets.contains(card);
+              final isValidTarget = _isValidTargetCard(card);
 
               Widget cardWidget = _buildStackedMiniCard(
                 card,
@@ -9135,13 +9789,13 @@ class _TestMatchScreenState extends State<TestMatchScreen>
     return DragTarget<GameCard>(
       onWillAcceptWithDetails: (details) {
         // Only accept if this card is a valid target for the dragged card
-        return _validTargets.contains(card);
+        return _isValidTargetCard(card);
       },
       onAcceptWithDetails: (details) {
         // Show attack/heal preview dialog when dropped on valid target
         final attackerCard = details.data;
         if (_selectedCardForAction == attackerCard &&
-            _validTargets.contains(card)) {
+            _isValidTargetCard(card)) {
           // Medics heal friendly units, others attack enemies
           if (_isMedic(attackerCard)) {
             _healTargetTYC3(card, row, col);
@@ -9152,7 +9806,7 @@ class _TestMatchScreenState extends State<TestMatchScreen>
       },
       builder: (context, candidateData, rejectedData) {
         final isBeingDraggedOver =
-            candidateData.isNotEmpty && _validTargets.contains(card);
+            candidateData.isNotEmpty && _isValidTargetCard(card);
 
         return Builder(
           builder: (ctx) {
@@ -9165,7 +9819,14 @@ class _TestMatchScreenState extends State<TestMatchScreen>
             });
 
             return GestureDetector(
-              onTap: () => _onCardTapTYC3(card, row, col, false, true),
+              onTap: () {
+                final match = _matchManager.currentMatch;
+                final isPlayerCard =
+                    match != null && card.ownerId == match.player.id;
+                final isOpponent =
+                    match != null && card.ownerId == match.opponent.id;
+                _onCardTapTYC3(card, row, col, isPlayerCard, isOpponent);
+              },
               onLongPress: () {
                 final rect = _globalRectForContext(ctx);
                 final terrain = _matchManager.currentMatch?.board

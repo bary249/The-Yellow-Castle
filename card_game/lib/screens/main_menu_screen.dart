@@ -67,6 +67,14 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
     ).push(MaterialPageRoute(builder: (_) => const HeroSelectionScreen()));
   }
 
+  void _openAbilityTesting() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const HeroSelectionScreen(abilityTestingMode: true),
+      ),
+    );
+  }
+
   void _playOnline() {
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -204,6 +212,17 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                         sublabel: 'Practice against computer',
                         color: Colors.green,
                         onTap: _playVsAI,
+                      ),
+
+                      const SizedBox(height: 20),
+
+                      // Ability Testing button
+                      _buildMenuButton(
+                        icon: Icons.science,
+                        label: 'ABILITY TESTING',
+                        sublabel: 'Spawn cards/relics/buffs for testing',
+                        color: Colors.deepPurple,
+                        onTap: _openAbilityTesting,
                       ),
 
                       const SizedBox(height: 20),

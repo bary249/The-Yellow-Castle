@@ -9,11 +9,13 @@ import 'matchmaking_screen.dart';
 class HeroSelectionScreen extends StatefulWidget {
   final bool isOnline;
   final bool isChessTimerMode;
+  final bool abilityTestingMode;
 
   const HeroSelectionScreen({
     super.key,
     this.isOnline = false,
     this.isChessTimerMode = false,
+    this.abilityTestingMode = false,
   });
 
   @override
@@ -67,6 +69,7 @@ class _HeroSelectionScreenState extends State<HeroSelectionScreen> {
                   builder: (_) => TestMatchScreen(
                     selectedHero: _selectedHero,
                     customDeck: deckCards,
+                    abilityTestingMode: widget.abilityTestingMode,
                   ),
                 ),
               );
