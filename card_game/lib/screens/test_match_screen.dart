@@ -6674,7 +6674,7 @@ class _TestMatchScreenState extends State<TestMatchScreen>
         relicName: relicName,
         relicDescription: relicDescription,
         isChessTimerMode: _useChessTimer,
-        playerBaseHP: widget.playerCurrentHealth,
+        playerBaseHP: _isAbilityTestingMode ? 1000 : widget.playerCurrentHealth,
         opponentBaseHP: widget.opponentBaseHP,
         opponentPriorityCardIds: widget.opponentPriorityCardIds.isEmpty
             ? null
@@ -6753,6 +6753,7 @@ class _TestMatchScreenState extends State<TestMatchScreen>
         opponentAttunedElement: opponentHero.terrainAffinities.first,
         playerHero: playerHero,
         opponentHero: opponentHero,
+        playerBaseHP: _isAbilityTestingMode ? 1000 : widget.playerCurrentHealth,
         opponentBaseHP: widget.opponentBaseHP,
       );
 
