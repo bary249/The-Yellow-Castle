@@ -8827,11 +8827,12 @@ class _TestMatchScreenState extends State<TestMatchScreen>
       final playerId = match.player.id;
 
       // Fog of War: Check if player has cards in middle (row 1) OR enemy base (row 0) of this lane
+      // Include hiddenSpies - spies have regular vision like any other unit
       final middleTile = match.board.getTile(1, col);
       final enemyBaseTile = match.board.getTile(0, col);
-      final playerHasMiddleCard = middleTile.cards.any(
-        (c) => c.ownerId == playerId && c.isAlive,
-      );
+      final playerHasMiddleCard =
+          middleTile.cards.any((c) => c.ownerId == playerId && c.isAlive) ||
+          middleTile.hiddenSpies.any((c) => c.ownerId == playerId && c.isAlive);
       final playerHasEnemyBaseCard = enemyBaseTile.cards.any(
         (c) => c.ownerId == playerId && c.isAlive,
       );

@@ -2969,11 +2969,12 @@ class MatchManager {
     final isPlayerAttacker = attacker.ownerId == _currentMatch!.player.id;
     if (isPlayerAttacker && targetRow == 0) {
       // Dynamic fog of war: check if player has visibility
+      // Include hiddenSpies - spies have regular vision like any other unit
       final playerId = _currentMatch!.player.id;
       final middleTile = _currentMatch!.board.getTile(1, targetCol);
-      final playerHasMiddleCard = middleTile.cards.any(
-        (c) => c.ownerId == playerId && c.isAlive,
-      );
+      final playerHasMiddleCard =
+          middleTile.cards.any((c) => c.ownerId == playerId && c.isAlive) ||
+          middleTile.hiddenSpies.any((c) => c.ownerId == playerId && c.isAlive);
 
       // Check if a scout can see this lane
       bool scoutCanSee = false;
@@ -3429,11 +3430,12 @@ class MatchManager {
     // Fog of war check: Player cannot attack enemy base if lane not revealed
     if (isPlayerAttacking) {
       // Dynamic fog of war: check if player has visibility
+      // Include hiddenSpies - spies have regular vision like any other unit
       final playerId = _currentMatch!.player.id;
       final middleTile = _currentMatch!.board.getTile(1, attackerCol);
-      final playerHasMiddleCard = middleTile.cards.any(
-        (c) => c.ownerId == playerId && c.isAlive,
-      );
+      final playerHasMiddleCard =
+          middleTile.cards.any((c) => c.ownerId == playerId && c.isAlive) ||
+          middleTile.hiddenSpies.any((c) => c.ownerId == playerId && c.isAlive);
 
       // Check if a scout can see this lane
       bool scoutCanSee = false;
