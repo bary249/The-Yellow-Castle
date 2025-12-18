@@ -2652,3 +2652,52 @@ List<GameCard> buildRandomizedAct3Deck(int difficulty) {
   cards.shuffle(random);
   return cards;
 }
+
+/// Build the Specials deck for ability testing mode.
+/// Contains one of each ability card for testing purposes.
+List<GameCard> buildSpecialsDeck() {
+  final cards = <GameCard>[];
+  int idx = 0;
+
+  // Support abilities
+  cards.add(basicMedic(idx++));
+  cards.add(enhancerUnit(idx++));
+  cards.add(switcherUnit(idx++));
+
+  // Defensive abilities
+  cards.add(shieldGuard(idx++)); // Has guard ability
+  cards.add(barrierUnit(idx++));
+  cards.add(megaTauntUnit(idx++));
+
+  // Control abilities
+  cards.add(silenceUnit(idx++));
+  cards.add(paralyzeUnit(idx++));
+  cards.add(glueUnit(idx++));
+  cards.add(fearUnit(idx++));
+
+  // Combat abilities
+  cards.add(pushBackUnit(idx++));
+  cards.add(oneSideAttackerUnit(idx++));
+  cards.add(twoSideAttackerUnit(idx++));
+
+  // Special abilities
+  cards.add(spyAgent(idx++));
+  cards.add(watcherUnit(idx++));
+  cards.add(shacoUnit(idx++));
+  cards.add(tallUnit(idx++));
+  cards.add(terrainAffinityUnit(idx++));
+
+  // Ranged
+  cards.add(archer(idx++)); // Has ranged ability
+
+  // Traps
+  cards.add(woodsMine(idx++)); // Has trap ability
+
+  // Ignite
+  cards.add(firestarter(idx++));
+
+  // Utility
+  cards.add(scoutUnit(idx++)); // Has scout ability
+
+  return cards;
+}

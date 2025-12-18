@@ -39,6 +39,11 @@ class MatchManager {
       // Keep our local deck cards (the opponent's view of our deck is wrong/empty)
       newState.player.deck.replaceCards(_currentMatch!.player.deck.cards);
 
+      // Keep our local starting deck snapshot (used by Tester hero)
+      newState.player.startingDeck = _currentMatch!.player.startingDeck
+          ?.map((c) => c.clone())
+          .toList();
+
       // Keep our local hand (opponent doesn't see our hand)
       newState.player.hand.clear();
       newState.player.hand.addAll(_currentMatch!.player.hand);
@@ -1091,6 +1096,11 @@ class MatchManager {
       _log('🏺 Relic hidden on a middle tile (location unknown)');
     }
 
+    // Capture starting deck snapshots for refill abilities (e.g., Tester hero)
+    // Do this AFTER shuffle/re-order so it matches the current deck's identity.
+    player.startingDeck = player.deck.cards.map((c) => c.copy()).toList();
+    opponent.startingDeck = opponent.deck.cards.map((c) => c.copy()).toList();
+
     // Draw initial hands
     player.drawInitialHand();
     opponent.drawInitialHand();
@@ -1239,6 +1249,28 @@ class MatchManager {
           _currentMatch!.history.add(
             TurnSnapshot.fromState(matchState: _currentMatch!),
           );
+        }
+        break;
+
+      case HeroAbilityType.refillHand:
+        // Refill hand with starting deck cards (for Tester hero)
+        final startingDeck = _currentMatch!.player.startingDeck;
+        if (startingDeck != null && startingDeck.isNotEmpty) {
+          _currentMatch!.player.hand.clear();
+          final now = DateTime.now().millisecondsSinceEpoch;
+          final takeCount = startingDeck.length < Player.maxHandSize
+              ? startingDeck.length
+              : Player.maxHandSize;
+          for (int i = 0; i < takeCount; i++) {
+            final base = startingDeck[i];
+            final refilled = base.copyWith(id: '${base.id}_refill_${now}_$i');
+            _currentMatch!.player.hand.add(refilled);
+          }
+          _log(
+            '   Refilled hand with ${_currentMatch!.player.hand.length} starting deck cards.',
+          );
+        } else {
+          _log('   No starting deck to refill from.');
         }
         break;
     }

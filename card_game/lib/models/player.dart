@@ -12,6 +12,7 @@ class Player {
   // Match state
   final Deck deck;
   final List<GameCard> hand;
+  List<GameCard>? startingDeck;
 
   // TYC3: Base HP (renamed from crystalHP for clarity)
   int baseHP;

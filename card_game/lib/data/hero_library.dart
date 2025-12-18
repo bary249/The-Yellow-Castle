@@ -8,6 +8,7 @@ class HeroLibrary {
     saladin(),
     admiralNelson(),
     archdukeCharles(),
+    tester(),
   ];
 
   /// Get a hero by ID.
@@ -69,5 +70,18 @@ class HeroLibrary {
     terrainAffinities: ['Woods'],
     abilityType: HeroAbilityType.directBaseDamage,
     abilityDescription: 'Deal 2 direct damage to the enemy base.',
+  );
+
+  /// Tester - Special hero for ability testing mode.
+  /// Affinity: All terrains
+  /// Ability: Refill hand with starting deck cards.
+  static GameHero tester() => GameHero(
+    id: 'tester',
+    name: 'Tester',
+    description:
+        'A special hero for testing abilities. Can refill hand with starting deck cards.',
+    terrainAffinities: ['Woods', 'Lake', 'Desert', 'Marsh'],
+    abilityType: HeroAbilityType.refillHand,
+    abilityDescription: 'Refill hand with starting deck cards.',
   );
 }

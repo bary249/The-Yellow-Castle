@@ -2082,6 +2082,14 @@ class _TestMatchScreenState extends State<TestMatchScreen>
     return card.abilities.any((a) => a.startsWith('ignite_'));
   }
 
+  bool _isEnhancer(GameCard card) {
+    return card.abilities.contains('enhancer');
+  }
+
+  bool _isSwitcher(GameCard card) {
+    return card.abilities.contains('switcher');
+  }
+
   bool _isValidTargetCard(GameCard card) {
     return _validTargets.any((t) => t.id == card.id);
   }
@@ -2198,6 +2206,28 @@ class _TestMatchScreenState extends State<TestMatchScreen>
                 col,
               );
               _validTargets = healTargets.map((t) => t.target).toList();
+            } else if (_isEnhancer(card)) {
+              // Enhancers target friendly units on same tile
+              final enhanceTargets = _matchManager.getReachableEnhanceTargets(
+                card,
+                row,
+                col,
+              );
+              _validTargets = enhanceTargets.map((t) => t.target).toList();
+            } else if (_isSwitcher(card)) {
+              // Switchers target pairs of friendly units - show all friendlies as potential targets
+              final switchTargets = _matchManager.getReachableSwitchTargets(
+                card,
+                row,
+                col,
+              );
+              // Flatten to unique targets for highlighting
+              final uniqueTargets = <GameCard>{};
+              for (final pair in switchTargets) {
+                uniqueTargets.add(pair.target1);
+                uniqueTargets.add(pair.target2);
+              }
+              _validTargets = uniqueTargets.toList();
             } else {
               final reachableTargets = _matchManager.getReachableAttackTargets(
                 card,
@@ -2437,6 +2467,136 @@ class _TestMatchScreenState extends State<TestMatchScreen>
       );
     }
 
+    _clearTYC3Selection();
+    setState(() {});
+  }
+
+  /// TYC3: Perform enhance on a target (Enhancer ability)
+  void _enhanceTargetTYC3(GameCard target, int targetRow, int targetCol) {
+    if (_selectedCardForAction == null ||
+        _selectedCardRow == null ||
+        _selectedCardCol == null)
+      return;
+
+    final enhancer = _selectedCardForAction!;
+    final enhancerRow = _selectedCardRow!;
+    final enhancerCol = _selectedCardCol!;
+
+    final result = _matchManager.enhanceCardTYC3(
+      enhancer,
+      target,
+      enhancerRow,
+      enhancerCol,
+      targetRow,
+      targetCol,
+    );
+
+    if (result != null) {
+      _syncOnlineState();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${enhancer.name} doubled ${target.name}\'s damage! (${enhancer.name} self-destructed)',
+          ),
+          backgroundColor: Colors.purple,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Enhance failed'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+
+    _clearTYC3Selection();
+    setState(() {});
+  }
+
+  /// TYC3: Perform switch on targets (Switcher ability)
+  /// For simplicity, we'll use a two-tap system: first tap selects first target, second tap selects second
+  GameCard? _switcherFirstTarget;
+  int? _switcherFirstTargetRow;
+  int? _switcherFirstTargetCol;
+
+  void _switchTargetTYC3(GameCard target, int targetRow, int targetCol) {
+    if (_selectedCardForAction == null ||
+        _selectedCardRow == null ||
+        _selectedCardCol == null)
+      return;
+
+    // If no first target selected yet, store this as first target
+    if (_switcherFirstTarget == null) {
+      _switcherFirstTarget = target;
+      _switcherFirstTargetRow = targetRow;
+      _switcherFirstTargetCol = targetCol;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Selected ${target.name} as first target. Tap another ally to swap abilities.',
+          ),
+          backgroundColor: Colors.blue,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      setState(() {});
+      return;
+    }
+
+    // If same target tapped again, deselect
+    if (_switcherFirstTarget!.id == target.id) {
+      _switcherFirstTarget = null;
+      _switcherFirstTargetRow = null;
+      _switcherFirstTargetCol = null;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('First target deselected.'),
+          backgroundColor: Colors.grey,
+        ),
+      );
+      setState(() {});
+      return;
+    }
+
+    // We have both targets, perform the switch
+    final switcher = _selectedCardForAction!;
+    final switcherRow = _selectedCardRow!;
+    final switcherCol = _selectedCardCol!;
+
+    final result = _matchManager.switchCardsTYC3(
+      switcher,
+      _switcherFirstTarget!,
+      target,
+      switcherRow,
+      switcherCol,
+    );
+
+    if (result != null) {
+      _syncOnlineState();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${switcher.name} swapped abilities between ${_switcherFirstTarget!.name} and ${target.name}! (${switcher.name} self-destructed)',
+          ),
+          backgroundColor: Colors.purple,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Switch failed'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+
+    // Clear switcher state
+    _switcherFirstTarget = null;
+    _switcherFirstTargetRow = null;
+    _switcherFirstTargetCol = null;
     _clearTYC3Selection();
     setState(() {});
   }
@@ -4644,6 +4804,10 @@ class _TestMatchScreenState extends State<TestMatchScreen>
     if (_selectedCardForAction != null && _isValidTargetCard(card)) {
       if (_isMedic(_selectedCardForAction!)) {
         _healTargetTYC3(card, row, col);
+      } else if (_isEnhancer(_selectedCardForAction!)) {
+        _enhanceTargetTYC3(card, row, col);
+      } else if (_isSwitcher(_selectedCardForAction!)) {
+        _switchTargetTYC3(card, row, col);
       } else {
         _attackTargetTYC3(card, row, col);
       }
@@ -4689,6 +4853,25 @@ class _TestMatchScreenState extends State<TestMatchScreen>
               col,
             );
             _validTargets = healTargets.map((t) => t.target).toList();
+          } else if (_isEnhancer(card)) {
+            final enhanceTargets = _matchManager.getReachableEnhanceTargets(
+              card,
+              row,
+              col,
+            );
+            _validTargets = enhanceTargets.map((t) => t.target).toList();
+          } else if (_isSwitcher(card)) {
+            final switchTargets = _matchManager.getReachableSwitchTargets(
+              card,
+              row,
+              col,
+            );
+            final uniqueTargets = <GameCard>{};
+            for (final pair in switchTargets) {
+              uniqueTargets.add(pair.target1);
+              uniqueTargets.add(pair.target2);
+            }
+            _validTargets = uniqueTargets.toList();
           } else {
             final reachableTargets = _matchManager.getReachableAttackTargets(
               card,
@@ -5037,6 +5220,8 @@ class _TestMatchScreenState extends State<TestMatchScreen>
         return Icons.healing;
       case HeroAbilityType.directBaseDamage:
         return Icons.local_fire_department;
+      case HeroAbilityType.refillHand:
+        return Icons.refresh;
     }
   }
 
@@ -10615,6 +10800,25 @@ class _TestMatchScreenState extends State<TestMatchScreen>
                 col,
               );
               _validTargets = healTargets.map((t) => t.target).toList();
+            } else if (_isEnhancer(card)) {
+              final enhanceTargets = _matchManager.getReachableEnhanceTargets(
+                card,
+                row,
+                col,
+              );
+              _validTargets = enhanceTargets.map((t) => t.target).toList();
+            } else if (_isSwitcher(card)) {
+              final switchTargets = _matchManager.getReachableSwitchTargets(
+                card,
+                row,
+                col,
+              );
+              final uniqueTargets = <GameCard>{};
+              for (final pair in switchTargets) {
+                uniqueTargets.add(pair.target1);
+                uniqueTargets.add(pair.target2);
+              }
+              _validTargets = uniqueTargets.toList();
             } else {
               _validTargets = _matchManager.getValidTargetsTYC3(card, row, col);
             }
@@ -10701,6 +10905,10 @@ class _TestMatchScreenState extends State<TestMatchScreen>
           // Medics heal friendly units, others attack enemies
           if (_isMedic(attackerCard)) {
             _healTargetTYC3(card, row, col);
+          } else if (_isEnhancer(attackerCard)) {
+            _enhanceTargetTYC3(card, row, col);
+          } else if (_isSwitcher(attackerCard)) {
+            _switchTargetTYC3(card, row, col);
           } else {
             _attackTargetTYC3(card, row, col);
           }

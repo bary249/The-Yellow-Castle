@@ -249,6 +249,18 @@ class _DeckSelectionScreenState extends State<DeckSelectionScreen> {
             builder: buildArchdukeCoalitionDeck,
           ),
         ];
+      case 'tester':
+        return [
+          DeckTemplate(
+            id: 'specials',
+            name: 'Specials Deck',
+            description: 'One of each ability card for testing.',
+            icon: Icons.science,
+            color: Colors.purple,
+            unitPreview: ['Medic', 'Enhancer', 'Switcher', 'Spy', 'Shaco'],
+            builder: buildSpecialsDeck,
+          ),
+        ];
       default:
         return [
           DeckTemplate(

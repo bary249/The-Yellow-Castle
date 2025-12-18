@@ -60,5 +60,6 @@ enum HeroAbilityType {
   /// Deal direct damage to enemy base (e.g. 2 damage).
   directBaseDamage,
 
-  /// (Future) More ability types can be added here.
+  /// Refill hand with starting deck cards.
+  refillHand,
 }
