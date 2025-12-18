@@ -7,7 +7,7 @@ class GameCard {
   final String id;
   final String name;
   final int damage;
-  final int health;
+  int health; // Changed from final to allow dynamic health modifications
 
   /// Card tier (Basic -> Advanced -> Expert)
   final CardTier tier;

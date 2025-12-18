@@ -201,6 +201,14 @@ class _TestMatchScreenState extends State<TestMatchScreen>
     cards.add(advancedMedic(0));
     cards.add(expertMedic(0));
 
+    // Add Commander cards for testing
+    cards.add(meleeCommander(0));
+    cards.add(rangedCommander(0));
+    cards.add(artilleryCommander(0));
+
+    cards.add(woodsMine(0));
+    cards.add(spyAgent(0));
+
     return cards;
   }
 
@@ -4673,6 +4681,8 @@ class _TestMatchScreenState extends State<TestMatchScreen>
     if (ability == 'scout') return Icons.visibility; // Eye icon for scouting
     if (ability == 'long_range') return Icons.gps_fixed; // Target icon
     if (ability == 'flanking') return Icons.swap_horiz; // Side movement
+    if (ability.startsWith('trap_')) return Icons.warning_amber;
+    if (ability == 'spy') return Icons.person_search;
     if (ability.startsWith('tile_shield'))
       return Icons.shield_outlined; // Tile-wide shield aura
     if (ability.startsWith('shield')) return Icons.shield;
@@ -4799,6 +4809,17 @@ class _TestMatchScreenState extends State<TestMatchScreen>
       final value = ability.split('_').last;
       return 'Defends ALL units on this tile by adding $value defense to attacks against them.';
     }
+    if (ability.startsWith('trap_')) {
+      final value = ability.split('_').last;
+      return 'Hidden trap: when an enemy enters this tile, it takes $value damage.';
+    }
+    if (ability == 'spy') {
+      return 'Can enter the enemy base. On entry, eliminates one enemy on that tile, then is destroyed.';
+    }
+    if (ability.startsWith('motivate_')) {
+      final value = ability.split('_').last;
+      return '+$value DMG and +$value HP to allied same-type units on the same tile and adjacent tiles.';
+    }
     if (ability.startsWith('shield_')) {
       final value = ability.split('_').last;
       return 'Takes $value less damage from each hit.';
@@ -4866,6 +4887,26 @@ class _TestMatchScreenState extends State<TestMatchScreen>
         }
         return ability;
     }
+  }
+
+  String _abilityDescriptionForCard(GameCard card, String ability) {
+    if (ability.startsWith('trap_')) {
+      final value = ability.split('_').last;
+      final terrain = card.element;
+      final terrainLabel = (terrain == null || terrain.isEmpty)
+          ? 'matching terrain'
+          : terrain;
+      return 'Place on $terrainLabel. Hidden trap: when an enemy enters this tile, it takes $value damage.';
+    }
+    if (ability.startsWith('motivate_')) {
+      final value = ability.split('_').last;
+      final family = card.family;
+      final familyLabel = (family == null || family.isEmpty)
+          ? 'same-type'
+          : family;
+      return '+$value DMG and +$value HP to all allied $familyLabel units on the same tile and adjacent tiles.';
+    }
+    return _abilityDescription(ability);
   }
 
   /// Build a row showing ability name and description
@@ -11123,7 +11164,7 @@ class _TestMatchScreenState extends State<TestMatchScreen>
                                   const SizedBox(width: 4),
                                   Expanded(
                                     child: Text(
-                                      '$a: ${_abilityDescription(a)}',
+                                      '${_abilityDisplayName(a)}: ${_abilityDescriptionForCard(card, a)}',
                                       style: const TextStyle(fontSize: 10),
                                     ),
                                   ),

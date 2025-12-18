@@ -191,6 +191,7 @@ This document captures the **implemented and intended logic** of the game, mappe
   - `terrain` (woods, lake, desert, marsh).
   - `owner` (player or opponent - only middle tiles can change ownership).
   - `cards` (list of cards on this tile, max 2).
+  - `trap` (optional hidden `TileTrap` state; does not occupy card slots).
 
 **Lane**
 - `LanePosition` enum: `west`, `center`, `east`.
@@ -218,6 +219,14 @@ This document captures the **implemented and intended logic** of the game, mappe
 **Tile Card Limits:**
 - Max 2 cards per tile per side.
 - Cards are placed on tiles, not in stacks.
+
+**Tile Hazards (Implemented):**
+- **Traps/Mines**: A trap can exist on a tile as hidden state (`Tile.trap`). When an enemy unit enters the tile, the trap triggers, deals damage, and is consumed.
+- **Burning Terrain (Woods/Forest)**: When a unit enters a `Woods`/`Forest` tile via movement, it immediately takes 1 damage and is knocked back to the tile it came from if possible.
+
+**Spy (Implemented):**
+- A unit with `spy` ability may move into the **enemy base tile**.
+- On **entering the enemy base tile**, it eliminates **one enemy unit on that tile**, then the Spy is destroyed (self-sacrifice).
 
 **Lane winner:**
 - Determined by which side has surviving cards after combat.

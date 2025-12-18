@@ -91,6 +91,96 @@ GameCard expertMedic(int index) => GameCard(
 );
 
 // ============================================================================
+// COMMANDER CARDS - Motivate adjacent same-type allies
+// ============================================================================
+
+GameCard meleeCommander(int index) => GameCard(
+  id: 'commander_melee_$index',
+  name: 'Melee Commander',
+  damage: 6,
+  health: 12,
+  tick: 3,
+  moveSpeed: 1,
+  maxAP: 1,
+  apPerTurn: 1,
+  attackAPCost: 1,
+  attackRange: 1,
+  element: null,
+  family: 'melee',
+  abilities: const ['motivate_1'],
+  cost: 3,
+  rarity: 2,
+);
+
+GameCard rangedCommander(int index) => GameCard(
+  id: 'commander_ranged_$index',
+  name: 'Ranged Commander',
+  damage: 5,
+  health: 8,
+  tick: 3,
+  moveSpeed: 1,
+  maxAP: 1,
+  apPerTurn: 1,
+  attackAPCost: 1,
+  attackRange: 2,
+  element: null,
+  family: 'ranged',
+  abilities: const ['motivate_1', 'ranged'],
+  cost: 3,
+  rarity: 2,
+);
+
+GameCard artilleryCommander(int index) => GameCard(
+  id: 'commander_artillery_$index',
+  name: 'Artillery Commander',
+  damage: 7,
+  health: 6,
+  tick: 4,
+  moveSpeed: 1,
+  maxAP: 1,
+  apPerTurn: 1,
+  attackAPCost: 1,
+  attackRange: 2,
+  element: null,
+  family: 'artillery',
+  abilities: const ['motivate_1', 'ranged'],
+  cost: 3,
+  rarity: 2,
+);
+
+GameCard woodsMine(int index) => GameCard(
+  id: 'trap_woods_mine_$index',
+  name: 'Woods Mine',
+  damage: 3,
+  health: 1,
+  tick: 1,
+  moveSpeed: 0,
+  maxAP: 1,
+  apPerTurn: 1,
+  attackAPCost: 1,
+  element: 'Woods',
+  abilities: const ['trap_3'],
+  cost: 1,
+  rarity: 1,
+);
+
+GameCard spyAgent(int index) => GameCard(
+  id: 'spy_agent_$index',
+  name: 'Spy',
+  damage: 0,
+  health: 1,
+  tick: 1,
+  moveSpeed: 2,
+  maxAP: 2,
+  apPerTurn: 2,
+  attackAPCost: 1,
+  element: null,
+  abilities: const ['spy'],
+  cost: 2,
+  rarity: 2,
+);
+
+// ============================================================================
 // COMMON CARDS (Rarity 1) - Unlimited copies available
 // Consolidated into Neutral Classes per user request
 // ============================================================================
@@ -109,6 +199,7 @@ GameCard cavalry(int index) => GameCard(
   apPerTurn: 2,
   attackAPCost: 1,
   element: null, // Neutral
+  family: 'melee',
   abilities: const ['cavalry'],
   cost: 1,
   rarity: 1,
@@ -127,6 +218,7 @@ GameCard pikeman(int index) => GameCard(
   apPerTurn: 1,
   attackAPCost: 1,
   element: null, // Neutral
+  family: 'melee',
   abilities: const ['pikeman'],
   cost: 2,
   rarity: 1,
@@ -145,6 +237,7 @@ GameCard shieldGuard(int index) => GameCard(
   apPerTurn: 1,
   attackAPCost: 1,
   element: null, // Neutral
+  family: 'melee',
   abilities: const ['shield_guard', 'guard'],
   cost: 3,
   rarity: 1,
@@ -164,6 +257,7 @@ GameCard archer(int index) => GameCard(
   attackAPCost: 1,
   attackRange: 1, // Ranged ability handles range mechanics
   element: null, // Neutral
+  family: 'ranged',
   abilities: const ['archer', 'ranged'],
   cost: 2,
   rarity: 2, // Ranged units are at least Rare
@@ -203,6 +297,7 @@ GameCard desertCannon(int index) => GameCard(
   attackAPCost: 1,
   attackRange: 2, // Can attack 2 tiles away!
   element: 'Desert',
+  family: 'artillery',
   abilities: const ['ranged', 'cannon'], // No retaliation
   cost: 4,
   rarity: 2, // Rare
@@ -221,6 +316,7 @@ GameCard lakeCannon(int index) => GameCard(
   attackAPCost: 1,
   attackRange: 2,
   element: 'Lake',
+  family: 'artillery',
   abilities: const ['ranged', 'cannon'],
   cost: 4,
   rarity: 2, // Rare
@@ -239,6 +335,7 @@ GameCard woodsCannon(int index) => GameCard(
   attackAPCost: 1,
   attackRange: 2,
   element: 'Woods',
+  family: 'artillery',
   abilities: const ['ranged', 'cannon'],
   cost: 4,
   rarity: 2, // Rare
@@ -603,6 +700,7 @@ GameCard napoleonVoltigeur(int index) => GameCard(
   apPerTurn: 2,
   attackAPCost: 1,
   element: null,
+  family: 'melee',
   abilities: const [],
   cost: 1,
   rarity: 1, // Common
@@ -621,6 +719,7 @@ GameCard napoleonFusilier(int index) => GameCard(
   apPerTurn: 1,
   attackAPCost: 1,
   element: null,
+  family: 'melee',
   abilities: const [],
   cost: 2,
   rarity: 1, // Common
@@ -639,6 +738,7 @@ GameCard napoleonLineInfantry(int index) => GameCard(
   apPerTurn: 1,
   attackAPCost: 1,
   element: null,
+  family: 'melee',
   abilities: const [],
   cost: 2,
   rarity: 1, // Common
@@ -658,6 +758,7 @@ GameCard napoleonFieldCannon(int index) => GameCard(
   attackAPCost: 1,
   attackRange: 2, // TYC3: Long range
   element: null,
+  family: 'artillery',
   abilities: const ['ranged'], // No retaliation
   cost: 2,
   rarity: 2, // Ranged units are at least Rare
@@ -676,6 +777,7 @@ GameCard napoleonSapper(int index) => GameCard(
   apPerTurn: 1,
   attackAPCost: 1,
   element: null,
+  family: 'melee',
   abilities: const ['fortify_1'], // +1 shield to all allies in lane
   cost: 2,
   rarity: 1, // Common

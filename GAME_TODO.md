@@ -1329,6 +1329,11 @@ Used to test look and feel and UX of a fully rendered game page.
 - [ ] **Crystal Strike** - Special ability to attack crystal directly (bypass cards)
 - [ ] **Zone Jump** - Ability to jump above 1 zone (skip advancement)
 
+### 17.5 New Mechanics (TYC3)
+- [x] **Traps/Mines** (hidden tile trap state + trigger on enemy tile entry)
+- [x] **Burning (Woods/Forest tile entry)** (1 damage + knockback, mid-turn)
+- [x] **Spy** (infiltrate, kill one unit, self-destruct)
+
 ---
 
 ## 📜 18. Big Additions (Future)

@@ -85,6 +85,207 @@ class MatchManager {
     );
   }
 
+  bool _isTrapCard(GameCard card) =>
+      card.abilities.any((a) => a.startsWith('trap_'));
+
+  bool _isSpyCard(GameCard card) => card.abilities.contains('spy');
+
+  int _getTrapDamage(GameCard card) {
+    for (final a in card.abilities) {
+      if (a.startsWith('trap_')) {
+        return int.tryParse(a.split('_').last) ?? card.damage;
+      }
+    }
+    return card.damage;
+  }
+
+  String? _getTrapTerrainRequirement(GameCard card) => card.element;
+
+  bool _placeTrapOnTile(Player active, GameCard card, int row, int col) {
+    if (_currentMatch == null) return false;
+
+    final tile = _currentMatch!.board.getTile(row, col);
+    if (tile.trap != null) {
+      _log('❌ This tile already has a trap');
+      return false;
+    }
+    final requiredTerrain = _getTrapTerrainRequirement(card);
+    if (requiredTerrain != null && requiredTerrain.isNotEmpty) {
+      final tileTerrain = tile.terrain;
+      if (tileTerrain == null ||
+          tileTerrain.toLowerCase() != requiredTerrain.toLowerCase()) {
+        _log('❌ Trap must be placed on $requiredTerrain terrain');
+        return false;
+      }
+    }
+
+    final damage = _getTrapDamage(card);
+    tile.trap = TileTrap(
+      ownerId: active.id,
+      damage: damage,
+      terrain: tile.terrain,
+    );
+    _currentMatch!.cardsPlayedThisTurn++;
+
+    final owner = active.id == _currentMatch!.player.id ? 'Player' : 'Opponent';
+    _log('✅ [$owner] Placed Trap (${damage} DMG) at ($row, $col)');
+    return true;
+  }
+
+  void _triggerTrapIfPresent(GameCard enteringCard, int row, int col) {
+    if (_currentMatch == null) return;
+    final tile = _currentMatch!.board.getTile(row, col);
+    final trap = tile.trap;
+    if (trap == null) return;
+    if (enteringCard.ownerId == null) return;
+    if (trap.ownerId == enteringCard.ownerId) return;
+
+    final damage = trap.damage;
+    tile.trap = null;
+
+    _log(
+      '💥 Trap triggered at ($row,$col)! ${enteringCard.name} takes $damage',
+    );
+    final died = enteringCard.takeDamage(damage);
+    if (died) {
+      tile.addGravestone(
+        Gravestone(
+          cardName: enteringCard.name,
+          deathLog: 'Destroyed by trap',
+          ownerId: enteringCard.ownerId,
+          turnCreated: _currentMatch!.turnNumber,
+        ),
+      );
+      onCardDestroyed?.call(enteringCard);
+      tile.cards.remove(enteringCard);
+      _log('   💀 ${enteringCard.name} destroyed by trap!');
+    } else {
+      _log(
+        '   ${enteringCard.name} now ${enteringCard.currentHealth}/${enteringCard.health} HP',
+      );
+    }
+  }
+
+  bool _isBurningTerrain(String? terrain) {
+    final t = terrain?.toLowerCase();
+    return t == 'woods' || t == 'forest';
+  }
+
+  ({int row, int col}) _applyBurningOnEntry({
+    required GameCard enteringCard,
+    required int fromRow,
+    required int fromCol,
+    required int toRow,
+    required int toCol,
+  }) {
+    if (_currentMatch == null) return (row: toRow, col: toCol);
+    if (!enteringCard.isAlive) return (row: toRow, col: toCol);
+
+    final toTile = _currentMatch!.board.getTile(toRow, toCol);
+    if (!_isBurningTerrain(toTile.terrain)) {
+      return (row: toRow, col: toCol);
+    }
+
+    const damage = 1;
+    _log(
+      '🔥 Burning terrain at ($toRow,$toCol)! ${enteringCard.name} takes $damage',
+    );
+    final died = enteringCard.takeDamage(damage);
+    if (died) {
+      toTile.addGravestone(
+        Gravestone(
+          cardName: enteringCard.name,
+          deathLog: 'Burned on terrain',
+          ownerId: enteringCard.ownerId,
+          turnCreated: _currentMatch!.turnNumber,
+        ),
+      );
+      onCardDestroyed?.call(enteringCard);
+      toTile.cards.remove(enteringCard);
+      _log('   💀 ${enteringCard.name} burned to death!');
+      return (row: toRow, col: toCol);
+    }
+
+    // Knockback: try to push back to the tile it came from
+    if (fromRow < 0 || fromRow >= 3 || fromCol < 0 || fromCol >= 3) {
+      return (row: toRow, col: toCol);
+    }
+    final fromTile = _currentMatch!.board.getTile(fromRow, fromCol);
+    if (!fromTile.canAddCard) {
+      return (row: toRow, col: toCol);
+    }
+
+    toTile.cards.remove(enteringCard);
+    fromTile.addCard(enteringCard);
+    _log(
+      '   ↩️ ${enteringCard.name} is knocked back to ($fromRow,$fromCol) from burning terrain',
+    );
+
+    _triggerTrapIfPresent(enteringCard, fromRow, fromCol);
+    return (row: fromRow, col: fromCol);
+  }
+
+  ({int row, int col}) _triggerSpyOnEnemyBaseEntry({
+    required GameCard enteringCard,
+    required int fromRow,
+    required int fromCol,
+    required int toRow,
+    required int toCol,
+  }) {
+    if (_currentMatch == null) return (row: toRow, col: toCol);
+    if (!enteringCard.isAlive) return (row: toRow, col: toCol);
+    if (!_isSpyCard(enteringCard)) return (row: toRow, col: toCol);
+    if (enteringCard.ownerId == null) return (row: toRow, col: toCol);
+
+    final isPlayerCard = enteringCard.ownerId == _currentMatch!.player.id;
+    final isEnemyBase =
+        (isPlayerCard && toRow == 0) || (!isPlayerCard && toRow == 2);
+    if (!isEnemyBase) return (row: toRow, col: toCol);
+
+    final tile = _currentMatch!.board.getTile(toRow, toCol);
+    final enemyCards = tile.cards.where(
+      (c) => c.isAlive && c.ownerId != enteringCard.ownerId,
+    );
+
+    final target = enemyCards.isNotEmpty ? enemyCards.first : null;
+    final owner = isPlayerCard ? 'Player' : 'Opponent';
+    if (target != null) {
+      _log(
+        '🕵️ [$owner] ${enteringCard.name} infiltrates enemy base and assassinates ${target.name}!',
+      );
+      tile.addGravestone(
+        Gravestone(
+          cardName: target.name,
+          deathLog: 'Assassinated by Spy',
+          ownerId: target.ownerId,
+          turnCreated: _currentMatch!.turnNumber,
+        ),
+      );
+      onCardDestroyed?.call(target);
+      tile.cards.remove(target);
+    } else {
+      _log(
+        '🕵️ [$owner] ${enteringCard.name} infiltrates enemy base but finds no target.',
+      );
+    }
+
+    // Spy is always destroyed after activation
+    tile.addGravestone(
+      Gravestone(
+        cardName: enteringCard.name,
+        deathLog: 'Spy self-destruct',
+        ownerId: enteringCard.ownerId,
+        turnCreated: _currentMatch!.turnNumber,
+      ),
+    );
+    onCardDestroyed?.call(enteringCard);
+    tile.cards.remove(enteringCard);
+    enteringCard.currentHealth = 0;
+
+    // Returns previous tile position (Spy no longer occupies enemy base)
+    return (row: fromRow, col: fromCol);
+  }
+
   /// Start a new match
   /// For online mode, pass [predefinedTerrains] and [predefinedRelicColumn] to use
   /// the board setup from the host (Player 1).
@@ -1610,7 +1811,7 @@ class MatchManager {
     final tile = _currentMatch!.board.getTile(row, col);
 
     // Check tile capacity
-    if (!tile.canAddCard) {
+    if (!_isTrapCard(card) && !tile.canAddCard) {
       _log('❌ Tile is full (max ${Tile.maxCards} cards)');
       return false;
     }
@@ -1631,6 +1832,15 @@ class MatchManager {
     if (!active.playCard(card)) {
       _log('❌ Card not in hand');
       return false;
+    }
+
+    if (_isTrapCard(card)) {
+      card.ownerId = active.id;
+      final placed = _placeTrapOnTile(active, card, row, col);
+      if (!placed) {
+        active.hand.add(card);
+      }
+      return placed;
     }
 
     // Place card on tile
@@ -1656,6 +1866,9 @@ class MatchManager {
     _log(
       '✅ [$owner] Placed ${card.name} (${card.damage}/${card.health}) at ($row, $col)$placementNote',
     );
+
+    _triggerTrapIfPresent(card, row, col);
+    if (!card.isAlive) return true;
 
     if (shouldInstantHeal) {
       // Heal the most-injured friendly unit on this tile.
@@ -1689,7 +1902,7 @@ class MatchManager {
     final tile = _currentMatch!.board.getTile(row, col);
 
     // Check tile capacity
-    if (!tile.canAddCard) {
+    if (!_isTrapCard(card) && !tile.canAddCard) {
       _log('❌ Replay: Tile is full (max ${Tile.maxCards} cards)');
       return false;
     }
@@ -1698,6 +1911,15 @@ class MatchManager {
     if (!opponent.playCard(card)) {
       _log('❌ Replay: Card not in opponent hand');
       return false;
+    }
+
+    if (_isTrapCard(card)) {
+      card.ownerId = opponent.id;
+      final placed = _placeTrapOnTile(opponent, card, row, col);
+      if (!placed) {
+        opponent.hand.add(card);
+      }
+      return placed;
     }
 
     // Place card on tile
@@ -1713,6 +1935,8 @@ class MatchManager {
 
     // Check for relic pickup
     _checkRelicPickup(row, col, card.ownerId!);
+
+    _triggerTrapIfPresent(card, row, col);
 
     // Update scout visibility
     if (card.abilities.contains('scout')) {
@@ -1950,20 +2174,25 @@ class MatchManager {
 
     // Cannot move to enemy base (row 0 for player, row 2 for opponent)
     final isPlayerCard = card.ownerId == _currentMatch!.player.id;
-    if (isPlayerCard && toRow == 0) return 'Cannot move into enemy base';
-    if (!isPlayerCard && toRow == 2) return 'Cannot move into enemy base';
+    final isMovingIntoEnemyBase =
+        (isPlayerCard && toRow == 0) || (!isPlayerCard && toRow == 2);
+    if (isMovingIntoEnemyBase && !_isSpyCard(card)) {
+      return 'Cannot move into enemy base';
+    }
 
     // Check destination tile for enemy cards (alive ones only)
     final destTile = _currentMatch!.board.getTile(toRow, toCol);
     final hasEnemyCards = destTile.cards.any(
       (c) => c.ownerId != card.ownerId && c.isAlive,
     );
-    if (hasEnemyCards) {
+    if (hasEnemyCards && !(_isSpyCard(card) && isMovingIntoEnemyBase)) {
       return 'Tile occupied by enemy - attack to clear it first';
     }
 
     // Check destination tile capacity (only friendly cards count)
-    if (!destTile.canAddCard) return 'Destination tile is full (max 4 cards)';
+    if (!destTile.canAddCard && !(_isSpyCard(card) && isMovingIntoEnemyBase)) {
+      return 'Destination tile is full (max 4 cards)';
+    }
 
     return null; // Can move
   }
@@ -2169,18 +2398,39 @@ class MatchManager {
     // Add to destination tile
     toTile.addCard(card);
 
+    _triggerTrapIfPresent(card, toRow, toCol);
+    if (!card.isAlive) return true;
+
+    _triggerSpyOnEnemyBaseEntry(
+      enteringCard: card,
+      fromRow: fromRow,
+      fromCol: fromCol,
+      toRow: toRow,
+      toCol: toCol,
+    );
+    if (!card.isAlive) return true;
+
+    final finalPos = _applyBurningOnEntry(
+      enteringCard: card,
+      fromRow: fromRow,
+      fromCol: fromCol,
+      toRow: toRow,
+      toCol: toCol,
+    );
+    if (!card.isAlive) return true;
+
     final owner = card.ownerId == _currentMatch!.player.id
         ? 'Player'
         : 'Opponent';
     _log(
-      '🚶 [$owner] ${card.name} moved ($fromRow,$fromCol) → ($toRow,$toCol)',
+      '🚶 [$owner] ${card.name} moved ($fromRow,$fromCol) → (${finalPos.row},${finalPos.col})',
     );
 
     // Check for relic pickup at destination tile
-    _checkRelicPickup(toRow, toCol, card.ownerId!);
+    _checkRelicPickup(finalPos.row, finalPos.col, card.ownerId!);
 
     // Update visibility (permanent lane reveal + scout)
-    _updatePermanentVisibility(toRow, toCol, card.ownerId!);
+    _updatePermanentVisibility(finalPos.row, finalPos.col, card.ownerId!);
 
     return true;
   }
@@ -2388,6 +2638,81 @@ class MatchManager {
     return bonus;
   }
 
+  /// TYC3: Calculate motivate bonus for a unit from Commander cards on same tile and adjacent tiles
+  /// motivate_1 = +1 damage and +1 health to same-type allies on same tile and adjacent tiles
+  ({int damage, int health}) calculateMotivateBonus(
+    GameCard card,
+    int row,
+    int col,
+  ) {
+    if (_currentMatch == null) return (damage: 0, health: 0);
+
+    int damageBonus = 0;
+    int healthBonus = 0;
+
+    // Check same tile first
+    final sameTile = _currentMatch!.board.getTile(row, col);
+    final sameTileCards = sameTile.cards.where(
+      (c) => c.isAlive && c.ownerId == card.ownerId && c.id != card.id,
+    );
+
+    for (final adjacentCard in sameTileCards) {
+      for (final ability in adjacentCard.abilities) {
+        if (ability.startsWith('motivate_')) {
+          final level = int.tryParse(ability.split('_').last) ?? 0;
+
+          // Commander motivates units of the same family as the Commander
+          if (adjacentCard.family != null &&
+              card.family != null &&
+              adjacentCard.family == card.family) {
+            damageBonus += level;
+            healthBonus += level;
+          }
+        }
+      }
+    }
+
+    // Check adjacent tiles (left, right, above, below)
+    final adjacentPositions = [
+      (row: row, col: col - 1), // Left
+      (row: row, col: col + 1), // Right
+      (row: row - 1, col: col), // Above
+      (row: row + 1, col: col), // Below
+    ];
+
+    for (final pos in adjacentPositions) {
+      // Check if position is within board bounds (3x3 grid)
+      if (pos.row < 0 || pos.row >= 3 || pos.col < 0 || pos.col >= 3) {
+        continue;
+      }
+
+      final tile = _currentMatch!.board.getTile(pos.row, pos.col);
+
+      // Get friendly cards on this adjacent tile
+      final friendlyCards = tile.cards.where(
+        (c) => c.isAlive && c.ownerId == card.ownerId,
+      );
+
+      for (final adjacentCard in friendlyCards) {
+        for (final ability in adjacentCard.abilities) {
+          if (ability.startsWith('motivate_')) {
+            final level = int.tryParse(ability.split('_').last) ?? 0;
+
+            // Commander motivates units of the same family as the Commander
+            if (adjacentCard.family != null &&
+                card.family != null &&
+                adjacentCard.family == card.family) {
+              damageBonus += level;
+              healthBonus += level;
+            }
+          }
+        }
+      }
+    }
+
+    return (damage: damageBonus, health: healthBonus);
+  }
+
   /// TYC3: Attack a target card
   /// Returns the AttackResult, or null if attack is invalid
   AttackResult? attackCardTYC3(
@@ -2493,6 +2818,13 @@ class MatchManager {
       attackerCol,
     );
 
+    // Calculate motivate bonus (from Commander cards on same tile and adjacent tiles)
+    final motivateBonus = calculateMotivateBonus(
+      attacker,
+      attackerRow,
+      attackerCol,
+    );
+
     // Resolve the attack (pass hero damage boost if player is attacking)
     final result = _combatResolver.resolveAttackTYC3(
       attacker,
@@ -2502,6 +2834,7 @@ class MatchManager {
       playerDamageBoost: isPlayerAttacking ? playerDamageBoost : 0,
       laneDamageBonus: laneBuffs.damage + tileCommandBonus,
       laneShieldBonus: laneBuffs.shield,
+      commanderDamageBonus: motivateBonus.damage,
     );
 
     _log(
@@ -2544,7 +2877,12 @@ class MatchManager {
             (!isPlayerCard && targetRow == 2);
 
         if (isEnemyBase) {
-          _log('   ⚠️ ${attacker.name} cannot advance into enemy base');
+          if (_isSpyCard(attacker)) {
+            _log('   🕵️ ${attacker.name} advances into enemy base');
+          } else {
+            _log('   ⚠️ ${attacker.name} cannot advance into enemy base');
+            return result;
+          }
         } else {
           final hasOtherEnemies = targetTile.cards.any(
             (c) => c.ownerId != attacker.ownerId && c.isAlive,
@@ -2557,11 +2895,39 @@ class MatchManager {
               '   🚶 ${attacker.name} advances to (${targetRow},${targetCol}) after kill',
             );
 
-            // Check for relic pickup at new tile
-            _checkRelicPickup(targetRow, targetCol, attacker.ownerId!);
+            _triggerTrapIfPresent(attacker, targetRow, targetCol);
 
-            // Update visibility (permanent lane reveal + scout)
-            _updatePermanentVisibility(targetRow, targetCol, attacker.ownerId!);
+            if (attacker.isAlive) {
+              _triggerSpyOnEnemyBaseEntry(
+                enteringCard: attacker,
+                fromRow: attackerRow,
+                fromCol: attackerCol,
+                toRow: targetRow,
+                toCol: targetCol,
+              );
+              if (!attacker.isAlive) return result;
+
+              final finalPos = _applyBurningOnEntry(
+                enteringCard: attacker,
+                fromRow: attackerRow,
+                fromCol: attackerCol,
+                toRow: targetRow,
+                toCol: targetCol,
+              );
+              if (!attacker.isAlive) {
+                return result;
+              }
+
+              // Check for relic pickup at new tile
+              _checkRelicPickup(finalPos.row, finalPos.col, attacker.ownerId!);
+
+              // Update visibility (permanent lane reveal + scout)
+              _updatePermanentVisibility(
+                finalPos.row,
+                finalPos.col,
+                attacker.ownerId!,
+              );
+            }
           } else {
             _log(
               '   ⚠️ ${attacker.name} cannot advance - other enemies remain on tile',
@@ -2700,6 +3066,13 @@ class MatchManager {
       attackerCol,
     );
 
+    // Calculate motivate bonus (from Commander cards on same tile and adjacent tiles)
+    final motivateBonus = calculateMotivateBonus(
+      attacker,
+      attackerRow,
+      attackerCol,
+    );
+
     return _combatResolver.previewAttackTYC3(
       attacker,
       target,
@@ -2708,6 +3081,7 @@ class MatchManager {
       playerDamageBoost: isPlayerTurn ? playerDamageBoost : 0,
       laneDamageBonus: laneBuffs.damage + tileCommandBonus,
       laneShieldBonus: laneBuffs.shield,
+      commanderDamageBonus: motivateBonus.damage,
     );
   }
 

@@ -822,6 +822,7 @@ class CombatResolver {
     int laneDamageBonus = 0,
     int laneShieldBonus = 0,
     int targetLaneShieldBonus = 0,
+    int commanderDamageBonus = 0,
   }) {
     // Calculate base damage
     int damage = attacker.damage;
@@ -848,6 +849,12 @@ class CombatResolver {
           damage += totalBonus;
           modifiers.add('+$totalBonus Lane Buff');
         }
+      }
+
+      // Apply commander damage bonus (from motivate ability)
+      if (commanderDamageBonus > 0) {
+        damage += commanderDamageBonus;
+        modifiers.add('+$commanderDamageBonus Commander Buff');
       }
 
       // Apply hero ability damage boost (player only)
@@ -1144,6 +1151,7 @@ class CombatResolver {
     int laneDamageBonus = 0,
     int laneShieldBonus = 0,
     int targetLaneShieldBonus = 0,
+    int commanderDamageBonus = 0,
   }) {
     // Calculate base damage
     int damage = attacker.damage;
@@ -1168,6 +1176,12 @@ class CombatResolver {
     if (isPlayerAttacking && playerDamageBoost > 0) {
       damage += playerDamageBoost;
       modifiers.add('+$playerDamageBoost Hero Boost');
+    }
+
+    // Apply commander damage bonus (from motivate ability)
+    if (commanderDamageBonus > 0) {
+      damage += commanderDamageBonus;
+      modifiers.add('+$commanderDamageBonus Commander Buff');
     }
 
     // Apply lane damage bonus if set

@@ -42,6 +42,28 @@ class Gravestone {
   }
 }
 
+class TileTrap {
+  final String ownerId;
+  final int damage;
+  final String? terrain;
+
+  TileTrap({required this.ownerId, required this.damage, this.terrain});
+
+  Map<String, dynamic> toJson() => {
+    'ownerId': ownerId,
+    'damage': damage,
+    'terrain': terrain,
+  };
+
+  factory TileTrap.fromJson(Map<String, dynamic> json) {
+    return TileTrap(
+      ownerId: json['ownerId'] as String,
+      damage: json['damage'] as int? ?? 0,
+      terrain: json['terrain'] as String?,
+    );
+  }
+}
+
 /// Represents a single tile on the 3×3 game board.
 /// TYC3: Updated for 4-card capacity (2×2 grid per tile)
 ///
@@ -82,13 +104,16 @@ class Tile {
   /// Gravestones of cards destroyed on this tile.
   final List<Gravestone> gravestones;
 
+  TileTrap? trap;
+
   Tile({
     required this.row,
     required this.column,
     this.terrain,
     required this.owner,
   }) : cards = [],
-       gravestones = [];
+       gravestones = [],
+       trap = null;
 
   /// Check if this tile is in the player's base row.
   bool get isPlayerBase => row == 2;
@@ -230,6 +255,7 @@ class Tile {
     'owner': owner.name,
     'cards': cards.map((c) => c.toJson()).toList(),
     'gravestones': gravestones.map((g) => g.toJson()).toList(),
+    'trap': trap?.toJson(),
   };
 
   /// Create from JSON
@@ -250,6 +276,11 @@ class Tile {
     final gravestonesData = json['gravestones'] as List<dynamic>? ?? [];
     for (final gsJson in gravestonesData) {
       tile.gravestones.add(Gravestone.fromJson(gsJson as Map<String, dynamic>));
+    }
+
+    final trapJson = json['trap'];
+    if (trapJson is Map<String, dynamic>) {
+      tile.trap = TileTrap.fromJson(trapJson);
     }
     return tile;
   }

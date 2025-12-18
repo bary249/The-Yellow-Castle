@@ -259,6 +259,8 @@ class GameBoard {
         for (final gs in sourceTile.gravestones) {
           newTile.gravestones.add(gs);
         }
+        // Copy trap state (hidden terrain trap)
+        newTile.trap = sourceTile.trap;
         return newTile;
       });
     });

@@ -1,25 +1,18 @@
-- [x] Make sure simulation mode works with the same current logics as the other modes.
-- [x] and make sure that the game summary include both simulation plaeyrs final base HP.
+**Design Notes – Card Mechanics (Technical Translation)**
 
-- [x] Decoy: rip should mention decoy. 
-- [x] The battle simulation and battle result dialog of a decoy should mention it's a decoy.
-- [x] Make sure the decoy mechanism works! i just tested and my decoy retaliated and killed an enemy card.
+**Traps / Mines**
 
+* Place a hidden card on a specific terrain tile (e.g., lake, Forest).
+* The opponent cannot see the card.
+* When an enemy unit enters that tile, the trap is triggered and the unit takes **damage**.
 
-- [x] Make battle log sidepane follow the turn by turn progression for watch replay mode.
+**Burning (Fire Effect)**
 
-- [x] add turn passing sound
+* Any unit currently occupying a **Forest** tile takes **damage**.
+* Affected units are **pushed back by one tile** (knockback), **if the target tile is unoccupied / valid**.
 
-- [x] Add a start game interface (total of 10 seconds time or "confirm" to dismiss), that gives players the option to replace 2 cards with 2 new random cards from deck from first dealt hand
+**Spy**
 
-- [x] Change timer to 8 minutes
-
-- [x] Put the card type from left to the card name (pikeman cavalry etc)
-
-- [x] put all card parameters in a column on the left side of each card: from bottom to top - HP, Damage, AP. Put the tile affinity of the card on top right. Add an icon to each special ability and put it on the center bottom of the card
-
-
-
-
-Rendering test  - Create a new mode called rendering test , this mode copies everything from pve, but, i want us to added assests to EVERYTHING.
-So backroud images to cards, map, tiles base everything shld have assests. this is mainly to test the look and feel and UX of a rendered page like in real games.
+* Can infiltrate the enemy base **without being revealed** to the opponent.
+* Upon activation, the Spy **eliminates one enemy unit**.
+* After the action resolves, the Spy **is destroyed (self-sacrifice)**.

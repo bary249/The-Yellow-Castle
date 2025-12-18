@@ -287,6 +287,11 @@ For each **tick** in each lane:
 - This applies to **ANY tile** - base tiles AND middle tiles.
 - Example: A "Woods" element card fighting on a "Woods" terrain tile gets +1 damage bonus.
 
+### 7.2.1 Burning Terrain (Woods/Forest)
+- When a unit **moves onto** a **Woods/Forest** tile, it immediately takes **1 damage**.
+- After taking damage, the unit is **knocked back** to the tile it came from if that tile is valid and has space.
+- This happens **mid-turn** (as part of movement), not only during combat.
+
 ### 7.3 Abilities Reference
 
 | Ability | Effect |
@@ -302,6 +307,8 @@ For each **tick** in each lane:
 | **stack_debuff_enemy_damage_X** | -X damage to all enemy cards in lane |
 | **conceal_back** | When front card with a back card, hides back card identity from enemy |
 | **scout** | Reveals enemy base tiles in adjacent lanes (see Fog of War section) |
+| **trap_X** | Place a hidden trap on matching terrain; when an enemy enters that tile it takes X damage (trap is consumed) |
+| **spy** | Can enter the enemy base; on entry, eliminates one enemy on that base tile, then is destroyed |
 
 ### 7.4 Medic Special Rule (Play-to-Heal)
 - If you play a **Medic** card from hand directly onto **your base tile** (row closest to your hand) and that tile contains an **injured friendly unit**:
