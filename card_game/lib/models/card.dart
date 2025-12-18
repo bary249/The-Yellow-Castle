@@ -62,6 +62,8 @@ class GameCard {
   int terrainAffinityLakeTurn = -1;
   final Set<String> terrainAffinityLakeTilesThisTurn = <String>{};
 
+  List<String>? swappedAbilities;
+
   // ===== END TYC3 =====
 
   /// Optional element for terrain matching (e.g. 'Woods', 'Lake', 'Desert')
@@ -71,7 +73,9 @@ class GameCard {
   final String? family;
 
   /// Ability tags (e.g. 'guard', 'ranged', 'fury_2', 'shield_1')
-  final List<String> abilities;
+  final List<String> _baseAbilities;
+
+  List<String> get abilities => swappedAbilities ?? _baseAbilities;
 
   /// Basic balance knobs
   final int cost;
@@ -99,7 +103,7 @@ class GameCard {
     this.cost = 0,
     this.rarity = 1,
     this.isDecoy = false,
-  }) : abilities = List.unmodifiable(abilities ?? const []),
+  }) : _baseAbilities = List.unmodifiable(abilities ?? const []),
        currentHealth = health,
        currentAP = apPerTurn; // Cards start with apPerTurn AP
 
@@ -201,6 +205,9 @@ class GameCard {
     copy.terrainAffinityLakeTilesThisTurn.addAll(
       terrainAffinityLakeTilesThisTurn,
     );
+    copy.swappedAbilities = swappedAbilities != null
+        ? List<String>.from(swappedAbilities!)
+        : null;
     copy.lastDamageAbsorbedByBarrier = false;
     return copy;
   }
@@ -322,6 +329,7 @@ class GameCard {
     'terrainAffinityLakeTurn': terrainAffinityLakeTurn,
     'terrainAffinityLakeTilesThisTurn': terrainAffinityLakeTilesThisTurn
         .toList(),
+    'swappedAbilities': swappedAbilities,
   };
 
   /// Parse CardTier from string
@@ -380,6 +388,10 @@ class GameCard {
       card.terrainAffinityLakeTilesThisTurn.addAll(
         lakeTiles.map((e) => e.toString()),
       );
+    }
+    final swapped = json['swappedAbilities'] as List<dynamic>?;
+    if (swapped != null) {
+      card.swappedAbilities = swapped.map((e) => e.toString()).toList();
     }
     return card;
   }

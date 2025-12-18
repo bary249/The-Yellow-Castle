@@ -484,6 +484,127 @@ class MatchManager {
     return card.abilities.contains('terrain_affinity');
   }
 
+  bool _isShacoCard(GameCard card) {
+    return card.abilities.contains('shaco');
+  }
+
+  void _spawnShacoDecoys({
+    required GameCard shaco,
+    required int row,
+    required int col,
+  }) {
+    if (_currentMatch == null) return;
+    if (!shaco.isAlive) return;
+    if (shaco.ownerId == null) return;
+
+    final sideCols = <int>[];
+    if (col == 0) {
+      sideCols.addAll([1, 2]);
+    } else if (col == 1) {
+      sideCols.addAll([0, 2]);
+    } else {
+      sideCols.addAll([0, 1]);
+    }
+
+    int decoyIndex = 0;
+    for (final sideCol in sideCols) {
+      final tile = _currentMatch!.board.getTile(row, sideCol);
+      if (!tile.canAddCard) continue;
+
+      final decoy = shaco.copyWith(
+        id: '${shaco.id}_decoy_$decoyIndex',
+        isDecoy: true,
+      );
+      decoy.ownerId = shaco.ownerId;
+      decoy.currentAP = shaco.currentAP;
+      decoy.currentHealth = shaco.currentHealth;
+
+      _addCardToTile(tile, decoy);
+      _log('🃏 Shaco spawns decoy at ($row,$sideCol)');
+
+      _triggerTrapIfPresent(decoy, row, sideCol);
+      if (decoy.isAlive) {
+        _applyTerrainAffinityOnEntry(card: decoy, row: row, col: sideCol);
+      }
+
+      decoyIndex++;
+    }
+  }
+
+  void _applySideAttackerSplash({
+    required GameCard attacker,
+    required int attackerCol,
+    required int targetRow,
+    required String primaryTargetId,
+    required int damage,
+    required bool isOneSide,
+  }) {
+    if (_currentMatch == null) return;
+    if (!attacker.isAlive) return;
+
+    final splashCols = <int>[];
+
+    if (isOneSide) {
+      // One-Side Attacker: from side lanes (0 or 2) hits center + far side
+      if (attackerCol == 0) {
+        splashCols.addAll([1, 2]);
+      } else if (attackerCol == 2) {
+        splashCols.addAll([1, 0]);
+      }
+      // From center lane, one-side does nothing extra
+    } else {
+      // Two-Side Attacker: from center hits both sides; from side hits center
+      if (attackerCol == 1) {
+        splashCols.addAll([0, 2]);
+      } else {
+        splashCols.add(1);
+      }
+    }
+
+    for (final col in splashCols) {
+      final tile = _currentMatch!.board.getTile(targetRow, col);
+      final enemies = <GameCard>[
+        ...tile.cards.where(
+          (c) =>
+              c.isAlive &&
+              c.ownerId != attacker.ownerId &&
+              c.id != primaryTargetId,
+        ),
+        ...tile.hiddenSpies.where(
+          (c) =>
+              c.isAlive &&
+              c.ownerId != attacker.ownerId &&
+              c.id != primaryTargetId,
+        ),
+      ];
+
+      for (final enemy in enemies) {
+        final hpBefore = enemy.currentHealth;
+        final died = enemy.takeDamage(damage);
+        final hpAfter = enemy.currentHealth;
+
+        final label = isOneSide ? 'One-Side' : 'Two-Side';
+        _log(
+          '   🎯 $label splash hits ${enemy.name} at ($targetRow,$col) for $damage ($hpBefore→$hpAfter)',
+        );
+
+        if (died) {
+          tile.addGravestone(
+            Gravestone(
+              cardName: enemy.name,
+              deathLog: '$label Attacker splash',
+              ownerId: enemy.ownerId,
+              turnCreated: _currentMatch!.turnNumber,
+            ),
+          );
+          onCardDestroyed?.call(enemy);
+          _removeCardFromTile(tile, enemy);
+          _log('   💀 ${enemy.name} destroyed by $label splash!');
+        }
+      }
+    }
+  }
+
   bool _tallCanSeeTile({
     required String viewerOwnerId,
     required int row,
@@ -2471,6 +2592,11 @@ class MatchManager {
     // Update visibility (permanent lane reveal + scout)
     _updatePermanentVisibility(row, col, card.ownerId!);
 
+    // Shaco: spawn decoys in side lanes
+    if (_isShacoCard(card) && card.isAlive) {
+      _spawnShacoDecoys(shaco: card, row: row, col: col);
+    }
+
     return true;
   }
 
@@ -3594,6 +3720,30 @@ class MatchManager {
       targetCol: targetCol,
     );
 
+    // One-Side Attacker: from side lanes hits center + far side
+    if (attacker.abilities.contains('one_side_attacker') && attacker.isAlive) {
+      _applySideAttackerSplash(
+        attacker: attacker,
+        attackerCol: attackerCol,
+        targetRow: targetRow,
+        primaryTargetId: target.id,
+        damage: result.damageDealt,
+        isOneSide: true,
+      );
+    }
+
+    // Two-Side Attacker: from center hits both sides; from side hits center
+    if (attacker.abilities.contains('two_side_attacker') && attacker.isAlive) {
+      _applySideAttackerSplash(
+        attacker: attacker,
+        attackerCol: attackerCol,
+        targetRow: targetRow,
+        primaryTargetId: target.id,
+        damage: result.damageDealt,
+        isOneSide: false,
+      );
+    }
+
     if (result.targetDied) {
       _log('   💀 ${target.name} destroyed!');
 
@@ -4159,6 +4309,10 @@ class MatchManager {
 
   bool _isMedic(GameCard card) => _getMedicHealAmount(card) > 0;
 
+  bool _isEnhancer(GameCard card) => card.abilities.contains('enhancer');
+
+  bool _isSwitcher(GameCard card) => card.abilities.contains('switcher');
+
   /// TYC3: Get all heal targets reachable with current AP (move + heal).
   /// For now, medics can only heal friendly units on the SAME TILE.
   List<({GameCard target, int row, int col, int moveCost})>
@@ -4305,6 +4459,267 @@ class MatchManager {
       attackerCol: healerCol,
       targetRow: targetRow,
       targetCol: targetCol,
+    );
+
+    _currentMatch!.lastCombatResult = result;
+    return result;
+  }
+
+  /// TYC3: Get all enhance targets reachable (friendly units on same tile).
+  List<({GameCard target, int row, int col, int moveCost})>
+  getReachableEnhanceTargets(GameCard card, int fromRow, int fromCol) {
+    if (_currentMatch == null) return [];
+    if (!useTurnBasedSystem) return [];
+    if (!_isEnhancer(card)) return [];
+
+    if (card.currentAP < card.attackAPCost) return [];
+
+    final targets = <({GameCard target, int row, int col, int moveCost})>[];
+    final tile = _currentMatch!.board.getTile(fromRow, fromCol);
+
+    for (final friendly in tile.cards) {
+      if (!friendly.isAlive) continue;
+      if (friendly.ownerId != card.ownerId) continue;
+      if (friendly.id == card.id) continue;
+
+      targets.add((target: friendly, row: fromRow, col: fromCol, moveCost: 0));
+    }
+
+    return targets;
+  }
+
+  /// TYC3: Enhance a friendly unit (double damage), then self-destruct.
+  SyncedCombatResult? enhanceCardTYC3(
+    GameCard enhancer,
+    GameCard target,
+    int enhancerRow,
+    int enhancerCol,
+    int targetRow,
+    int targetCol,
+  ) {
+    if (_currentMatch == null) return null;
+    if (!useTurnBasedSystem) return null;
+
+    if (!_isEnhancer(enhancer)) {
+      _log('❌ Enhance failed: ${enhancer.name} is not an enhancer');
+      return null;
+    }
+    if (!enhancer.canAttack()) {
+      _log('❌ Enhance failed: Not enough AP');
+      return null;
+    }
+    if (!target.isAlive) {
+      _log('❌ Enhance failed: Target is dead');
+      return null;
+    }
+    if (target.ownerId != enhancer.ownerId) {
+      _log('❌ Enhance failed: Cannot enhance enemy units');
+      return null;
+    }
+    if (enhancer.id == target.id) {
+      _log('❌ Enhance failed: Cannot enhance self');
+      return null;
+    }
+
+    if (enhancerRow != targetRow || enhancerCol != targetCol) {
+      _log('❌ Enhance failed: Enhancer must be on the same tile as target');
+      return null;
+    }
+
+    if (!enhancer.spendAttackAP()) {
+      _log('❌ Enhance failed: Not enough AP');
+      return null;
+    }
+
+    final damageBefore = target.damage;
+    target.health = target.health; // Keep health unchanged
+    // Double the base damage by modifying the terrainAffinityDamageBonus
+    // (since damage is final, we use the bonus field which stacks)
+    target.terrainAffinityDamageBonus += damageBefore;
+    final damageAfter = target.damage + target.terrainAffinityDamageBonus;
+
+    final enhancerOwner = enhancer.ownerId == _currentMatch!.player.id
+        ? 'Player'
+        : 'Opponent';
+    _log(
+      '⚡ [$enhancerOwner] ${enhancer.name} enhances ${target.name} (DMG: $damageBefore → $damageAfter)',
+    );
+
+    // Self-destruct
+    final tile = _currentMatch!.board.getTile(enhancerRow, enhancerCol);
+    tile.addGravestone(
+      Gravestone(
+        cardName: enhancer.name,
+        deathLog: 'Self-destructed after enhancing ${target.name}',
+        ownerId: enhancer.ownerId,
+        turnCreated: _currentMatch!.turnNumber,
+      ),
+    );
+    onCardDestroyed?.call(enhancer);
+    _removeCardFromTile(tile, enhancer);
+    enhancer.currentHealth = 0;
+    _log('   💀 ${enhancer.name} self-destructs!');
+
+    final result = SyncedCombatResult(
+      id: '${DateTime.now().millisecondsSinceEpoch}_${enhancer.id}_${target.id}_enhance',
+      isBaseAttack: false,
+      isHeal: false,
+      attackerName: enhancer.name,
+      targetName: target.name,
+      targetId: target.id,
+      damageDealt: 0,
+      healAmount: 0,
+      retaliationDamage: 0,
+      targetDied: false,
+      attackerDied: true,
+      targetHpBefore: target.currentHealth,
+      targetHpAfter: target.currentHealth,
+      attackerHpBefore: enhancer.health,
+      attackerHpAfter: 0,
+      laneCol: targetCol,
+      attackerOwnerId: enhancer.ownerId ?? '',
+      attackerId: enhancer.id,
+      attackerRow: enhancerRow,
+      attackerCol: enhancerCol,
+      targetRow: targetRow,
+      targetCol: targetCol,
+    );
+
+    _currentMatch!.lastCombatResult = result;
+    return result;
+  }
+
+  /// TYC3: Get all switch target pairs (2 friendly units on same tile, excluding switcher).
+  List<({GameCard target1, GameCard target2, int row, int col})>
+  getReachableSwitchTargets(GameCard card, int fromRow, int fromCol) {
+    if (_currentMatch == null) return [];
+    if (!useTurnBasedSystem) return [];
+    if (!_isSwitcher(card)) return [];
+
+    if (card.currentAP < card.attackAPCost) return [];
+
+    final tile = _currentMatch!.board.getTile(fromRow, fromCol);
+    final friendlies = tile.cards
+        .where((c) => c.isAlive && c.ownerId == card.ownerId && c.id != card.id)
+        .toList();
+
+    if (friendlies.length < 2) return [];
+
+    final pairs = <({GameCard target1, GameCard target2, int row, int col})>[];
+    for (int i = 0; i < friendlies.length; i++) {
+      for (int j = i + 1; j < friendlies.length; j++) {
+        pairs.add((
+          target1: friendlies[i],
+          target2: friendlies[j],
+          row: fromRow,
+          col: fromCol,
+        ));
+      }
+    }
+
+    return pairs;
+  }
+
+  /// TYC3: Switch abilities between two friendly units, then self-destruct.
+  SyncedCombatResult? switchCardsTYC3(
+    GameCard switcher,
+    GameCard target1,
+    GameCard target2,
+    int switcherRow,
+    int switcherCol,
+  ) {
+    if (_currentMatch == null) return null;
+    if (!useTurnBasedSystem) return null;
+
+    if (!_isSwitcher(switcher)) {
+      _log('❌ Switch failed: ${switcher.name} is not a switcher');
+      return null;
+    }
+    if (!switcher.canAttack()) {
+      _log('❌ Switch failed: Not enough AP');
+      return null;
+    }
+    if (!target1.isAlive || !target2.isAlive) {
+      _log('❌ Switch failed: One or both targets are dead');
+      return null;
+    }
+    if (target1.ownerId != switcher.ownerId ||
+        target2.ownerId != switcher.ownerId) {
+      _log('❌ Switch failed: Can only switch abilities between friendly units');
+      return null;
+    }
+    if (switcher.id == target1.id || switcher.id == target2.id) {
+      _log('❌ Switch failed: Cannot include self in switch');
+      return null;
+    }
+    if (target1.id == target2.id) {
+      _log('❌ Switch failed: Must select two different targets');
+      return null;
+    }
+
+    if (!switcher.spendAttackAP()) {
+      _log('❌ Switch failed: Not enough AP');
+      return null;
+    }
+
+    // Swap abilities
+    final abilities1 = List<String>.from(target1.abilities);
+    final abilities2 = List<String>.from(target2.abilities);
+    target1.swappedAbilities = abilities2;
+    target2.swappedAbilities = abilities1;
+
+    final switcherOwner = switcher.ownerId == _currentMatch!.player.id
+        ? 'Player'
+        : 'Opponent';
+    _log(
+      '🔀 [$switcherOwner] ${switcher.name} swaps abilities between ${target1.name} and ${target2.name}',
+    );
+    _log(
+      '   ${target1.name}: ${abilities1.join(", ")} → ${abilities2.join(", ")}',
+    );
+    _log(
+      '   ${target2.name}: ${abilities2.join(", ")} → ${abilities1.join(", ")}',
+    );
+
+    // Self-destruct
+    final tile = _currentMatch!.board.getTile(switcherRow, switcherCol);
+    tile.addGravestone(
+      Gravestone(
+        cardName: switcher.name,
+        deathLog:
+            'Self-destructed after switching ${target1.name} and ${target2.name}',
+        ownerId: switcher.ownerId,
+        turnCreated: _currentMatch!.turnNumber,
+      ),
+    );
+    onCardDestroyed?.call(switcher);
+    _removeCardFromTile(tile, switcher);
+    switcher.currentHealth = 0;
+    _log('   💀 ${switcher.name} self-destructs!');
+
+    final result = SyncedCombatResult(
+      id: '${DateTime.now().millisecondsSinceEpoch}_${switcher.id}_switch',
+      isBaseAttack: false,
+      isHeal: false,
+      attackerName: switcher.name,
+      targetName: '${target1.name} & ${target2.name}',
+      targetId: target1.id,
+      damageDealt: 0,
+      healAmount: 0,
+      retaliationDamage: 0,
+      targetDied: false,
+      attackerDied: true,
+      targetHpBefore: target1.currentHealth,
+      targetHpAfter: target1.currentHealth,
+      attackerHpBefore: switcher.health,
+      attackerHpAfter: 0,
+      laneCol: switcherCol,
+      attackerOwnerId: switcher.ownerId ?? '',
+      attackerId: switcher.id,
+      attackerRow: switcherRow,
+      attackerCol: switcherCol,
+      targetRow: switcherRow,
+      targetCol: switcherCol,
     );
 
     _currentMatch!.lastCombatResult = result;

@@ -340,6 +340,86 @@ GameCard tallUnit(int index) => GameCard(
   rarity: 2,
 );
 
+GameCard shacoUnit(int index) => GameCard(
+  id: 'shaco_$index',
+  name: 'Shaco',
+  damage: 3,
+  health: 3,
+  tick: 2,
+  moveSpeed: 1,
+  maxAP: 1,
+  apPerTurn: 1,
+  attackAPCost: 1,
+  element: null,
+  abilities: const ['shaco'],
+  cost: 3,
+  rarity: 3,
+);
+
+GameCard oneSideAttackerUnit(int index) => GameCard(
+  id: 'one_side_attacker_$index',
+  name: 'One-Side Attacker',
+  damage: 3,
+  health: 4,
+  tick: 2,
+  moveSpeed: 1,
+  maxAP: 1,
+  apPerTurn: 1,
+  attackAPCost: 1,
+  element: null,
+  abilities: const ['one_side_attacker'],
+  cost: 3,
+  rarity: 3,
+);
+
+GameCard twoSideAttackerUnit(int index) => GameCard(
+  id: 'two_side_attacker_$index',
+  name: 'Two-Side Attacker',
+  damage: 3,
+  health: 4,
+  tick: 2,
+  moveSpeed: 1,
+  maxAP: 1,
+  apPerTurn: 1,
+  attackAPCost: 1,
+  element: null,
+  abilities: const ['two_side_attacker'],
+  cost: 3,
+  rarity: 3,
+);
+
+GameCard enhancerUnit(int index) => GameCard(
+  id: 'enhancer_$index',
+  name: 'Enhancer',
+  damage: 1,
+  health: 2,
+  tick: 2,
+  moveSpeed: 1,
+  maxAP: 1,
+  apPerTurn: 1,
+  attackAPCost: 1,
+  element: null,
+  abilities: const ['enhancer'],
+  cost: 2,
+  rarity: 2,
+);
+
+GameCard switcherUnit(int index) => GameCard(
+  id: 'switcher_$index',
+  name: 'Switcher',
+  damage: 1,
+  health: 2,
+  tick: 2,
+  moveSpeed: 1,
+  maxAP: 1,
+  apPerTurn: 1,
+  attackAPCost: 1,
+  element: null,
+  abilities: const ['switcher'],
+  cost: 3,
+  rarity: 3,
+);
+
 GameCard firestarter(int index) => GameCard(
   id: 'firestarter_$index',
   name: 'Firestarter',

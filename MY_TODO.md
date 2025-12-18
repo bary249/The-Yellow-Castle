@@ -41,13 +41,6 @@ New Ability - Watcher - Can see spies and hidden cards from 1 tile away (only le
 
 new ability - push back - push back all enemy cards in front of it 1 tile back.
 
-
-
-
-
-
-
-
 New ability - Silence - makes enemy cards in adjcent front units unable to attack from thier current tile for as long as the silencing card is present in front of them.(It's like glue but on attack instead of movement).
 
 New ability - Paralyze  - makes enemy cards in adjcent front units unable to move or attack from thier current tile for as long as the paralyzing card is present in front of them.(It's like glue but on attack and movement instead of movement).
@@ -56,6 +49,28 @@ New ability - barrier - negates one incoming attack dmg completely(no hp reducti
 
 New Ability - Fear - A passive card ability , that makes enemy cards that see this card for the first time , reduce thier ap to 0.(it's like makeing the tile in front of this unit act like a "marsh")
 
+New ability - enhancer - It's like the medic ability with the heal, only it doubels the damage of an ally unit, the it destroies it self. so it needs to target an ally unit, double the ally unit hp (same mechanism as heal by medic) and then have a RIP chip.
+
+New Ability - Switcher - A very special ability, which targets 2 ally cards on the same tile, and swaps their abilities between one and the other, then self destructs.
+
+
+
+
+
+
+Factory Function	Card Name	Ability
+silenceUnit(index)	Silencer	silence
+paralyzeUnit(index)	Paralyzer	paralyze
+barrierUnit(index)	Barrier	barrier
+fearUnit(index)	Fear	fear
+glueUnit(index)	Glue	glue
+pushBackUnit(index)	Pusher	push_back
+terrainAffinityUnit(index)	Terrain Adept	terrain_affinity
+megaTauntUnit(index)	Mega Taunt	mega_taunt
+tallUnit(index)	Tall	tall
+shacoUnit(index)	Shaco	shaco
+oneSideAttackerUnit(index)	One-Side Attacker	one_side_attacker
+twoSideAttackerUnit(index)	Two-Side Attacker	two_side_attacker
 
 
 

@@ -299,6 +299,31 @@ This document captures the **implemented and intended logic** of the game, mappe
 - Passive visibility.
 - Units with `tall` grant fog-of-war visibility within Manhattan distance 1.
 
+**Shaco (Implemented - core):**
+- Trigger: on placement.
+- Effect: spawns a decoy copy in each other lane (same row, if tile has capacity).
+- Decoys have `isDecoy: true`, same visible stats as Shaco, but deal 0 damage and die when attacking.
+
+**One-Side Attacker (Implemented - core):**
+- Trigger: after primary attack resolves.
+- Effect: from side lanes (col 0 or 2), also deals splash damage to center + far side (same row).
+- Only primary target retaliates.
+
+**Two-Side Attacker (Implemented - core):**
+- Trigger: after primary attack resolves.
+- Effect: from center (col 1), deals splash damage to both sides. From side lanes, deals splash to center.
+- Only primary target retaliates.
+
+**Enhancer (Implemented - core):**
+- Trigger: active ability targeting a friendly unit on the same tile.
+- Effect: doubles the target's damage (adds base damage to `terrainAffinityDamageBonus`).
+- After enhancing, the Enhancer self-destructs (gravestone created, card removed).
+
+**Switcher (Implemented - core):**
+- Trigger: active ability targeting 2 friendly units on the same tile.
+- Effect: swaps their abilities (uses `swappedAbilities` runtime field for persistence).
+- After switching, the Switcher self-destructs (gravestone created, card removed).
+
 **Lane winner:**
 - Determined by which side has surviving cards after combat.
 

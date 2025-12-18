@@ -219,6 +219,11 @@ class _TestMatchScreenState extends State<TestMatchScreen>
     cards.add(terrainAffinityUnit(0));
     cards.add(megaTauntUnit(0));
     cards.add(tallUnit(0));
+    cards.add(shacoUnit(0));
+    cards.add(oneSideAttackerUnit(0));
+    cards.add(twoSideAttackerUnit(0));
+    cards.add(enhancerUnit(0));
+    cards.add(switcherUnit(0));
 
     return cards;
   }
@@ -5226,6 +5231,11 @@ class _TestMatchScreenState extends State<TestMatchScreen>
     if (ability == 'terrain_affinity') return Icons.terrain;
     if (ability == 'mega_taunt') return Icons.shield;
     if (ability == 'tall') return Icons.height;
+    if (ability == 'shaco') return Icons.content_copy;
+    if (ability == 'one_side_attacker') return Icons.call_split;
+    if (ability == 'two_side_attacker') return Icons.unfold_more;
+    if (ability == 'enhancer') return Icons.flash_on;
+    if (ability == 'switcher') return Icons.swap_horiz;
     if (ability == 'silence') return Icons.volume_off;
     if (ability == 'paralyze') return Icons.block;
     if (ability == 'barrier') return Icons.shield_outlined;
@@ -5380,6 +5390,21 @@ class _TestMatchScreenState extends State<TestMatchScreen>
     }
     if (ability == 'tall') {
       return 'Provides fog-of-war visibility within Manhattan distance 1.';
+    }
+    if (ability == 'shaco') {
+      return 'On play, spawns a decoy copy in each other lane (same row). Decoys look identical but deal 0 damage and die when attacking.';
+    }
+    if (ability == 'one_side_attacker') {
+      return 'From side lanes, also hits center + far side (same row). Only primary target retaliates.';
+    }
+    if (ability == 'two_side_attacker') {
+      return 'From center, hits both sides. From side, hits center. Only primary target retaliates.';
+    }
+    if (ability == 'enhancer') {
+      return 'Target a friendly unit on the same tile to double its damage, then self-destruct.';
+    }
+    if (ability == 'switcher') {
+      return 'Target 2 friendly units on the same tile to swap their abilities, then self-destruct.';
     }
     if (ability == 'silence') {
       return 'Enemy units directly in front of this unit cannot attack while it remains behind them.';

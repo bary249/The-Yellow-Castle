@@ -323,6 +323,11 @@ For each **tick** in each lane:
 | **terrain_affinity** | While standing on terrain: Lake gives +1 AP on arrival (once per tile per turn), Marsh gives +5 HP, Desert becomes ranged, Woods gives +3 damage |
 | **mega_taunt** | Intercepts enemy base attacks for adjacent bases (highest HP interceptor, deterministic tie-break) |
 | **tall** | Provides fog-of-war visibility within Manhattan distance 1 |
+| **shaco** | On play, spawns a decoy copy in each other lane (same row); decoys deal 0 damage and die when attacking |
+| **one_side_attacker** | From side lanes, also hits center + far side (same row); only primary target retaliates |
+| **two_side_attacker** | From center hits both sides; from side hits center; only primary target retaliates |
+| **enhancer** | Target a friendly unit on the same tile to double its damage, then self-destruct |
+| **switcher** | Target 2 friendly units on the same tile to swap their abilities, then self-destruct |
 
 ### 7.4 Medic Special Rule (Play-to-Heal)
 - If you play a **Medic** card from hand directly onto **your base tile** (row closest to your hand) and that tile contains an **injured friendly unit**:

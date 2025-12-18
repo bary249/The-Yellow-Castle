@@ -1345,6 +1345,11 @@ Used to test look and feel and UX of a fully rendered game page.
 - [x] **Terrain Affinity** (core + serialization + ability-testing card + basic keyword UI)
 - [x] **Mega Taunt** (core + ability-testing card + basic keyword UI)
 - [x] **Tall** (core + ability-testing card + basic keyword UI)
+- [x] **Shaco** (core + ability-testing card + basic keyword UI)
+- [x] **One-Side Attacker** (core + ability-testing card + basic keyword UI)
+- [x] **Two-Side Attacker** (core + ability-testing card + basic keyword UI)
+- [x] **Enhancer** (core + ability-testing card + basic keyword UI)
+- [x] **Switcher** (core + serialization + ability-testing card + basic keyword UI)
 
 #### 17.5.2 Follow-ups (TYC3 Abilities)
 - [ ] Balance pass for the new ability cards (stats/cost/rarity)
