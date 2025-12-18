@@ -3003,6 +3003,237 @@ class _TestMatchScreenState extends State<TestMatchScreen>
     );
   }
 
+  /// Show spy assassination result dialog
+  void _showSpyAssassinationDialog(
+    GameCard spy,
+    GameCard? target,
+    int baseDamage,
+  ) {
+    final match = _matchManager.currentMatch;
+    if (match == null) return;
+
+    final isPlayerSpy = spy.ownerId == match.player.id;
+    final spyOwner = isPlayerSpy ? 'Your' : "Enemy's";
+
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Row(
+            children: [
+              const Text('🕵️ ', style: TextStyle(fontSize: 24)),
+              const Text('Spy Assassination'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Spy action
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.purple[50],
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.purple[200]!),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      '$spyOwner Spy infiltrated the enemy base!',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                    if (target != null) ...[
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Text('Assassinated: '),
+                          Text(
+                            target.name,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.red,
+                              fontSize: 16,
+                            ),
+                          ),
+                          const Text(' 💀'),
+                        ],
+                      ),
+                    ] else ...[
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Text('Dealt '),
+                          Text(
+                            '$baseDamage',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.red,
+                              fontSize: 20,
+                            ),
+                          ),
+                          const Text(' damage to enemy base!'),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              // Spy self-destruct
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text(
+                  'Spy self-destructed after mission',
+                  style: TextStyle(
+                    fontStyle: FontStyle.italic,
+                    color: Colors.grey,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('OK'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// Show spy assassination preview dialog before moving to enemy base
+  Future<bool> _showSpyAssassinationPreviewDialog(
+    GameCard spy,
+    int targetRow,
+    int targetCol,
+  ) async {
+    final match = _matchManager.currentMatch;
+    if (match == null) return false;
+
+    final targetTile = match.board.getTile(targetRow, targetCol);
+    final enemyCards = targetTile.cards
+        .where((c) => c.isAlive && c.ownerId != spy.ownerId)
+        .toList();
+    final target = enemyCards.isNotEmpty ? enemyCards.first : null;
+
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Row(
+            children: [
+              const Text('🕵️ ', style: TextStyle(fontSize: 24)),
+              const Text('Spy Mission'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.amber[50],
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.amber[300]!),
+                ),
+                child: Column(
+                  children: [
+                    const Text(
+                      'Your Spy will infiltrate the enemy base!',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 12),
+                    if (target != null) ...[
+                      const Text('Target:'),
+                      const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.red[100],
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          target.name,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        '⚔️ Will be assassinated',
+                        style: TextStyle(color: Colors.red),
+                      ),
+                    ] else ...[
+                      const Text('No enemy units on base tile'),
+                      const SizedBox(height: 8),
+                      const Text(
+                        '💥 Will deal 1 damage to enemy base',
+                        style: TextStyle(color: Colors.orange),
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[200],
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Text(
+                        '⚠️ Spy will self-destruct after mission',
+                        style: TextStyle(
+                          fontStyle: FontStyle.italic,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.purple,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Execute Mission'),
+            ),
+          ],
+        );
+      },
+    );
+
+    return result ?? false;
+  }
+
   /// Show battle result dialog for AI attacks (async, waits for dismiss)
   Future<void> _showAIBattleResultDialog(
     AttackResult result,
@@ -3712,7 +3943,7 @@ class _TestMatchScreenState extends State<TestMatchScreen>
   }
 
   /// TYC3: Move card to a tile (supports multi-step moves if card has enough AP)
-  void _moveCardTYC3(int toRow, int toCol) {
+  Future<void> _moveCardTYC3(int toRow, int toCol) async {
     if (_selectedCardForAction == null ||
         _selectedCardRow == null ||
         _selectedCardCol == null)
@@ -3721,6 +3952,7 @@ class _TestMatchScreenState extends State<TestMatchScreen>
     final card = _selectedCardForAction!;
     final fromRow = _selectedCardRow!;
     final fromCol = _selectedCardCol!;
+    final match = _matchManager.currentMatch;
 
     // Check if this is a valid destination using reachable tiles
     final reachableTiles = _matchManager.getReachableTiles(
@@ -3737,6 +3969,23 @@ class _TestMatchScreenState extends State<TestMatchScreen>
         context,
       ).showSnackBar(const SnackBar(content: Text('Cannot reach that tile')));
       return;
+    }
+
+    // Spy preview dialog when moving to enemy base
+    final isSpy = card.abilities.contains('spy');
+    final isPlayerCard = match != null && card.ownerId == match.player.id;
+    final isEnemyBase =
+        (isPlayerCard && toRow == 0) || (!isPlayerCard && toRow == 2);
+
+    if (isSpy && isEnemyBase) {
+      final confirmed = await _showSpyAssassinationPreviewDialog(
+        card,
+        toRow,
+        toCol,
+      );
+      if (!confirmed) {
+        return;
+      }
     }
 
     // Move step by step to reach the destination
@@ -6274,6 +6523,12 @@ class _TestMatchScreenState extends State<TestMatchScreen>
       if (widget.forceCampaignDeck && !_isOnlineMode) {
         _campaignDestroyedPlayerCardIds.add(card.id);
       }
+    };
+
+    // Spy assassination callback - show dialog for both player and opponent
+    _matchManager.onSpyAssassination = (spy, target, baseDamage) {
+      if (!mounted) return;
+      _showSpyAssassinationDialog(spy, target, baseDamage);
     };
 
     // Determine opponent name and deck

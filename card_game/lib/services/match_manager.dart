@@ -307,6 +307,8 @@ class MatchManager {
 
     final target = enemyCards.isNotEmpty ? enemyCards.first : null;
     final owner = isPlayerCard ? 'Player' : 'Opponent';
+    int baseDamageDealt = 0;
+
     if (target != null) {
       _log(
         '🕵️ [$owner] ${enteringCard.name} infiltrates enemy base and assassinates ${target.name}!',
@@ -326,6 +328,7 @@ class MatchManager {
           ? _currentMatch!.opponent
           : _currentMatch!.player;
       targetPlayer.takeBaseDamage(1);
+      baseDamageDealt = 1;
       _log(
         '🕵️ [$owner] ${enteringCard.name} infiltrates enemy base and hits the base for 1 damage!',
       );
@@ -343,6 +346,9 @@ class MatchManager {
         );
       }
     }
+
+    // Trigger assassination callback for UI dialog
+    onSpyAssassination?.call(enteringCard, target, baseDamageDealt);
 
     // Spy is always destroyed after activation
     tile.addGravestone(
@@ -885,6 +891,9 @@ class MatchManager {
   /// Callback for combat animation updates
   Function()? onCombatUpdate;
   Function(GameCard card)? onCardDestroyed;
+
+  /// Callback for spy assassination (spy, target or null if base hit, baseDamage)
+  Function(GameCard spy, GameCard? target, int baseDamage)? onSpyAssassination;
 
   /// Current tick information for UI display
   String? currentTickInfo;

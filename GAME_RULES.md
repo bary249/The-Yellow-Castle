@@ -312,7 +312,7 @@ For each **tick** in each lane:
 | **scout** | Reveals enemy base tiles in adjacent lanes (see Fog of War section) |
 | **trap_X** | Place a hidden trap on matching terrain; when an enemy enters that tile it takes X damage (trap is consumed) |
 | **ignite_X** | Ignite an adjacent tile for X turns (burning triggers only on ignited Woods/Forest) |
-| **spy** | Invisible infiltrator: cannot attack or be targeted by direct attacks; can share tiles with enemy units; on entering enemy base auto-kills 1 enemy there (if 1–2 exist) otherwise deals 1 base damage; then self-destructs |
+| **spy** | Invisible infiltrator: undetectable by enemies (except watcher); cannot attack or be targeted by direct attacks; can share tiles with enemy units; on entering enemy base auto-kills 1 enemy there (if 1–2 exist) otherwise deals 1 base damage; then self-destructs |
 
 ### 7.4 Medic Special Rule (Play-to-Heal)
 - If you play a **Medic** card from hand directly onto **your base tile** (row closest to your hand) and that tile contains an **injured friendly unit**:

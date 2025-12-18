@@ -228,7 +228,7 @@ This document captures the **implemented and intended logic** of the game, mappe
 
 **Spy (Implemented):**
 - Spy units are stored on tiles as `Tile.hiddenSpies` (not in `Tile.cards`).
-- **Invisibility**: Spy is always invisible to the opponent in the UI (except its gravestone/RIP when it dies).
+- **Undetectable**: Spy is always invisible to the opponent in the UI (except its gravestone/RIP when it dies). Enemies cannot see the spy unless they have a "watcher" ability.
 - **Cannot attack**: Spy cannot perform normal attacks. It can only move and assassinate.
 - **Cannot be attacked directly**: Spy is excluded from direct attack targeting.
   - It can still die to non-targeted effects such as traps, burning, cleave, etc.
@@ -237,6 +237,7 @@ This document captures the **implemented and intended logic** of the game, mappe
   - If the enemy base tile has 1–2 enemy units, Spy kills one (first).
   - Otherwise, Spy deals 1 damage to the enemy base.
   - Then Spy always self-destructs.
+- **Assassination dialog**: When spy assassinates, a dialog is shown to both players indicating the spy's action.
 
 **Lane winner:**
 - Determined by which side has surviving cards after combat.
