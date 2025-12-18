@@ -90,6 +90,49 @@ class MatchManager {
 
   bool _isSpyCard(GameCard card) => card.abilities.contains('spy');
 
+  bool _tileHasEnemyCardsForOwner(Tile tile, String ownerId) {
+    return tile.cards.any((c) => c.isAlive && c.ownerId != ownerId);
+  }
+
+  int _friendlyOccupantCount(Tile tile, String ownerId) {
+    final friendlyCards = tile.cards.where(
+      (c) => c.isAlive && c.ownerId == ownerId,
+    );
+    final friendlySpies = tile.hiddenSpies.where(
+      (c) => c.isAlive && c.ownerId == ownerId,
+    );
+    return friendlyCards.length + friendlySpies.length;
+  }
+
+  bool _canAddFriendlyOccupant(Tile tile, String ownerId) {
+    return _friendlyOccupantCount(tile, ownerId) < Tile.maxCards;
+  }
+
+  void _removeCardFromTile(Tile tile, GameCard card) {
+    tile.cards.removeWhere((c) => c.id == card.id);
+    tile.hiddenSpies.removeWhere((c) => c.id == card.id);
+  }
+
+  void _addCardToTile(Tile tile, GameCard card) {
+    if (_isSpyCard(card)) {
+      tile.hiddenSpies.add(card);
+    } else {
+      tile.addCard(card);
+    }
+  }
+
+  bool _isIgniterCard(GameCard card) =>
+      card.abilities.any((a) => a.startsWith('ignite_'));
+
+  int _getIgniteTurns(GameCard card) {
+    for (final a in card.abilities) {
+      if (a.startsWith('ignite_')) {
+        return int.tryParse(a.split('_').last) ?? 0;
+      }
+    }
+    return 0;
+  }
+
   int _getTrapDamage(GameCard card) {
     for (final a in card.abilities) {
       if (a.startsWith('trap_')) {
@@ -157,7 +200,7 @@ class MatchManager {
         ),
       );
       onCardDestroyed?.call(enteringCard);
-      tile.cards.remove(enteringCard);
+      _removeCardFromTile(tile, enteringCard);
       _log('   💀 ${enteringCard.name} destroyed by trap!');
     } else {
       _log(
@@ -171,6 +214,13 @@ class MatchManager {
     return t == 'woods' || t == 'forest';
   }
 
+  bool _isTileIgnited(Tile tile) {
+    if (_currentMatch == null) return false;
+    final until = tile.ignitedUntilTurn;
+    if (until == null) return false;
+    return until >= _currentMatch!.turnNumber;
+  }
+
   ({int row, int col}) _applyBurningOnEntry({
     required GameCard enteringCard,
     required int fromRow,
@@ -182,7 +232,7 @@ class MatchManager {
     if (!enteringCard.isAlive) return (row: toRow, col: toCol);
 
     final toTile = _currentMatch!.board.getTile(toRow, toCol);
-    if (!_isBurningTerrain(toTile.terrain)) {
+    if (!_isBurningTerrain(toTile.terrain) || !_isTileIgnited(toTile)) {
       return (row: toRow, col: toCol);
     }
 
@@ -201,7 +251,7 @@ class MatchManager {
         ),
       );
       onCardDestroyed?.call(enteringCard);
-      toTile.cards.remove(enteringCard);
+      _removeCardFromTile(toTile, enteringCard);
       _log('   💀 ${enteringCard.name} burned to death!');
       return (row: toRow, col: toCol);
     }
@@ -211,12 +261,20 @@ class MatchManager {
       return (row: toRow, col: toCol);
     }
     final fromTile = _currentMatch!.board.getTile(fromRow, fromCol);
-    if (!fromTile.canAddCard) {
+    if (enteringCard.ownerId == null) {
       return (row: toRow, col: toCol);
     }
 
-    toTile.cards.remove(enteringCard);
-    fromTile.addCard(enteringCard);
+    final canKnockBack = _isSpyCard(enteringCard)
+        ? (_tileHasEnemyCardsForOwner(fromTile, enteringCard.ownerId!) ||
+              _canAddFriendlyOccupant(fromTile, enteringCard.ownerId!))
+        : fromTile.canAddCard;
+    if (!canKnockBack) {
+      return (row: toRow, col: toCol);
+    }
+
+    _removeCardFromTile(toTile, enteringCard);
+    _addCardToTile(fromTile, enteringCard);
     _log(
       '   ↩️ ${enteringCard.name} is knocked back to ($fromRow,$fromCol) from burning terrain',
     );
@@ -264,9 +322,26 @@ class MatchManager {
       onCardDestroyed?.call(target);
       tile.cards.remove(target);
     } else {
+      final targetPlayer = isPlayerCard
+          ? _currentMatch!.opponent
+          : _currentMatch!.player;
+      targetPlayer.takeBaseDamage(1);
       _log(
-        '🕵️ [$owner] ${enteringCard.name} infiltrates enemy base but finds no target.',
+        '🕵️ [$owner] ${enteringCard.name} infiltrates enemy base and hits the base for 1 damage!',
       );
+      _log('   Base HP: ${targetPlayer.baseHP}/${Player.maxBaseHP}');
+
+      if (targetPlayer.isDefeated) {
+        _currentMatch!.currentPhase = MatchPhase.gameOver;
+        _currentMatch!.winnerId = isPlayerCard
+            ? _currentMatch!.player.id
+            : _currentMatch!.opponent.id;
+        _log('🏆 GAME OVER! ${isPlayerCard ? "Player" : "Opponent"} wins!');
+
+        _currentMatch!.history.add(
+          TurnSnapshot.fromState(matchState: _currentMatch!),
+        );
+      }
     }
 
     // Spy is always destroyed after activation
@@ -279,11 +354,84 @@ class MatchManager {
       ),
     );
     onCardDestroyed?.call(enteringCard);
-    tile.cards.remove(enteringCard);
+    _removeCardFromTile(tile, enteringCard);
     enteringCard.currentHealth = 0;
 
     // Returns previous tile position (Spy no longer occupies enemy base)
     return (row: fromRow, col: fromCol);
+  }
+
+  List<({int row, int col})> getIgniteTargets(
+    GameCard card,
+    int fromRow,
+    int fromCol,
+  ) {
+    if (_currentMatch == null) return [];
+    if (!useTurnBasedSystem) return [];
+    if (!_isIgniterCard(card)) return [];
+
+    final turns = _getIgniteTurns(card);
+    if (turns <= 0) return [];
+
+    if (card.ownerId != _currentMatch!.activePlayerId) return [];
+    if (card.currentAP < card.attackAPCost) return [];
+
+    final targets = <({int row, int col})>[];
+    final dirs = <({int dr, int dc})>[
+      (dr: -1, dc: 0),
+      (dr: 1, dc: 0),
+      (dr: 0, dc: -1),
+      (dr: 0, dc: 1),
+    ];
+
+    for (final d in dirs) {
+      final r = fromRow + d.dr;
+      final c = fromCol + d.dc;
+      if (r < 0 || r > 2 || c < 0 || c > 2) continue;
+      targets.add((row: r, col: c));
+    }
+
+    return targets;
+  }
+
+  bool igniteTileTYC3(
+    GameCard igniter,
+    int igniterRow,
+    int igniterCol,
+    int targetRow,
+    int targetCol,
+  ) {
+    if (_currentMatch == null) return false;
+    if (!useTurnBasedSystem) return false;
+
+    if (!_isIgniterCard(igniter)) return false;
+    if (igniter.ownerId != _currentMatch!.activePlayerId) return false;
+    if (!igniter.isAlive) return false;
+
+    final turns = _getIgniteTurns(igniter);
+    if (turns <= 0) return false;
+
+    final rowDist = (targetRow - igniterRow).abs();
+    final colDist = (targetCol - igniterCol).abs();
+    if (rowDist + colDist != 1) return false;
+
+    if (!igniter.spendAttackAP()) return false;
+
+    final tile = _currentMatch!.board.getTile(targetRow, targetCol);
+    final currentTurn = _currentMatch!.turnNumber;
+    final newUntil = currentTurn + (turns - 1);
+    final prevUntil = tile.ignitedUntilTurn;
+    tile.ignitedUntilTurn = prevUntil == null
+        ? newUntil
+        : (prevUntil > newUntil ? prevUntil : newUntil);
+
+    final owner = igniter.ownerId == _currentMatch!.player.id
+        ? 'Player'
+        : 'Opponent';
+    _log(
+      '🔥 [$owner] ${igniter.name} ignites tile ($targetRow,$targetCol) until turn ${tile.ignitedUntilTurn} (AP ${igniter.currentAP}/${igniter.maxAP})',
+    );
+    return true;
   }
 
   /// Start a new match
@@ -1811,9 +1959,20 @@ class MatchManager {
     final tile = _currentMatch!.board.getTile(row, col);
 
     // Check tile capacity
-    if (!_isTrapCard(card) && !tile.canAddCard) {
-      _log('❌ Tile is full (max ${Tile.maxCards} cards)');
-      return false;
+    if (!_isTrapCard(card)) {
+      if (_isSpyCard(card)) {
+        if (_canAddFriendlyOccupant(tile, active.id) == false) {
+          _log('❌ Tile is full (max ${Tile.maxCards} cards)');
+          return false;
+        }
+        if (tile.hiddenSpies.any((s) => s.isAlive && s.ownerId == active.id)) {
+          _log('❌ A spy is already on this tile');
+          return false;
+        }
+      } else if (!tile.canAddCard) {
+        _log('❌ Tile is full (max ${Tile.maxCards} cards)');
+        return false;
+      }
     }
 
     // Special case: Playing a medic from hand onto your base tile can
@@ -1844,7 +2003,7 @@ class MatchManager {
     }
 
     // Place card on tile
-    tile.addCard(card);
+    _addCardToTile(tile, card);
     _currentMatch!.cardsPlayedThisTurn++;
 
     // Initialize card's AP and set owner
@@ -1868,6 +2027,16 @@ class MatchManager {
     );
 
     _triggerTrapIfPresent(card, row, col);
+
+    if (_isSpyCard(card) && card.isAlive) {
+      _triggerSpyOnEnemyBaseEntry(
+        enteringCard: card,
+        fromRow: row,
+        fromCol: col,
+        toRow: row,
+        toCol: col,
+      );
+    }
     if (!card.isAlive) return true;
 
     if (shouldInstantHeal) {
@@ -1902,9 +2071,22 @@ class MatchManager {
     final tile = _currentMatch!.board.getTile(row, col);
 
     // Check tile capacity
-    if (!_isTrapCard(card) && !tile.canAddCard) {
-      _log('❌ Replay: Tile is full (max ${Tile.maxCards} cards)');
-      return false;
+    if (!_isTrapCard(card)) {
+      if (_isSpyCard(card)) {
+        if (_canAddFriendlyOccupant(tile, opponent.id) == false) {
+          _log('❌ Replay: Tile is full (max ${Tile.maxCards} cards)');
+          return false;
+        }
+        if (tile.hiddenSpies.any(
+          (s) => s.isAlive && s.ownerId == opponent.id,
+        )) {
+          _log('❌ Replay: A spy is already on this tile');
+          return false;
+        }
+      } else if (!tile.canAddCard) {
+        _log('❌ Replay: Tile is full (max ${Tile.maxCards} cards)');
+        return false;
+      }
     }
 
     // Remove card from opponent's hand
@@ -1923,7 +2105,7 @@ class MatchManager {
     }
 
     // Place card on tile
-    tile.addCard(card);
+    _addCardToTile(tile, card);
 
     // Initialize card's AP and set owner
     card.currentAP = card.maxAP - 1;
@@ -1982,11 +2164,22 @@ class MatchManager {
     // This ensures both players see the same turn count
     _currentMatch!.turnNumber++;
 
+    // Cleanup expired ignited tiles
+    final currentTurn = _currentMatch!.turnNumber;
+    for (int r = 0; r < 3; r++) {
+      for (int c = 0; c < 3; c++) {
+        final tile = _currentMatch!.board.getTile(r, c);
+        final until = tile.ignitedUntilTurn;
+        if (until != null && until < currentTurn) {
+          tile.ignitedUntilTurn = null;
+        }
+      }
+    }
+
     // Cleanup old gravestones (remove after 1 turn)
     _cleanupGravestones();
 
     // Clean up enemy units that attacked more than 1 turn ago (fog of war)
-    final currentTurn = _currentMatch!.turnNumber;
     _currentMatch!.recentlyAttackedEnemyUnits.removeWhere(
       (unitId, attackTurn) => currentTurn - attackTurn >= 1,
     );
@@ -2071,6 +2264,14 @@ class MatchManager {
             cardsRegen++;
 
             // Apply HP regen abilities
+            _applyRegenAbilities(card);
+          }
+        }
+
+        for (final card in tile.hiddenSpies) {
+          if (card.ownerId == playerId && card.isAlive) {
+            card.regenerateAP();
+            cardsRegen++;
             _applyRegenAbilities(card);
           }
         }
@@ -2182,16 +2383,31 @@ class MatchManager {
 
     // Check destination tile for enemy cards (alive ones only)
     final destTile = _currentMatch!.board.getTile(toRow, toCol);
-    final hasEnemyCards = destTile.cards.any(
-      (c) => c.ownerId != card.ownerId && c.isAlive,
-    );
-    if (hasEnemyCards && !(_isSpyCard(card) && isMovingIntoEnemyBase)) {
+    final hasEnemyCards =
+        card.ownerId != null &&
+        _tileHasEnemyCardsForOwner(destTile, card.ownerId!);
+    if (hasEnemyCards && !_isSpyCard(card)) {
       return 'Tile occupied by enemy - attack to clear it first';
     }
 
-    // Check destination tile capacity (only friendly cards count)
-    if (!destTile.canAddCard && !(_isSpyCard(card) && isMovingIntoEnemyBase)) {
-      return 'Destination tile is full (max 4 cards)';
+    // Only one friendly spy per tile
+    if (_isSpyCard(card) &&
+        card.ownerId != null &&
+        destTile.hiddenSpies.any(
+          (s) => s.isAlive && s.ownerId == card.ownerId,
+        )) {
+      return 'A spy is already on this tile';
+    }
+
+    // Check destination tile capacity for friendly occupancy
+    if (!_isSpyCard(card) && !destTile.canAddCard) {
+      return 'Destination tile is full (max ${Tile.maxCards} cards)';
+    }
+
+    if (_isSpyCard(card) && card.ownerId != null && !hasEnemyCards) {
+      if (!_canAddFriendlyOccupant(destTile, card.ownerId!)) {
+        return 'Destination tile is full (max ${Tile.maxCards} cards)';
+      }
     }
 
     return null; // Can move
@@ -2246,21 +2462,33 @@ class MatchManager {
         // Bounds check
         if (newRow < 0 || newRow > 2 || newCol < 0 || newCol > 2) continue;
 
-        // Can't move into enemy base
-        if (isPlayerCard && newRow == 0) continue;
-        if (!isPlayerCard && newRow == 2) continue;
+        // Can't move into enemy base (except spies)
+        if (!_isSpyCard(card)) {
+          if (isPlayerCard && newRow == 0) continue;
+          if (!isPlayerCard && newRow == 2) continue;
+        }
 
         // Check destination tile
         final destTile = _currentMatch!.board.getTile(newRow, newCol);
 
-        // Can't move through enemy cards
-        final hasEnemyCards = destTile.cards.any(
-          (c) => c.ownerId != card.ownerId && c.isAlive,
-        );
-        if (hasEnemyCards) continue;
+        final hasEnemyCards =
+            card.ownerId != null &&
+            _tileHasEnemyCardsForOwner(destTile, card.ownerId!);
+        if (hasEnemyCards && !_isSpyCard(card)) continue;
 
-        // Check capacity
-        if (!destTile.canAddCard) continue;
+        if (_isSpyCard(card) &&
+            card.ownerId != null &&
+            destTile.hiddenSpies.any(
+              (s) => s.isAlive && s.ownerId == card.ownerId,
+            )) {
+          continue;
+        }
+
+        // Check capacity for friendly occupancy
+        if (!_isSpyCard(card) && !destTile.canAddCard) continue;
+        if (_isSpyCard(card) && card.ownerId != null && !hasEnemyCards) {
+          if (!_canAddFriendlyOccupant(destTile, card.ownerId!)) continue;
+        }
 
         queue.add((row: newRow, col: newCol, apCost: current.apCost + 1));
       }
@@ -2274,6 +2502,9 @@ class MatchManager {
   List<({GameCard target, int row, int col, int moveCost})>
   getReachableAttackTargets(GameCard card, int fromRow, int fromCol) {
     if (_currentMatch == null) return [];
+
+    // Spies cannot attack - they only assassinate on enemy base entry
+    if (_isSpyCard(card)) return [];
 
     final targets = <({GameCard target, int row, int col, int moveCost})>[];
     final isPlayerCard = card.ownerId == _currentMatch!.player.id;
@@ -2393,10 +2624,10 @@ class MatchManager {
     if (!card.spendMoveAP()) return false;
 
     // Remove from source tile
-    fromTile.cards.remove(card);
+    _removeCardFromTile(fromTile, card);
 
     // Add to destination tile
-    toTile.addCard(card);
+    _addCardToTile(toTile, card);
 
     _triggerTrapIfPresent(card, toRow, toCol);
     if (!card.isAlive) return true;
@@ -2726,6 +2957,14 @@ class MatchManager {
     if (_currentMatch == null) return null;
     if (!useTurnBasedSystem) return null;
 
+    // Spies cannot perform normal attacks - they only assassinate on enemy base entry
+    if (_isSpyCard(attacker)) {
+      _log(
+        '❌ Spies cannot attack directly - move to enemy base to assassinate',
+      );
+      return null;
+    }
+
     // Fog of war check: Player cannot attack into unrevealed enemy base (row 0)
     final isPlayerAttacker = attacker.ownerId == _currentMatch!.player.id;
     if (isPlayerAttacker && targetRow == 0) {
@@ -2849,6 +3088,43 @@ class MatchManager {
 
     final attackerTile = _currentMatch!.board.getTile(attackerRow, attackerCol);
 
+    // Cleave is AOE and can hit hidden spies that share the tile.
+    if (attacker.abilities.contains('cleave') && attacker.isAlive) {
+      final cleaveTargets =
+          <GameCard>[...targetTile.cards, ...targetTile.hiddenSpies].where(
+            (c) =>
+                c.isAlive && c.ownerId != attacker.ownerId && c.id != target.id,
+          );
+
+      final secondTarget = cleaveTargets.isNotEmpty
+          ? cleaveTargets.first
+          : null;
+      if (secondTarget != null) {
+        final damage = result.damageDealt;
+        final hpBefore = secondTarget.currentHealth;
+        final died = secondTarget.takeDamage(damage);
+        final hpAfter = secondTarget.currentHealth;
+
+        _log(
+          '   🌀 Cleave hits ${secondTarget.name} for $damage damage (${hpBefore}→$hpAfter)',
+        );
+
+        if (died) {
+          targetTile.addGravestone(
+            Gravestone(
+              cardName: secondTarget.name,
+              deathLog: 'Cleave damage',
+              ownerId: secondTarget.ownerId,
+              turnCreated: _currentMatch!.turnNumber,
+            ),
+          );
+          onCardDestroyed?.call(secondTarget);
+          _removeCardFromTile(targetTile, secondTarget);
+          _log('   💀 ${secondTarget.name} destroyed by cleave!');
+        }
+      }
+    }
+
     if (result.targetDied) {
       _log('   💀 ${target.name} destroyed!');
 
@@ -2865,7 +3141,7 @@ class MatchManager {
 
       // Remove dead card from tile
       onCardDestroyed?.call(target);
-      targetTile.cards.remove(target);
+      _removeCardFromTile(targetTile, target);
 
       // Melee attacker advances to target's tile after kill (if not ranged and attacker survived)
       // Only advance if no other enemy cards remain on the target tile
@@ -2879,6 +3155,20 @@ class MatchManager {
         if (isEnemyBase) {
           if (_isSpyCard(attacker)) {
             _log('   🕵️ ${attacker.name} advances into enemy base');
+            final fromTile = attackerTile;
+            _removeCardFromTile(fromTile, attacker);
+            _addCardToTile(targetTile, attacker);
+            _triggerTrapIfPresent(attacker, targetRow, targetCol);
+            if (!attacker.isAlive) return result;
+
+            _triggerSpyOnEnemyBaseEntry(
+              enteringCard: attacker,
+              fromRow: attackerRow,
+              fromCol: attackerCol,
+              toRow: targetRow,
+              toCol: targetCol,
+            );
+            return result;
           } else {
             _log('   ⚠️ ${attacker.name} cannot advance into enemy base');
             return result;
@@ -2889,8 +3179,8 @@ class MatchManager {
           );
           if (!hasOtherEnemies) {
             // Move attacker to target tile (free move after kill)
-            attackerTile.cards.remove(attacker);
-            targetTile.addCard(attacker);
+            _removeCardFromTile(attackerTile, attacker);
+            _addCardToTile(targetTile, attacker);
             _log(
               '   🚶 ${attacker.name} advances to (${targetRow},${targetCol}) after kill',
             );
@@ -2973,7 +3263,7 @@ class MatchManager {
 
         // Remove dead attacker from tile
         onCardDestroyed?.call(attacker);
-        attackerTile.cards.remove(attacker);
+        _removeCardFromTile(attackerTile, attacker);
       }
     }
     _log('   AP remaining: ${attacker.currentAP}/${attacker.maxAP}');
@@ -3089,6 +3379,9 @@ class MatchManager {
   List<GameCard> getValidTargetsTYC3(GameCard attacker, int row, int col) {
     if (_currentMatch == null) return [];
     if (!useTurnBasedSystem) return [];
+
+    // Spies cannot attack - they only assassinate on enemy base entry
+    if (_isSpyCard(attacker)) return [];
 
     // Check if attacker has AP to attack
     if (attacker.currentAP < attacker.attackAPCost) return [];

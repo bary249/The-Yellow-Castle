@@ -101,10 +101,18 @@ class Tile {
   /// Layout: [0]=front-left, [1]=front-right, [2]=back-left, [3]=back-right
   final List<GameCard> cards;
 
+  final List<GameCard> hiddenSpies;
+
   /// Gravestones of cards destroyed on this tile.
   final List<Gravestone> gravestones;
 
   TileTrap? trap;
+
+  /// Burning/Ignite: If set, this tile is considered "ignited" until (and including)
+  /// this match turn number.
+  ///
+  /// NOTE: Match turn numbers increment every time a player ends their turn.
+  int? ignitedUntilTurn;
 
   Tile({
     required this.row,
@@ -112,8 +120,10 @@ class Tile {
     this.terrain,
     required this.owner,
   }) : cards = [],
+       hiddenSpies = [],
        gravestones = [],
-       trap = null;
+       trap = null,
+       ignitedUntilTurn = null;
 
   /// Check if this tile is in the player's base row.
   bool get isPlayerBase => row == 2;
@@ -254,8 +264,10 @@ class Tile {
     'terrain': terrain,
     'owner': owner.name,
     'cards': cards.map((c) => c.toJson()).toList(),
+    'hiddenSpies': hiddenSpies.map((c) => c.toJson()).toList(),
     'gravestones': gravestones.map((g) => g.toJson()).toList(),
     'trap': trap?.toJson(),
+    'ignitedUntilTurn': ignitedUntilTurn,
   };
 
   /// Create from JSON
@@ -273,6 +285,11 @@ class Tile {
     for (final cardJson in cardsData) {
       tile.cards.add(GameCard.fromJson(cardJson as Map<String, dynamic>));
     }
+
+    final hiddenSpiesData = json['hiddenSpies'] as List<dynamic>? ?? [];
+    for (final cardJson in hiddenSpiesData) {
+      tile.hiddenSpies.add(GameCard.fromJson(cardJson as Map<String, dynamic>));
+    }
     final gravestonesData = json['gravestones'] as List<dynamic>? ?? [];
     for (final gsJson in gravestonesData) {
       tile.gravestones.add(Gravestone.fromJson(gsJson as Map<String, dynamic>));
@@ -281,6 +298,11 @@ class Tile {
     final trapJson = json['trap'];
     if (trapJson is Map<String, dynamic>) {
       tile.trap = TileTrap.fromJson(trapJson);
+    }
+
+    final ignitedUntilTurnJson = json['ignitedUntilTurn'];
+    if (ignitedUntilTurnJson is int) {
+      tile.ignitedUntilTurn = ignitedUntilTurnJson;
     }
     return tile;
   }

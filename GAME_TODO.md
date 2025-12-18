@@ -1331,8 +1331,8 @@ Used to test look and feel and UX of a fully rendered game page.
 
 ### 17.5 New Mechanics (TYC3)
 - [x] **Traps/Mines** (hidden tile trap state + trigger on enemy tile entry)
-- [x] **Burning (Woods/Forest tile entry)** (1 damage + knockback, mid-turn)
-- [x] **Spy** (infiltrate, kill one unit, self-destruct)
+- [x] **Ignite + Burning (Woods/Forest + ignited only)** (ignite adjacent tile for X turns; burning deals 1 damage + knockback on entry while ignited)
+- [x] **Spy (hidden/invisible infiltrator)** (cannot be targeted by direct attacks; co-exists on enemy tiles; on enemy base entry kills 1 enemy if 1–2 exist else deals 1 base damage; then self-destructs)
 
 ---
 

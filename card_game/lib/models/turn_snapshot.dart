@@ -44,6 +44,13 @@ class TurnSnapshot {
           targetTile.cards.add(card.clone());
         }
 
+        for (final card in sourceTile.hiddenSpies) {
+          targetTile.hiddenSpies.add(card.clone());
+        }
+
+        targetTile.trap = sourceTile.trap;
+        targetTile.ignitedUntilTurn = sourceTile.ignitedUntilTurn;
+
         for (final gs in sourceTile.gravestones) {
           targetTile.gravestones.add(
             Gravestone(

@@ -255,12 +255,18 @@ class GameBoard {
         for (final card in sourceTile.cards) {
           newTile.cards.add(card);
         }
+        // Copy hidden spies to new tile
+        for (final card in sourceTile.hiddenSpies) {
+          newTile.hiddenSpies.add(card);
+        }
         // Copy gravestones to new tile
         for (final gs in sourceTile.gravestones) {
           newTile.gravestones.add(gs);
         }
         // Copy trap state (hidden terrain trap)
         newTile.trap = sourceTile.trap;
+        // Copy ignite state
+        newTile.ignitedUntilTurn = sourceTile.ignitedUntilTurn;
         return newTile;
       });
     });

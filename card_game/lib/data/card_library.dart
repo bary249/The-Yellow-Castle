@@ -180,6 +180,22 @@ GameCard spyAgent(int index) => GameCard(
   rarity: 2,
 );
 
+GameCard firestarter(int index) => GameCard(
+  id: 'firestarter_$index',
+  name: 'Firestarter',
+  damage: 1,
+  health: 2,
+  tick: 2,
+  moveSpeed: 1,
+  maxAP: 2,
+  apPerTurn: 2,
+  attackAPCost: 1,
+  element: null,
+  abilities: const ['ignite_2'],
+  cost: 2,
+  rarity: 2,
+);
+
 // ============================================================================
 // COMMON CARDS (Rarity 1) - Unlimited copies available
 // Consolidated into Neutral Classes per user request

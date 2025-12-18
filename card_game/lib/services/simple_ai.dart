@@ -143,6 +143,14 @@ class SimpleAI {
             movableCards.add((card: card, row: row, col: col));
           }
         }
+
+        for (final card in tile.hiddenSpies) {
+          if (card.isAlive &&
+              card.canMove() &&
+              card.ownerId == activePlayer.id) {
+            movableCards.add((card: card, row: row, col: col));
+          }
+        }
       }
     }
     movableCards.shuffle(_random);
@@ -163,7 +171,9 @@ class SimpleAI {
         (c) => c.ownerId == enemyPlayer.id && c.isAlive,
       );
 
-      if (hasEnemyCards) continue;
+      // Spies can move onto enemy-occupied tiles; other units cannot.
+      final isSpy = card.abilities.contains('spy');
+      if (hasEnemyCards && !isSpy) continue;
 
       // Random chance to stay
       if (_random.nextDouble() < 0.2) continue;
@@ -185,6 +195,9 @@ class SimpleAI {
             attackers.add((card: card, row: row, col: col));
           }
         }
+
+        // Note: Spies in hiddenSpies cannot attack - they only assassinate on enemy base entry
+        // So we don't add them to attackers list
       }
     }
     attackers.shuffle(_random);
@@ -213,7 +226,8 @@ class SimpleAI {
         for (int tr = 0; tr < 3; tr++) {
           for (int tc = 0; tc < 3; tc++) {
             final tTile = match.board.getTile(tr, tc);
-            if (tTile.cards.contains(target)) {
+            if (tTile.cards.contains(target) ||
+                tTile.hiddenSpies.contains(target)) {
               final result = matchManager.attackCardTYC3(
                 card,
                 target,

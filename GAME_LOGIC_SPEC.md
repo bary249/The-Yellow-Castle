@@ -190,8 +190,10 @@ This document captures the **implemented and intended logic** of the game, mappe
   - `row`, `col` (position).
   - `terrain` (woods, lake, desert, marsh).
   - `owner` (player or opponent - only middle tiles can change ownership).
-  - `cards` (list of cards on this tile, max 2).
+  - `cards` (list of visible cards on this tile).
+  - `hiddenSpies` (list of Spy cards on this tile; hidden from opponent UI).
   - `trap` (optional hidden `TileTrap` state; does not occupy card slots).
+  - `ignitedUntilTurn` (optional int; if set and >= current turn, the tile is ignited).
 
 **Lane**
 - `LanePosition` enum: `west`, `center`, `east`.
@@ -222,11 +224,19 @@ This document captures the **implemented and intended logic** of the game, mappe
 
 **Tile Hazards (Implemented):**
 - **Traps/Mines**: A trap can exist on a tile as hidden state (`Tile.trap`). When an enemy unit enters the tile, the trap triggers, deals damage, and is consumed.
-- **Burning Terrain (Woods/Forest)**: When a unit enters a `Woods`/`Forest` tile via movement, it immediately takes 1 damage and is knocked back to the tile it came from if possible.
+- **Burning Terrain (Woods/Forest)**: Burning only triggers on `Woods`/`Forest` tiles that are currently **ignited** (`ignitedUntilTurn >= current turn`). On entry, the unit takes 1 damage and is knocked back to the tile it came from if possible.
 
 **Spy (Implemented):**
-- A unit with `spy` ability may move into the **enemy base tile**.
-- On **entering the enemy base tile**, it eliminates **one enemy unit on that tile**, then the Spy is destroyed (self-sacrifice).
+- Spy units are stored on tiles as `Tile.hiddenSpies` (not in `Tile.cards`).
+- **Invisibility**: Spy is always invisible to the opponent in the UI (except its gravestone/RIP when it dies).
+- **Cannot attack**: Spy cannot perform normal attacks. It can only move and assassinate.
+- **Cannot be attacked directly**: Spy is excluded from direct attack targeting.
+  - It can still die to non-targeted effects such as traps, burning, cleave, etc.
+- **Co-existence**: Spy may move onto tiles that already contain enemy units (the opponent still sees their own units normally).
+- **Enemy base entry trigger (automatic)**: When a Spy enters the enemy base tile:
+  - If the enemy base tile has 1–2 enemy units, Spy kills one (first).
+  - Otherwise, Spy deals 1 damage to the enemy base.
+  - Then Spy always self-destructs.
 
 **Lane winner:**
 - Determined by which side has surviving cards after combat.
