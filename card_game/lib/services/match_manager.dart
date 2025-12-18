@@ -214,6 +214,407 @@ class MatchManager {
     return t == 'woods' || t == 'forest';
   }
 
+  bool _isMarshTerrain(String? terrain) {
+    final t = terrain?.toLowerCase();
+    return t == 'marsh';
+  }
+
+  int _forwardDirForOwnerId(String ownerId) {
+    if (_currentMatch == null) return -1;
+    return ownerId == _currentMatch!.player.id ? -1 : 1;
+  }
+
+  String? _enemyOwnerId(String ownerId) {
+    if (_currentMatch == null) return null;
+    if (ownerId == _currentMatch!.player.id) return _currentMatch!.opponent.id;
+    if (ownerId == _currentMatch!.opponent.id) return _currentMatch!.player.id;
+    return null;
+  }
+
+  Iterable<GameCard> _enemyCardsBehindTileForOwner({
+    required String ownerId,
+    required int row,
+    required int col,
+  }) {
+    if (_currentMatch == null) return const [];
+
+    final enemyId = _enemyOwnerId(ownerId);
+    if (enemyId == null) return const [];
+
+    final behindRow = row - _forwardDirForOwnerId(enemyId);
+    if (behindRow < 0 || behindRow > 2) return const [];
+
+    final behindTile = _currentMatch!.board.getTile(behindRow, col);
+    return <GameCard>[
+      ...behindTile.cards,
+      ...behindTile.hiddenSpies,
+    ].where((c) => c.isAlive && c.ownerId == enemyId);
+  }
+
+  String? _getMoveLockReason(GameCard card, int row, int col) {
+    if (card.ownerId == null) return null;
+
+    final sources = _enemyCardsBehindTileForOwner(
+      ownerId: card.ownerId!,
+      row: row,
+      col: col,
+    );
+
+    if (sources.any((c) => c.abilities.contains('paralyze'))) {
+      return 'Paralyzed - cannot move';
+    }
+    if (sources.any((c) => c.abilities.contains('glue'))) {
+      return 'Glued - cannot move';
+    }
+    return null;
+  }
+
+  String? _getAttackLockReason(GameCard card, int row, int col) {
+    if (card.ownerId == null) return null;
+
+    final sources = _enemyCardsBehindTileForOwner(
+      ownerId: card.ownerId!,
+      row: row,
+      col: col,
+    );
+
+    if (sources.any((c) => c.abilities.contains('paralyze'))) {
+      return 'Paralyzed - cannot attack';
+    }
+    if (sources.any((c) => c.abilities.contains('silence'))) {
+      return 'Silenced - cannot attack';
+    }
+    return null;
+  }
+
+  void _applyFearOnEntry({
+    required GameCard enteringCard,
+    required int row,
+    required int col,
+  }) {
+    if (_currentMatch == null) return;
+    if (!enteringCard.isAlive) return;
+    if (enteringCard.ownerId == null) return;
+
+    final enemyId = _enemyOwnerId(enteringCard.ownerId!);
+    if (enemyId == null) return;
+
+    final behindRow = row - _forwardDirForOwnerId(enemyId);
+    if (behindRow < 0 || behindRow > 2) return;
+
+    final behindTile = _currentMatch!.board.getTile(behindRow, col);
+    final fearSources =
+        <GameCard>[...behindTile.cards, ...behindTile.hiddenSpies].where(
+          (c) =>
+              c.isAlive && c.ownerId == enemyId && c.abilities.contains('fear'),
+        );
+
+    bool applied = false;
+    for (final fearCard in fearSources) {
+      if (fearCard.fearSeenEnemyIds.contains(enteringCard.id)) continue;
+      fearCard.fearSeenEnemyIds.add(enteringCard.id);
+      applied = true;
+    }
+
+    if (applied) {
+      enteringCard.currentAP = 0;
+      _log('😱 Fear drains AP: ${enteringCard.name} is reduced to 0 AP');
+    }
+  }
+
+  void _applyPushBackAfterAttack({
+    required GameCard attacker,
+    required int targetRow,
+    required int targetCol,
+  }) {
+    if (_currentMatch == null) return;
+    if (!attacker.isAlive) return;
+    if (attacker.ownerId == null) return;
+    if (!attacker.abilities.contains('push_back')) return;
+
+    final targetTile = _currentMatch!.board.getTile(targetRow, targetCol);
+    final candidates =
+        <GameCard>[...targetTile.cards, ...targetTile.hiddenSpies]
+            .where(
+              (c) =>
+                  c.isAlive &&
+                  c.ownerId != null &&
+                  c.ownerId != attacker.ownerId,
+            )
+            .toList();
+
+    if (candidates.isEmpty) return;
+
+    candidates.sort((a, b) => a.id.compareTo(b.id));
+
+    for (final pushed in candidates) {
+      if (!pushed.isAlive) continue;
+      if (pushed.ownerId == null) continue;
+
+      final pushRow = targetRow - _forwardDirForOwnerId(pushed.ownerId!);
+      final pushCol = targetCol;
+      if (pushRow < 0 || pushRow > 2) continue;
+
+      final destTile = _currentMatch!.board.getTile(pushRow, pushCol);
+
+      final canPush = _isSpyCard(pushed)
+          ? (_tileHasEnemyCardsForOwner(destTile, pushed.ownerId!) ||
+                _canAddFriendlyOccupant(destTile, pushed.ownerId!))
+          : (destTile.canAddCard &&
+                !_tileHasEnemyCardsForOwner(destTile, pushed.ownerId!));
+
+      if (!canPush) continue;
+
+      _applyTerrainAffinityOnExit(
+        card: pushed,
+        fromTerrain: targetTile.terrain,
+      );
+
+      _removeCardFromTile(targetTile, pushed);
+      _addCardToTile(destTile, pushed);
+      _log(
+        '↩️ Push Back: ${pushed.name} pushed ($targetRow,$targetCol) → ($pushRow,$pushCol)',
+      );
+
+      _triggerTrapIfPresent(pushed, pushRow, pushCol);
+      if (!pushed.isAlive) continue;
+
+      _triggerSpyOnEnemyBaseEntry(
+        enteringCard: pushed,
+        fromRow: targetRow,
+        fromCol: targetCol,
+        toRow: pushRow,
+        toCol: pushCol,
+      );
+      if (!pushed.isAlive) continue;
+
+      final finalPos = _applyBurningOnEntry(
+        enteringCard: pushed,
+        fromRow: targetRow,
+        fromCol: targetCol,
+        toRow: pushRow,
+        toCol: pushCol,
+      );
+      if (!pushed.isAlive) continue;
+
+      _applyFearOnEntry(
+        enteringCard: pushed,
+        row: finalPos.row,
+        col: finalPos.col,
+      );
+
+      _applyMarshDrainOnEntry(
+        enteringCard: pushed,
+        row: finalPos.row,
+        col: finalPos.col,
+      );
+
+      _applyTerrainAffinityOnEntry(
+        card: pushed,
+        row: finalPos.row,
+        col: finalPos.col,
+      );
+
+      _checkRelicPickup(finalPos.row, finalPos.col, pushed.ownerId!);
+      _updatePermanentVisibility(finalPos.row, finalPos.col, pushed.ownerId!);
+    }
+  }
+
+  bool _isWatcherCard(GameCard card) => card.abilities.contains('watcher');
+
+  bool _isTileRevealedByWatcherForOwner({
+    required String viewerOwnerId,
+    required int row,
+    required int col,
+  }) {
+    if (_currentMatch == null) return false;
+
+    final forwardDir = viewerOwnerId == _currentMatch!.player.id ? -1 : 1;
+
+    final watcherPositions = <({int r, int c})>[
+      (r: row, c: col),
+      (r: row, c: col - 1),
+      (r: row, c: col + 1),
+      // "Forward" from watcher perspective means the watcher is 1 tile behind this tile.
+      (r: row - forwardDir, c: col),
+    ];
+
+    for (final pos in watcherPositions) {
+      if (pos.r < 0 || pos.r > 2 || pos.c < 0 || pos.c > 2) continue;
+      final tile = _currentMatch!.board.getTile(pos.r, pos.c);
+      final hasWatcher = tile.cards.any(
+        (c) => c.isAlive && c.ownerId == viewerOwnerId && _isWatcherCard(c),
+      );
+      if (hasWatcher) return true;
+    }
+
+    return false;
+  }
+
+  /// Whether a tile's hidden information (spies / concealed cards) is revealed
+  /// for the given viewer due to Watcher proximity.
+  bool isTileRevealedByWatcher({
+    required String viewerOwnerId,
+    required int row,
+    required int col,
+  }) {
+    return _isTileRevealedByWatcherForOwner(
+      viewerOwnerId: viewerOwnerId,
+      row: row,
+      col: col,
+    );
+  }
+
+  void _applyMarshDrainOnEntry({
+    required GameCard enteringCard,
+    required int row,
+    required int col,
+  }) {
+    if (_currentMatch == null) return;
+    if (!enteringCard.isAlive) return;
+
+    final tile = _currentMatch!.board.getTile(row, col);
+    if (!_isMarshTerrain(tile.terrain)) return;
+
+    enteringCard.currentAP = 0;
+    _log('🟩 Marsh drains AP: ${enteringCard.name} is reduced to 0 AP');
+  }
+
+  bool _hasTerrainAffinity(GameCard card) {
+    return card.abilities.contains('terrain_affinity');
+  }
+
+  bool _tallCanSeeTile({
+    required String viewerOwnerId,
+    required int row,
+    required int col,
+  }) {
+    if (_currentMatch == null) return false;
+
+    for (int r = 0; r < 3; r++) {
+      for (int c = 0; c < 3; c++) {
+        if ((r - row).abs() + (c - col).abs() > 1) continue;
+        final tile = _currentMatch!.board.getTile(r, c);
+        final hasTall = <GameCard>[...tile.cards, ...tile.hiddenSpies].any(
+          (card) =>
+              card.isAlive &&
+              card.ownerId == viewerOwnerId &&
+              card.abilities.contains('tall'),
+        );
+        if (hasTall) return true;
+      }
+    }
+    return false;
+  }
+
+  ({GameCard card, int row, int col})? _selectMegaTauntInterceptor({
+    required String defenderOwnerId,
+    required int baseRow,
+    required int baseCol,
+    required GameCard attacker,
+  }) {
+    if (_currentMatch == null) return null;
+
+    final candidates = <({GameCard card, int row, int col})>[];
+    for (final dc in const [-1, 1]) {
+      final c = baseCol + dc;
+      if (c < 0 || c > 2) continue;
+      final tile = _currentMatch!.board.getTile(baseRow, c);
+      final units = tile.cards.where(
+        (u) =>
+            u.isAlive &&
+            u.ownerId == defenderOwnerId &&
+            u.abilities.contains('mega_taunt'),
+      );
+      for (final u in units) {
+        candidates.add((card: u, row: baseRow, col: c));
+      }
+    }
+
+    if (candidates.isEmpty) return null;
+
+    candidates.sort((a, b) {
+      final hp = b.card.currentHealth.compareTo(a.card.currentHealth);
+      if (hp != 0) return hp;
+      return a.card.id.compareTo(b.card.id);
+    });
+
+    final topHp = candidates.first.card.currentHealth;
+    final tied = candidates
+        .where((e) => e.card.currentHealth == topHp)
+        .toList(growable: false);
+    if (tied.length == 1) return tied.first;
+
+    int seed = 0;
+    final str =
+        '${_currentMatch!.turnNumber}:${attacker.id}:${baseRow},${baseCol}';
+    for (final codeUnit in str.codeUnits) {
+      seed = (seed * 31 + codeUnit) & 0x7fffffff;
+    }
+    final idx = seed % tied.length;
+    return tied[idx];
+  }
+
+  void _applyTerrainAffinityOnExit({
+    required GameCard card,
+    required String? fromTerrain,
+  }) {
+    if (_currentMatch == null) return;
+    if (!card.isAlive) return;
+    if (!_hasTerrainAffinity(card)) return;
+
+    final t = fromTerrain?.toLowerCase();
+
+    if (t == 'desert') {
+      card.terrainAffinityRanged = false;
+    }
+    if (t == 'woods' || t == 'forest') {
+      card.terrainAffinityDamageBonus = 0;
+    }
+    if (t == 'marsh' && card.terrainAffinityMarshBonusApplied) {
+      card.health -= 5;
+      if (card.currentHealth > card.health) {
+        card.currentHealth = card.health;
+      }
+      card.terrainAffinityMarshBonusApplied = false;
+    }
+  }
+
+  void _applyTerrainAffinityOnEntry({
+    required GameCard card,
+    required int row,
+    required int col,
+  }) {
+    if (_currentMatch == null) return;
+    if (!card.isAlive) return;
+    if (!_hasTerrainAffinity(card)) return;
+
+    final tile = _currentMatch!.board.getTile(row, col);
+    final t = tile.terrain?.toLowerCase();
+
+    card.terrainAffinityRanged = t == 'desert';
+    card.terrainAffinityDamageBonus = (t == 'woods' || t == 'forest') ? 3 : 0;
+
+    if (t == 'marsh' && !card.terrainAffinityMarshBonusApplied) {
+      card.health += 5;
+      card.currentHealth += 5;
+      card.terrainAffinityMarshBonusApplied = true;
+    }
+
+    if (t == 'lake') {
+      if (card.terrainAffinityLakeTurn != _currentMatch!.turnNumber) {
+        card.terrainAffinityLakeTurn = _currentMatch!.turnNumber;
+        card.terrainAffinityLakeTilesThisTurn.clear();
+      }
+
+      final tileKey = '$row,$col';
+      if (!card.terrainAffinityLakeTilesThisTurn.contains(tileKey)) {
+        card.terrainAffinityLakeTilesThisTurn.add(tileKey);
+        card.currentAP = card.currentAP + 1;
+      }
+    }
+  }
+
   bool _isTileIgnited(Tile tile) {
     if (_currentMatch == null) return false;
     final until = tile.ignitedUntilTurn;
@@ -280,6 +681,9 @@ class MatchManager {
     );
 
     _triggerTrapIfPresent(enteringCard, fromRow, fromCol);
+    if (enteringCard.isAlive) {
+      _applyFearOnEntry(enteringCard: enteringCard, row: fromRow, col: fromCol);
+    }
     return (row: fromRow, col: fromCol);
   }
 
@@ -2048,6 +2452,8 @@ class MatchManager {
     }
     if (!card.isAlive) return true;
 
+    _applyTerrainAffinityOnEntry(card: card, row: row, col: col);
+
     if (shouldInstantHeal) {
       // Heal the most-injured friendly unit on this tile.
       injuredFriendlyOnTile.sort((a, b) {
@@ -2364,6 +2770,11 @@ class MatchManager {
       return 'Not enough AP to move (need 1, have ${card.currentAP})';
     }
 
+    final lockReason = _getMoveLockReason(card, fromRow, fromCol);
+    if (lockReason != null) {
+      return lockReason;
+    }
+
     // Calculate distance
     final rowDist = (toRow - fromRow).abs();
     final colDist = (toCol - fromCol).abs();
@@ -2515,6 +2926,9 @@ class MatchManager {
     // Spies cannot attack - they only assassinate on enemy base entry
     if (_isSpyCard(card)) return [];
 
+    final lockReason = _getAttackLockReason(card, fromRow, fromCol);
+    if (lockReason != null) return [];
+
     final targets = <({GameCard target, int row, int col, int moveCost})>[];
     final isPlayerCard = card.ownerId == _currentMatch!.player.id;
 
@@ -2601,9 +3015,20 @@ class MatchManager {
     int col,
   ) {
     final tile = _currentMatch!.board.getTile(row, col);
-    final enemyCards = tile.cards
-        .where((card) => card.isAlive && card.ownerId != attacker.ownerId)
-        .toList();
+    final enemyCards = <GameCard>[
+      ...tile.cards.where(
+        (card) => card.isAlive && card.ownerId != attacker.ownerId,
+      ),
+      if (attacker.ownerId != null &&
+          _isTileRevealedByWatcherForOwner(
+            viewerOwnerId: attacker.ownerId!,
+            row: row,
+            col: col,
+          ))
+        ...tile.hiddenSpies.where(
+          (card) => card.isAlive && card.ownerId != attacker.ownerId,
+        ),
+    ];
 
     if (enemyCards.isEmpty) return;
 
@@ -2632,6 +3057,8 @@ class MatchManager {
     // Spend AP
     if (!card.spendMoveAP()) return false;
 
+    _applyTerrainAffinityOnExit(card: card, fromTerrain: fromTile.terrain);
+
     // Remove from source tile
     _removeCardFromTile(fromTile, card);
 
@@ -2658,6 +3085,20 @@ class MatchManager {
       toCol: toCol,
     );
     if (!card.isAlive) return true;
+
+    _applyFearOnEntry(enteringCard: card, row: finalPos.row, col: finalPos.col);
+
+    _applyMarshDrainOnEntry(
+      enteringCard: card,
+      row: finalPos.row,
+      col: finalPos.col,
+    );
+
+    _applyTerrainAffinityOnEntry(
+      card: card,
+      row: finalPos.row,
+      col: finalPos.col,
+    );
 
     final owner = card.ownerId == _currentMatch!.player.id
         ? 'Player'
@@ -2974,6 +3415,12 @@ class MatchManager {
       return null;
     }
 
+    final lockReason = _getAttackLockReason(attacker, attackerRow, attackerCol);
+    if (lockReason != null) {
+      _log('❌ Attack failed: $lockReason');
+      return null;
+    }
+
     // Fog of war check: Player cannot attack into unrevealed enemy base (row 0)
     final isPlayerAttacker = attacker.ownerId == _currentMatch!.player.id;
     if (isPlayerAttacker && targetRow == 0) {
@@ -3005,7 +3452,13 @@ class MatchManager {
         }
       }
 
-      if (!playerHasMiddleCard && !scoutCanSee) {
+      final tallCanSee = _tallCanSeeTile(
+        viewerOwnerId: playerId,
+        row: 0,
+        col: targetCol,
+      );
+
+      if (!playerHasMiddleCard && !scoutCanSee && !tallCanSee) {
         _log('❌ Cannot attack into fog of war - no visibility in this lane');
         return null;
       }
@@ -3135,6 +3588,12 @@ class MatchManager {
       }
     }
 
+    _applyPushBackAfterAttack(
+      attacker: attacker,
+      targetRow: targetRow,
+      targetCol: targetCol,
+    );
+
     if (result.targetDied) {
       _log('   💀 ${target.name} destroyed!');
 
@@ -3217,6 +3676,18 @@ class MatchManager {
               if (!attacker.isAlive) {
                 return result;
               }
+
+              _applyFearOnEntry(
+                enteringCard: attacker,
+                row: finalPos.row,
+                col: finalPos.col,
+              );
+
+              _applyMarshDrainOnEntry(
+                enteringCard: attacker,
+                row: finalPos.row,
+                col: finalPos.col,
+              );
 
               // Check for relic pickup at new tile
               _checkRelicPickup(finalPos.row, finalPos.col, attacker.ownerId!);
@@ -3393,6 +3864,9 @@ class MatchManager {
     // Spies cannot attack - they only assassinate on enemy base entry
     if (_isSpyCard(attacker)) return [];
 
+    final lockReason = _getAttackLockReason(attacker, row, col);
+    if (lockReason != null) return [];
+
     // Check if attacker has AP to attack
     if (attacker.currentAP < attacker.attackAPCost) return [];
 
@@ -3405,7 +3879,20 @@ class MatchManager {
       final rowCards = <List<GameCard>>[];
       for (int c = 0; c < 3; c++) {
         final tile = _currentMatch!.board.getTile(r, c);
-        rowCards.add(tile.cards.where((card) => card.isAlive).toList());
+        final visible = tile.cards.where((card) => card.isAlive).toList();
+        if (attacker.ownerId != null &&
+            _isTileRevealedByWatcherForOwner(
+              viewerOwnerId: attacker.ownerId!,
+              row: r,
+              col: c,
+            )) {
+          visible.addAll(
+            tile.hiddenSpies.where(
+              (s) => s.isAlive && s.ownerId != attacker.ownerId,
+            ),
+          );
+        }
+        rowCards.add(visible);
       }
       boardCards.add(rowCards);
     }
@@ -3429,6 +3916,12 @@ class MatchManager {
     // Check if attacker can attack
     if (!attacker.canAttack()) {
       _log('❌ Not enough AP to attack base');
+      return 0;
+    }
+
+    final lockReason = _getAttackLockReason(attacker, attackerRow, attackerCol);
+    if (lockReason != null) {
+      _log('❌ Attack failed: $lockReason');
       return 0;
     }
 
@@ -3466,7 +3959,13 @@ class MatchManager {
         }
       }
 
-      if (!playerHasMiddleCard && !scoutCanSee) {
+      final tallCanSee = _tallCanSeeTile(
+        viewerOwnerId: playerId,
+        row: 0,
+        col: attackerCol,
+      );
+
+      if (!playerHasMiddleCard && !scoutCanSee && !tallCanSee) {
         _log(
           '❌ Cannot attack base through fog of war - no visibility in this lane',
         );
@@ -3525,6 +4024,73 @@ class MatchManager {
     final targetPlayer = isPlayerAttacking
         ? _currentMatch!.opponent
         : _currentMatch!.player;
+
+    final defenderOwnerId = targetPlayer.id;
+    final interceptor = _selectMegaTauntInterceptor(
+      defenderOwnerId: defenderOwnerId,
+      baseRow: targetBaseRow,
+      baseCol: attackerCol,
+      attacker: attacker,
+    );
+
+    if (interceptor != null) {
+      final tile = _currentMatch!.board.getTile(
+        interceptor.row,
+        interceptor.col,
+      );
+      final hpBefore = interceptor.card.currentHealth;
+      final died = interceptor.card.takeDamage(damage);
+      final hpAfter = interceptor.card.currentHealth;
+
+      _log(
+        '🛡️ Mega Taunt: ${interceptor.card.name} intercepts base attack for ${targetPlayer.name} ($damage damage)',
+      );
+
+      if (died) {
+        tile.addGravestone(
+          Gravestone(
+            cardName: interceptor.card.name,
+            deathLog: 'Intercepted base attack',
+            ownerId: interceptor.card.ownerId,
+            turnCreated: _currentMatch!.turnNumber,
+          ),
+        );
+        onCardDestroyed?.call(interceptor.card);
+        _removeCardFromTile(tile, interceptor.card);
+      }
+
+      _currentMatch!.lastCombatResult = SyncedCombatResult(
+        id: '${DateTime.now().millisecondsSinceEpoch}_${attacker.id}_mega_taunt',
+        isBaseAttack: true,
+        isHeal: false,
+        attackerName: attacker.name,
+        targetName: interceptor.card.name,
+        targetId: interceptor.card.id,
+        damageDealt: damage,
+        healAmount: 0,
+        retaliationDamage: 0,
+        targetDied: died,
+        attackerDied: false,
+        targetHpBefore: hpBefore,
+        targetHpAfter: hpAfter,
+        attackerHpBefore: attacker.currentHealth,
+        attackerHpAfter: attacker.currentHealth,
+        laneCol: attackerCol,
+        attackerOwnerId: attacker.ownerId ?? '',
+        attackerId: attacker.id,
+        attackerRow: attackerRow,
+        attackerCol: attackerCol,
+        targetRow: interceptor.row,
+        targetCol: interceptor.col,
+      );
+
+      if (!isPlayerAttacking) {
+        _currentMatch!.recentlyAttackedEnemyUnits[attacker.id] =
+            _currentMatch!.turnNumber;
+      }
+
+      return damage;
+    }
 
     targetPlayer.takeBaseDamage(damage);
 

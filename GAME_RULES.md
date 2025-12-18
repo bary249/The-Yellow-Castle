@@ -313,6 +313,16 @@ For each **tick** in each lane:
 | **trap_X** | Place a hidden trap on matching terrain; when an enemy enters that tile it takes X damage (trap is consumed) |
 | **ignite_X** | Ignite an adjacent tile for X turns (burning triggers only on ignited Woods/Forest) |
 | **spy** | Invisible infiltrator: undetectable by enemies (except watcher); cannot attack or be targeted by direct attacks; can share tiles with enemy units; on entering enemy base auto-kills 1 enemy there (if 1–2 exist) otherwise deals 1 base damage; then self-destructs |
+| **watcher** | Reveals spies and hidden cards within 1 tile (same tile, left, right, forward) |
+| **push_back** | When attacking normally, pushes enemy cards on the attacked tile 1 tile backward |
+| **glue** | Enemy cards in front of this unit cannot intentionally move while this unit remains behind them |
+| **silence** | Enemy cards in front of this unit cannot attack while this unit remains behind them |
+| **paralyze** | Enemy cards in front of this unit cannot move or attack while this unit remains behind them |
+| **barrier** | Negates the next incoming damage to this unit (once per match) |
+| **fear** | The first time an enemy unit enters the tile directly in front of this unit, that enemy unit’s AP is set to 0 (once per enemy unit per fear-card) |
+| **terrain_affinity** | While standing on terrain: Lake gives +1 AP on arrival (once per tile per turn), Marsh gives +5 HP, Desert becomes ranged, Woods gives +3 damage |
+| **mega_taunt** | Intercepts enemy base attacks for adjacent bases (highest HP interceptor, deterministic tie-break) |
+| **tall** | Provides fog-of-war visibility within Manhattan distance 1 |
 
 ### 7.4 Medic Special Rule (Play-to-Heal)
 - If you play a **Medic** card from hand directly onto **your base tile** (row closest to your hand) and that tile contains an **injured friendly unit**:

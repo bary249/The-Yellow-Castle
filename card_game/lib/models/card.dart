@@ -44,6 +44,24 @@ class GameCard {
   /// Is this card a decoy? (Looks like real card, but 0 DMG / 1 HP logic)
   final bool isDecoy;
 
+  /// Barrier runtime: whether this unit's barrier has already been consumed.
+  /// Applies once per match per unit.
+  bool barrierUsed = false;
+
+  /// Fear runtime: tracks which enemy unit IDs have already been affected by this
+  /// specific fear source (once per enemy unit per fear-card).
+  final Set<String> fearSeenEnemyIds = <String>{};
+
+  /// Transient helper for UI/logging: set to true when the most recent
+  /// takeDamage call was negated by Barrier.
+  bool lastDamageAbsorbedByBarrier = false;
+
+  bool terrainAffinityRanged = false;
+  int terrainAffinityDamageBonus = 0;
+  bool terrainAffinityMarshBonusApplied = false;
+  int terrainAffinityLakeTurn = -1;
+  final Set<String> terrainAffinityLakeTilesThisTurn = <String>{};
+
   // ===== END TYC3 =====
 
   /// Optional element for terrain matching (e.g. 'Woods', 'Lake', 'Desert')
@@ -174,6 +192,16 @@ class GameCard {
     copy.currentHealth = currentHealth;
     copy.currentAP = currentAP;
     copy.ownerId = ownerId;
+    copy.barrierUsed = barrierUsed;
+    copy.fearSeenEnemyIds.addAll(fearSeenEnemyIds);
+    copy.terrainAffinityRanged = terrainAffinityRanged;
+    copy.terrainAffinityDamageBonus = terrainAffinityDamageBonus;
+    copy.terrainAffinityMarshBonusApplied = terrainAffinityMarshBonusApplied;
+    copy.terrainAffinityLakeTurn = terrainAffinityLakeTurn;
+    copy.terrainAffinityLakeTilesThisTurn.addAll(
+      terrainAffinityLakeTilesThisTurn,
+    );
+    copy.lastDamageAbsorbedByBarrier = false;
     return copy;
   }
 
@@ -187,11 +215,20 @@ class GameCard {
     if (health <= 0) return damage;
     final hpRatio = currentHealth / health;
     final multiplier = 0.5 + 0.5 * hpRatio;
-    return (damage * multiplier).ceil();
+    return ((damage + terrainAffinityDamageBonus) * multiplier).ceil();
   }
 
   /// Take damage and return true if card dies
   bool takeDamage(int amount) {
+    lastDamageAbsorbedByBarrier = false;
+
+    // Barrier negates the next incoming damage from any source.
+    if (amount > 0 && abilities.contains('barrier') && !barrierUsed) {
+      barrierUsed = true;
+      lastDamageAbsorbedByBarrier = true;
+      return false;
+    }
+
     // Decoys die from any damage
     if (isDecoy && amount > 0) {
       currentHealth = 0;
@@ -207,6 +244,9 @@ class GameCard {
   void reset() {
     currentHealth = health;
     currentAP = 0; // Cards start with 0 AP when placed
+    barrierUsed = false;
+    fearSeenEnemyIds.clear();
+    lastDamageAbsorbedByBarrier = false;
   }
 
   // ===== TYC3: AP METHODS =====
@@ -238,7 +278,7 @@ class GameCard {
   }
 
   /// Check if this card has the 'ranged' ability (no retaliation)
-  bool get isRanged => abilities.contains('ranged');
+  bool get isRanged => abilities.contains('ranged') || terrainAffinityRanged;
 
   /// Check if this card has the 'guard' ability (must be attacked first)
   bool get isGuard => abilities.contains('guard');
@@ -274,6 +314,14 @@ class GameCard {
     'currentAP': currentAP,
     'ownerId': ownerId,
     'isDecoy': isDecoy,
+    'barrierUsed': barrierUsed,
+    'fearSeenEnemyIds': fearSeenEnemyIds.toList(),
+    'terrainAffinityRanged': terrainAffinityRanged,
+    'terrainAffinityDamageBonus': terrainAffinityDamageBonus,
+    'terrainAffinityMarshBonusApplied': terrainAffinityMarshBonusApplied,
+    'terrainAffinityLakeTurn': terrainAffinityLakeTurn,
+    'terrainAffinityLakeTilesThisTurn': terrainAffinityLakeTilesThisTurn
+        .toList(),
   };
 
   /// Parse CardTier from string
@@ -312,6 +360,27 @@ class GameCard {
     card.currentHealth = json['currentHealth'] as int? ?? json['health'] as int;
     card.currentAP = json['currentAP'] as int? ?? 0;
     card.ownerId = json['ownerId'] as String?;
+    card.barrierUsed = json['barrierUsed'] as bool? ?? false;
+    final fearSeen = json['fearSeenEnemyIds'] as List<dynamic>?;
+    if (fearSeen != null) {
+      card.fearSeenEnemyIds.addAll(fearSeen.map((e) => e.toString()));
+    }
+
+    card.terrainAffinityRanged =
+        json['terrainAffinityRanged'] as bool? ?? false;
+    card.terrainAffinityDamageBonus =
+        json['terrainAffinityDamageBonus'] as int? ?? 0;
+    card.terrainAffinityMarshBonusApplied =
+        json['terrainAffinityMarshBonusApplied'] as bool? ?? false;
+    card.terrainAffinityLakeTurn =
+        json['terrainAffinityLakeTurn'] as int? ?? -1;
+    final lakeTiles =
+        json['terrainAffinityLakeTilesThisTurn'] as List<dynamic>?;
+    if (lakeTiles != null) {
+      card.terrainAffinityLakeTilesThisTurn.addAll(
+        lakeTiles.map((e) => e.toString()),
+      );
+    }
     return card;
   }
 

@@ -225,6 +225,7 @@ This document captures the **implemented and intended logic** of the game, mappe
 **Tile Hazards (Implemented):**
 - **Traps/Mines**: A trap can exist on a tile as hidden state (`Tile.trap`). When an enemy unit enters the tile, the trap triggers, deals damage, and is consumed.
 - **Burning Terrain (Woods/Forest)**: Burning only triggers on `Woods`/`Forest` tiles that are currently **ignited** (`ignitedUntilTurn >= current turn`). On entry, the unit takes 1 damage and is knocked back to the tile it came from if possible.
+- **Marsh AP Drain (Implemented)**: After a unit enters a `marsh` tile (including forced movement such as knockback/push), its `currentAP` is set to `0`.
 
 **Spy (Implemented):**
 - Spy units are stored on tiles as `Tile.hiddenSpies` (not in `Tile.cards`).
@@ -238,6 +239,65 @@ This document captures the **implemented and intended logic** of the game, mappe
   - Otherwise, Spy deals 1 damage to the enemy base.
   - Then Spy always self-destructs.
 - **Assassination dialog**: When spy assassinates, a dialog is shown to both players indicating the spy's action.
+
+**Watcher (Implemented - core + UI):**
+- A unit with `watcher` reveals hidden information on tiles within **watch distance 1** relative to the Watcher's owner direction.
+- Tiles revealed (relative to viewer):
+  - same tile
+  - left
+  - right
+  - forward
+- When a tile is revealed by watcher:
+  - enemy `Tile.hiddenSpies` on that tile become targetable by any friendly unit.
+  - the UI renders those spies as full enemy cards on that tile.
+  - `conceal_back` is treated as not applying for that tile.
+
+**Push Back (Implemented - core):**
+- Trigger: on a normal attack action (card attacks card) by a unit with `push_back`.
+- Effect: pushes enemy units on the attacked tile 1 tile backward (relative to the attacker’s owner direction).
+- Forced-movement entry effects apply (trap, spy base entry, burning knockback, fear, marsh AP drain), and visibility/relic pickup update after landing.
+
+**Glue (Implemented - core):**
+- While a unit with `glue` is present, enemy units in the tile directly in front of it (same column, one tile forward relative to the glue owner) cannot intentionally move.
+- Forced movement (trap/burning knockback/push) overrides glue.
+- Effect ends immediately if the glue unit moves away or dies.
+
+**Silence (Implemented - core):**
+- While a unit with `silence` is present, enemy units in the tile directly in front of it cannot attack.
+- Effect ends immediately if the silencing unit moves away or dies.
+
+**Paralyze (Implemented - core):**
+- While a unit with `paralyze` is present, enemy units in the tile directly in front of it cannot move or attack.
+- Effect ends immediately if the paralyzing unit moves away or dies.
+
+**Barrier (Implemented - core):**
+- A unit with `barrier` negates the next incoming damage completely (no HP reduction).
+- It is consumed once per match per unit.
+- Requires persistent state for online sync:
+  - `GameCard.barrierUsed` (bool)
+
+**Fear (Implemented - core):**
+- Passive ability.
+- Trigger: when an enemy unit enters the tile directly in front of a `fear` unit (relative to the fear unit’s owner direction).
+- Effect: that enemy unit’s `currentAP` is set to `0`.
+- Triggers once per enemy unit per fear-card (deterministic for online sync):
+  - `GameCard.fearSeenEnemyIds` (set of enemy card IDs that already triggered)
+
+**Terrain Affinity (Implemented - core):**
+- Active while the unit is standing on a tile.
+- Lake: on arrival, grants +1 AP once per tile per turn (can temporarily exceed max AP).
+- Marsh: while on the tile, grants +5 HP (added on entry, removed on exit).
+- Desert: while on the tile, the unit becomes `ranged` (no retaliation).
+- Woods/Forest: while on the tile, the unit gains +3 damage.
+
+**Mega Taunt (Implemented - core):**
+- Trigger: when an enemy performs a base attack.
+- Effect: if the defending side has an adjacent base-tile unit with `mega_taunt`, it intercepts the base damage.
+- Selection: highest current HP interceptor; ties are deterministic.
+
+**Tall (Implemented - core):**
+- Passive visibility.
+- Units with `tall` grant fog-of-war visibility within Manhattan distance 1.
 
 **Lane winner:**
 - Determined by which side has surviving cards after combat.

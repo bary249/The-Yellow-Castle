@@ -1334,6 +1334,23 @@ Used to test look and feel and UX of a fully rendered game page.
 - [x] **Ignite + Burning (Woods/Forest + ignited only)** (ignite adjacent tile for X turns; burning deals 1 damage + knockback on entry while ignited)
 - [x] **Spy (hidden/invisible infiltrator)** (cannot be targeted by direct attacks; co-exists on enemy tiles; on enemy base entry kills 1 enemy if 1–2 exist else deals 1 base damage; then self-destructs)
 
+#### 17.5.1 New Abilities (TYC3)
+- [x] **Watcher** (core + UI + ability-testing card)
+- [x] **Glue** (core + ability-testing card + basic keyword UI)
+- [x] **Silence** (core + ability-testing card + basic keyword UI)
+- [x] **Paralyze** (core + ability-testing card + basic keyword UI)
+- [x] **Barrier** (core + serialization + ability-testing card + basic keyword UI)
+- [x] **Fear** (core + serialization + ability-testing card + basic keyword UI)
+- [x] **Push Back** (core + ability-testing card + basic keyword UI)
+- [x] **Terrain Affinity** (core + serialization + ability-testing card + basic keyword UI)
+- [x] **Mega Taunt** (core + ability-testing card + basic keyword UI)
+- [x] **Tall** (core + ability-testing card + basic keyword UI)
+
+#### 17.5.2 Follow-ups (TYC3 Abilities)
+- [ ] Balance pass for the new ability cards (stats/cost/rarity)
+- [ ] AI heuristics for positioning and counter-play (glue/silence/paralyze/fear)
+- [ ] Better UI feedback beyond keywords (e.g., blocked-move/blocked-attack reason surfacing, barrier trigger/fear trigger indicators)
+
 ---
 
 ## 📜 18. Big Additions (Future)

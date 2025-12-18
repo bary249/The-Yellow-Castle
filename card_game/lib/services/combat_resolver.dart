@@ -173,7 +173,7 @@ class CombatResolver {
   /// Card-vs-card element/terrain matchups are disabled; we start from
   /// the attacker's raw damage and then apply zone-attunement + abilities.
   int _calculateElementalDamage(GameCard attacker, GameCard target) {
-    return attacker.damage;
+    return attacker.damage + attacker.terrainAffinityDamageBonus;
   }
 
   /// Resolve combat in a single lane
@@ -825,7 +825,7 @@ class CombatResolver {
     int commanderDamageBonus = 0,
   }) {
     // Calculate base damage
-    int damage = attacker.damage;
+    int damage = attacker.damage + attacker.terrainAffinityDamageBonus;
     final List<String> modifiers = [];
 
     // Decoy Logic (Attacker)
@@ -949,10 +949,17 @@ class CombatResolver {
     // Deal damage to target
     final targetHpBefore = target.currentHealth;
     // Decoy Logic (Target)
-    final targetDied = target.isDecoy
-        ? target.takeDamage(999)
-        : target.takeDamage(damage);
+    final appliedAttackAmount = target.isDecoy ? 999 : damage;
+    final targetDied = target.takeDamage(appliedAttackAmount);
     final targetHpAfter = target.currentHealth;
+
+    final actualDamageDealt = target.lastDamageAbsorbedByBarrier
+        ? 0
+        : (targetHpBefore - targetHpAfter).clamp(0, appliedAttackAmount);
+
+    if (target.lastDamageAbsorbedByBarrier) {
+      modifiers.add('Barrier');
+    }
 
     if (target.isDecoy) {
       modifiers.add('Target was Decoy!');
@@ -965,10 +972,10 @@ class CombatResolver {
         laneDescription: 'TYC3',
         action: '⚔️ ${attacker.name} ATTACKS',
         details:
-            '${target.name}${target.isDecoy ? " (Decoy)" : ""} takes $damage damage | HP: $targetHpBefore → $targetHpAfter${targetDied ? " 💀" : ""}',
+            '${target.name}${target.isDecoy ? " (Decoy)" : ""} takes $actualDamageDealt damage | HP: $targetHpBefore → $targetHpAfter${targetDied ? " 💀" : ""}',
         isImportant: targetDied,
         level: targetDied ? LogLevel.important : LogLevel.normal,
-        damageDealt: damage,
+        damageDealt: actualDamageDealt,
         attackerName: attacker.name,
         targetName: target.isDecoy ? '${target.name} (Decoy)' : target.name,
         targetHpBefore: targetHpBefore,
@@ -981,6 +988,7 @@ class CombatResolver {
     // Check for retaliation (melee attackers always receive retaliation, even from dying units)
     // This represents simultaneous combat - both units strike at the same time
     int retaliationDamage = 0;
+    int actualRetaliationApplied = 0;
     bool attackerDied = false;
 
     // Retaliation happens if attacker is melee (not ranged) and target has damage > 0
@@ -989,7 +997,7 @@ class CombatResolver {
     final List<String> retModifiers = [];
     if (!attacker.isRanged && target.damage > 0 && !target.isDecoy) {
       // Target retaliates
-      retaliationDamage = target.damage;
+      retaliationDamage = target.damage + target.terrainAffinityDamageBonus;
 
       // Apply target's fury
       final furyBonus = _getFuryBonus(target);
@@ -1070,6 +1078,16 @@ class CombatResolver {
       attackerDied = attacker.takeDamage(retaliationDamage);
       final attackerHpAfter = attacker.currentHealth;
 
+      final actualRetaliationDealt = attacker.lastDamageAbsorbedByBarrier
+          ? 0
+          : (attackerHpBefore - attackerHpAfter).clamp(0, retaliationDamage);
+
+      actualRetaliationApplied = actualRetaliationDealt;
+
+      if (attacker.lastDamageAbsorbedByBarrier) {
+        retModifiers.add('Barrier');
+      }
+
       // Log retaliation
       combatLog.add(
         BattleLogEntry(
@@ -1077,10 +1095,10 @@ class CombatResolver {
           laneDescription: 'TYC3',
           action: '↩️ ${target.name} RETALIATES',
           details:
-              '${attacker.name} takes $retaliationDamage damage | HP: $attackerHpBefore → $attackerHpAfter${attackerDied ? " 💀" : ""}',
+              '${attacker.name} takes $actualRetaliationDealt damage | HP: $attackerHpBefore → $attackerHpAfter${attackerDied ? " 💀" : ""}',
           isImportant: attackerDied,
           level: attackerDied ? LogLevel.important : LogLevel.normal,
-          damageDealt: retaliationDamage,
+          damageDealt: actualRetaliationDealt,
           attackerName: target.name,
           targetName: attacker.name,
           targetHpBefore: attackerHpBefore,
@@ -1105,6 +1123,7 @@ class CombatResolver {
 
     // Apply thorns damage if target has thorns ability
     int actualThornsDamage = 0;
+    int actualThornsApplied = 0;
     if (!attackerDied && target.isAlive) {
       actualThornsDamage = _getThornsDamage(target);
       if (actualThornsDamage > 0) {
@@ -1112,13 +1131,21 @@ class CombatResolver {
         attackerDied = attacker.takeDamage(actualThornsDamage);
         final attackerHpAfter = attacker.currentHealth;
 
+        actualThornsApplied = attacker.lastDamageAbsorbedByBarrier
+            ? 0
+            : (attackerHpBefore - attackerHpAfter).clamp(0, actualThornsDamage);
+
+        if (attacker.lastDamageAbsorbedByBarrier) {
+          retModifiers.add('Barrier');
+        }
+
         combatLog.add(
           BattleLogEntry(
             tick: 0,
             laneDescription: 'TYC3',
             action: '🌿 ${target.name} THORNS',
             details:
-                '${attacker.name} takes $actualThornsDamage thorns damage | HP: $attackerHpBefore → $attackerHpAfter${attackerDied ? " 💀" : ""}',
+                '${attacker.name} takes $actualThornsApplied thorns damage | HP: $attackerHpBefore → $attackerHpAfter${attackerDied ? " 💀" : ""}',
             isImportant: attackerDied,
             level: attackerDied ? LogLevel.important : LogLevel.normal,
           ),
@@ -1128,13 +1155,13 @@ class CombatResolver {
 
     return AttackResult(
       success: true,
-      damageDealt: damage,
-      retaliationDamage: retaliationDamage,
-      thornsDamage: actualThornsDamage,
+      damageDealt: actualDamageDealt,
+      retaliationDamage: actualRetaliationApplied,
+      thornsDamage: actualThornsApplied,
       targetDied: targetDied,
       attackerDied: attackerDied,
       message:
-          '${attacker.name} dealt $damage to ${target.name}${targetDied ? " (killed)" : ""}',
+          '${attacker.name} dealt $actualDamageDealt to ${target.name}${targetDied ? " (killed)" : ""}',
       modifiers: modifiers,
       retaliationModifiers: retModifiers,
     );
@@ -1154,7 +1181,7 @@ class CombatResolver {
     int commanderDamageBonus = 0,
   }) {
     // Calculate base damage
-    int damage = attacker.damage;
+    int damage = attacker.damage + attacker.terrainAffinityDamageBonus;
     final List<String> modifiers = [];
 
     // Apply fury bonus
@@ -1281,7 +1308,7 @@ class CombatResolver {
     final List<String> retModifiers = [];
     if (!attacker.isRanged && target.damage > 0) {
       // Target retaliates
-      retaliationDamage = target.damage;
+      retaliationDamage = target.damage + target.terrainAffinityDamageBonus;
 
       // Apply target's fury
       final furyBonus = _getFuryBonus(target);

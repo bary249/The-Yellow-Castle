@@ -180,6 +180,166 @@ GameCard spyAgent(int index) => GameCard(
   rarity: 2,
 );
 
+GameCard watcherUnit(int index) => GameCard(
+  id: 'watcher_$index',
+  name: 'Watcher',
+  damage: 2,
+  health: 4,
+  tick: 2,
+  moveSpeed: 1,
+  maxAP: 1,
+  apPerTurn: 1,
+  attackAPCost: 1,
+  element: null,
+  abilities: const ['watcher'],
+  cost: 2,
+  rarity: 2,
+);
+
+GameCard silenceUnit(int index) => GameCard(
+  id: 'silence_$index',
+  name: 'Silencer',
+  damage: 2,
+  health: 4,
+  tick: 2,
+  moveSpeed: 1,
+  maxAP: 1,
+  apPerTurn: 1,
+  attackAPCost: 1,
+  element: null,
+  abilities: const ['silence'],
+  cost: 2,
+  rarity: 2,
+);
+
+GameCard paralyzeUnit(int index) => GameCard(
+  id: 'paralyze_$index',
+  name: 'Paralyzer',
+  damage: 2,
+  health: 4,
+  tick: 2,
+  moveSpeed: 1,
+  maxAP: 1,
+  apPerTurn: 1,
+  attackAPCost: 1,
+  element: null,
+  abilities: const ['paralyze'],
+  cost: 2,
+  rarity: 2,
+);
+
+GameCard barrierUnit(int index) => GameCard(
+  id: 'barrier_$index',
+  name: 'Barrier',
+  damage: 2,
+  health: 4,
+  tick: 2,
+  moveSpeed: 1,
+  maxAP: 1,
+  apPerTurn: 1,
+  attackAPCost: 1,
+  element: null,
+  abilities: const ['barrier'],
+  cost: 2,
+  rarity: 2,
+);
+
+GameCard fearUnit(int index) => GameCard(
+  id: 'fear_$index',
+  name: 'Fear',
+  damage: 2,
+  health: 4,
+  tick: 2,
+  moveSpeed: 1,
+  maxAP: 1,
+  apPerTurn: 1,
+  attackAPCost: 1,
+  element: null,
+  abilities: const ['fear'],
+  cost: 2,
+  rarity: 2,
+);
+
+GameCard glueUnit(int index) => GameCard(
+  id: 'glue_$index',
+  name: 'Glue',
+  damage: 2,
+  health: 4,
+  tick: 2,
+  moveSpeed: 1,
+  maxAP: 1,
+  apPerTurn: 1,
+  attackAPCost: 1,
+  element: null,
+  abilities: const ['glue'],
+  cost: 2,
+  rarity: 2,
+);
+
+GameCard pushBackUnit(int index) => GameCard(
+  id: 'push_back_$index',
+  name: 'Pusher',
+  damage: 2,
+  health: 4,
+  tick: 2,
+  moveSpeed: 1,
+  maxAP: 1,
+  apPerTurn: 1,
+  attackAPCost: 1,
+  element: null,
+  abilities: const ['push_back'],
+  cost: 2,
+  rarity: 2,
+);
+
+GameCard terrainAffinityUnit(int index) => GameCard(
+  id: 'terrain_affinity_$index',
+  name: 'Terrain Adept',
+  damage: 2,
+  health: 4,
+  tick: 2,
+  moveSpeed: 1,
+  maxAP: 2,
+  apPerTurn: 2,
+  attackAPCost: 1,
+  element: null,
+  abilities: const ['terrain_affinity'],
+  cost: 2,
+  rarity: 2,
+);
+
+GameCard megaTauntUnit(int index) => GameCard(
+  id: 'mega_taunt_$index',
+  name: 'Mega Taunt',
+  damage: 1,
+  health: 10,
+  tick: 2,
+  moveSpeed: 1,
+  maxAP: 1,
+  apPerTurn: 1,
+  attackAPCost: 1,
+  element: null,
+  abilities: const ['mega_taunt'],
+  cost: 3,
+  rarity: 3,
+);
+
+GameCard tallUnit(int index) => GameCard(
+  id: 'tall_$index',
+  name: 'Tall',
+  damage: 2,
+  health: 6,
+  tick: 2,
+  moveSpeed: 1,
+  maxAP: 1,
+  apPerTurn: 1,
+  attackAPCost: 1,
+  element: null,
+  abilities: const ['tall'],
+  cost: 2,
+  rarity: 2,
+);
+
 GameCard firestarter(int index) => GameCard(
   id: 'firestarter_$index',
   name: 'Firestarter',

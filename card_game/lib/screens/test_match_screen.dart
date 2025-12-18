@@ -209,6 +209,16 @@ class _TestMatchScreenState extends State<TestMatchScreen>
     cards.add(woodsMine(0));
     cards.add(spyAgent(0));
     cards.add(firestarter(0));
+    cards.add(watcherUnit(0));
+    cards.add(silenceUnit(0));
+    cards.add(paralyzeUnit(0));
+    cards.add(barrierUnit(0));
+    cards.add(fearUnit(0));
+    cards.add(glueUnit(0));
+    cards.add(pushBackUnit(0));
+    cards.add(terrainAffinityUnit(0));
+    cards.add(megaTauntUnit(0));
+    cards.add(tallUnit(0));
 
     return cards;
   }
@@ -226,6 +236,130 @@ class _TestMatchScreenState extends State<TestMatchScreen>
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('Cleared all cards in hand.')));
+  }
+
+  Future<void> _abilityTestingClearOpponentHand() async {
+    final match = _matchManager.currentMatch;
+    if (match == null) return;
+
+    setState(() {
+      match.opponent.hand.clear();
+      _clearStaging();
+      _clearTYC3Selection();
+    });
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text("Cleared opponent's hand.")));
+  }
+
+  Future<void> _abilityTestingFillOpponentHandWithSpies() async {
+    final match = _matchManager.currentMatch;
+    if (match == null) return;
+
+    final maxCards = 8;
+    setState(() {
+      match.opponent.hand.clear();
+      for (int i = 0; i < maxCards; i++) {
+        final base = spyAgent(i);
+        final unique = '${DateTime.now().millisecondsSinceEpoch}_spy_$i';
+        final instance = _createAbilityTestingCardInstance(base, unique);
+        match.opponent.hand.add(instance);
+      }
+      _clearStaging();
+      _clearTYC3Selection();
+    });
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Filled opponent's hand with Spies.")),
+    );
+  }
+
+  Future<void> _showAbilityTestingOpponentCardPicker() async {
+    final match = _matchManager.currentMatch;
+    if (match == null) return;
+
+    final allCards = _abilityTestingAllCards();
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.grey[900],
+      builder: (context) {
+        String query = '';
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final filtered = query.isEmpty
+                ? allCards
+                : allCards.where((c) {
+                    final q = query.toLowerCase();
+                    final name = c.name.toLowerCase();
+                    final id = c.id.toLowerCase();
+                    final abilities = c.abilities.join(' ').toLowerCase();
+                    return name.contains(q) ||
+                        id.contains(q) ||
+                        abilities.contains(q);
+                  }).toList();
+
+            return SafeArea(
+              child: SizedBox(
+                height: MediaQuery.of(context).size.height * 0.8,
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: TextField(
+                        decoration: const InputDecoration(
+                          hintText: 'Search cards...',
+                          filled: true,
+                        ),
+                        onChanged: (v) => setSheetState(() => query = v),
+                      ),
+                    ),
+                    Expanded(
+                      child: ListView.builder(
+                        itemCount: filtered.length,
+                        itemBuilder: (context, index) {
+                          final card = filtered[index];
+                          return ListTile(
+                            title: Text(
+                              card.name,
+                              style: const TextStyle(color: Colors.white),
+                            ),
+                            subtitle: Text(
+                              '${card.element ?? "Neutral"} • DMG:${card.damage} HP:${card.health} • Cost:${card.cost}',
+                              style: const TextStyle(color: Colors.white54),
+                            ),
+                            trailing: IconButton(
+                              icon: const Icon(
+                                Icons.add,
+                                color: Colors.white70,
+                              ),
+                              onPressed: () {
+                                final unique =
+                                    '${DateTime.now().millisecondsSinceEpoch}_${index}';
+                                final instance =
+                                    _createAbilityTestingCardInstance(
+                                      card,
+                                      unique,
+                                    );
+                                setState(() {
+                                  match.opponent.hand.add(instance);
+                                });
+                              },
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   Future<void> _showAbilityTestingCardPicker() async {
@@ -808,6 +942,54 @@ class _TestMatchScreenState extends State<TestMatchScreen>
               onTap: () async {
                 Navigator.pop(context);
                 await _abilityTestingClearHand();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.person_off, color: Colors.white70),
+              title: const Text(
+                "Remove all opponent cards in hand",
+                style: TextStyle(color: Colors.white),
+              ),
+              subtitle: const Text(
+                "Clears opponent's hand (testing mode)",
+                style: TextStyle(color: Colors.white54),
+              ),
+              onTap: () async {
+                Navigator.pop(context);
+                await _abilityTestingClearOpponentHand();
+              },
+            ),
+            ListTile(
+              leading: const Icon(
+                Icons.person_add_alt_1,
+                color: Colors.white70,
+              ),
+              title: const Text(
+                'Add cards to opponent hand',
+                style: TextStyle(color: Colors.white),
+              ),
+              subtitle: const Text(
+                'Choose specific cards to add to opponent',
+                style: TextStyle(color: Colors.white54),
+              ),
+              onTap: () async {
+                Navigator.pop(context);
+                await _showAbilityTestingOpponentCardPicker();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.person_search, color: Colors.white70),
+              title: const Text(
+                "Fill opponent hand with Spies",
+                style: TextStyle(color: Colors.white),
+              ),
+              subtitle: const Text(
+                'Quick setup for Watcher/Spy testing',
+                style: TextStyle(color: Colors.white54),
+              ),
+              onTap: () async {
+                Navigator.pop(context);
+                await _abilityTestingFillOpponentHandWithSpies();
               },
             ),
             ListTile(
@@ -5039,6 +5221,16 @@ class _TestMatchScreenState extends State<TestMatchScreen>
     if (ability == 'flanking') return Icons.swap_horiz; // Side movement
     if (ability.startsWith('trap_')) return Icons.warning_amber;
     if (ability == 'spy') return Icons.person_search;
+    if (ability == 'watcher') return Icons.visibility_outlined;
+    if (ability == 'push_back') return Icons.keyboard_return;
+    if (ability == 'terrain_affinity') return Icons.terrain;
+    if (ability == 'mega_taunt') return Icons.shield;
+    if (ability == 'tall') return Icons.height;
+    if (ability == 'silence') return Icons.volume_off;
+    if (ability == 'paralyze') return Icons.block;
+    if (ability == 'barrier') return Icons.shield_outlined;
+    if (ability == 'fear') return Icons.sentiment_very_dissatisfied;
+    if (ability == 'glue') return Icons.lock;
     if (ability.startsWith('ignite_')) return Icons.local_fire_department;
     if (ability.startsWith('tile_shield'))
       return Icons.shield_outlined; // Tile-wide shield aura
@@ -5176,6 +5368,33 @@ class _TestMatchScreenState extends State<TestMatchScreen>
     }
     if (ability == 'spy') {
       return 'Can enter the enemy base. On entry, eliminates one enemy on that tile, then is destroyed.';
+    }
+    if (ability == 'push_back') {
+      return 'When this unit attacks normally, it pushes enemy units on the attacked tile 1 tile backward.';
+    }
+    if (ability == 'terrain_affinity') {
+      return 'Standing on terrain grants bonuses: Lake (+1 AP on arrival once per tile per turn), Marsh (+5 HP), Desert (Ranged), Woods (+3 DMG).';
+    }
+    if (ability == 'mega_taunt') {
+      return 'Intercepts enemy base attacks for adjacent bases (highest HP interceptor, tie deterministic).';
+    }
+    if (ability == 'tall') {
+      return 'Provides fog-of-war visibility within Manhattan distance 1.';
+    }
+    if (ability == 'silence') {
+      return 'Enemy units directly in front of this unit cannot attack while it remains behind them.';
+    }
+    if (ability == 'paralyze') {
+      return 'Enemy units directly in front of this unit cannot move or attack while it remains behind them.';
+    }
+    if (ability == 'glue') {
+      return 'Enemy units directly in front of this unit cannot intentionally move while it remains behind them.';
+    }
+    if (ability == 'barrier') {
+      return 'Negates the next incoming damage to this unit (once per match).';
+    }
+    if (ability == 'fear') {
+      return 'The first time an enemy unit enters the tile directly in front of this unit, that unit\'s AP is set to 0.';
     }
     if (ability.startsWith('motivate_')) {
       final value = ability.split('_').last;
@@ -9071,6 +9290,7 @@ class _TestMatchScreenState extends State<TestMatchScreen>
     // Get cards at this tile based on position
     List<GameCard> playerCardsAtTile = [];
     List<GameCard> opponentCardsAtTile = [];
+    List<GameCard> opponentVisibleCardsAtTile = [];
     List<GameCard> playerSpiesAtTile = [];
 
     // Fog of war: check if this lane's enemy base is revealed
@@ -9081,6 +9301,11 @@ class _TestMatchScreenState extends State<TestMatchScreen>
       final tileCards = tile.cards.where((c) => c.isAlive).toList();
       final tileSpies = tile.hiddenSpies.where((c) => c.isAlive).toList();
       final playerId = match.player.id;
+      final tileRevealedByWatcher = _matchManager.isTileRevealedByWatcher(
+        viewerOwnerId: playerId,
+        row: row,
+        col: col,
+      );
 
       // Fog of War: Check if player has cards in middle (row 1) OR enemy base (row 0) of this lane
       // Include hiddenSpies - spies have regular vision like any other unit
@@ -9136,12 +9361,20 @@ class _TestMatchScreenState extends State<TestMatchScreen>
             }
           }
           opponentCardsAtTile.add(card);
+          opponentVisibleCardsAtTile.add(card);
         }
       }
 
       playerSpiesAtTile = tileSpies
           .where((c) => c.ownerId == playerId)
           .toList();
+
+      // Watcher reveal: show enemy spies as full cards (but do not treat as normal enemy blockers)
+      if (tileRevealedByWatcher) {
+        opponentCardsAtTile.addAll(
+          tileSpies.where((c) => c.ownerId != playerId),
+        );
+      }
     } else {
       // Legacy mode: use lane system
       if (row == 0) {
@@ -9167,7 +9400,7 @@ class _TestMatchScreenState extends State<TestMatchScreen>
 
     final showSpyChip =
         _useTYC3Mode &&
-        opponentCardsAtTile.isNotEmpty &&
+        opponentVisibleCardsAtTile.isNotEmpty &&
         tile.hiddenSpies.any((c) => c.isAlive && c.ownerId == match.player.id);
 
     // Can place on player base (row 2), or middle row (row 1) if card has 2+ AP
@@ -9181,7 +9414,8 @@ class _TestMatchScreenState extends State<TestMatchScreen>
         _selectedCard != null && _selectedCard!.maxAP >= 2;
 
     // Check if there are enemy cards on the middle tile (can't place there)
-    final hasEnemyOnMiddle = isMiddleRow && opponentCardsAtTile.isNotEmpty;
+    final hasEnemyOnMiddle =
+        isMiddleRow && opponentVisibleCardsAtTile.isNotEmpty;
 
     // Check 1 card per lane limit - count staged cards in this lane (all rows)
     int stagedInLane = 0;
@@ -9214,8 +9448,16 @@ class _TestMatchScreenState extends State<TestMatchScreen>
     // Check if opponent's front card has conceal_back ability
     // If so, we'll hide the back card's identity from the player
     bool opponentBackCardConcealed = false;
-    if (opponentCardsAtTile.length >= 2) {
-      final frontCard = opponentCardsAtTile[0]; // First card is front (topCard)
+    final tileRevealedByWatcher =
+        _useTYC3Mode &&
+        _matchManager.isTileRevealedByWatcher(
+          viewerOwnerId: match.player.id,
+          row: row,
+          col: col,
+        );
+    if (!tileRevealedByWatcher && opponentVisibleCardsAtTile.length >= 2) {
+      final frontCard =
+          opponentVisibleCardsAtTile[0]; // First card is front (topCard)
       if (frontCard.abilities.contains('conceal_back')) {
         opponentBackCardConcealed = true;
       }
@@ -9238,7 +9480,8 @@ class _TestMatchScreenState extends State<TestMatchScreen>
     List<GameCard> cardsToShow = [
       ...opponentCardsReversed, // Enemy BACK first (top), then FRONT (toward player)
       ...playerCardsAtTile, // Player FRONT first, then BACK
-      if (_useTYC3Mode && opponentCardsAtTile.isEmpty) ...playerSpiesAtTile,
+      if (_useTYC3Mode && opponentVisibleCardsAtTile.isEmpty)
+        ...playerSpiesAtTile,
       if (showStaged)
         ...stagedCardsOnTile, // Player staged cards at BOTTOM (only during placement)
     ];
