@@ -24,12 +24,15 @@ class HeroSelectionScreen extends StatefulWidget {
 
 class _HeroSelectionScreenState extends State<HeroSelectionScreen> {
   GameHero? _selectedHero;
+  late final List<GameHero> _availableHeroes;
 
   @override
   void initState() {
     super.initState();
-    // Default to first hero
-    _selectedHero = HeroLibrary.allHeroes.first;
+    _availableHeroes = widget.abilityTestingMode
+        ? HeroLibrary.allHeroes
+        : HeroLibrary.allHeroes.where((h) => h.id != 'tester').toList();
+    _selectedHero = _availableHeroes.isNotEmpty ? _availableHeroes.first : null;
   }
 
   void _startMatch() {
@@ -108,9 +111,9 @@ class _HeroSelectionScreenState extends State<HeroSelectionScreen> {
             Expanded(
               child: ListView.builder(
                 padding: const EdgeInsets.all(16),
-                itemCount: HeroLibrary.allHeroes.length,
+                itemCount: _availableHeroes.length,
                 itemBuilder: (context, index) {
-                  final hero = HeroLibrary.allHeroes[index];
+                  final hero = _availableHeroes[index];
                   final isSelected = _selectedHero?.id == hero.id;
 
                   return _buildHeroCard(hero, isSelected);

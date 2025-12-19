@@ -258,6 +258,30 @@ class _TestMatchScreenState extends State<TestMatchScreen>
     ).showSnackBar(const SnackBar(content: Text("Cleared opponent's hand.")));
   }
 
+  Future<void> _abilityTestingClearOpponentBoard() async {
+    final match = _matchManager.currentMatch;
+    if (match == null) return;
+
+    setState(() {
+      for (int r = 0; r < 3; r++) {
+        for (int c = 0; c < 3; c++) {
+          final tile = match.board.getTile(r, c);
+          tile.cards.removeWhere((card) => card.ownerId == match.opponent.id);
+          tile.hiddenSpies.removeWhere(
+            (card) => card.ownerId == match.opponent.id,
+          );
+        }
+      }
+      _clearStaging();
+      _clearTYC3Selection();
+    });
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text("Cleared opponent's board.")));
+  }
+
   Future<void> _abilityTestingFillOpponentHandWithSpies() async {
     final match = _matchManager.currentMatch;
     if (match == null) return;
@@ -514,6 +538,32 @@ class _TestMatchScreenState extends State<TestMatchScreen>
 
     _clearTYC3Selection();
     setState(() {});
+  }
+
+  void _endTurnAIPassTYC3() {
+    if (_isOnlineMode || _onlineGameManager != null) return;
+    if (!_matchManager.isPlayerTurn) return;
+    if (_matchManager.currentMatch == null) return;
+    if (_matchManager.currentMatch!.isGameOver) return;
+
+    _turnTimer?.cancel();
+
+    if (_isAttackPreviewOpen && mounted) {
+      Navigator.of(context).pop();
+    }
+
+    _matchManager.endTurnTYC3();
+    FlameAudio.play('turn_pass.mp3');
+    _clearTYC3Selection();
+    _selectedCard = null;
+
+    if (_matchManager.isOpponentTurn &&
+        !_matchManager.currentMatch!.isGameOver) {
+      _matchManager.endTurnTYC3();
+    }
+
+    _startTurnTimer();
+    if (mounted) setState(() {});
   }
 
   void _applyAbilityTestingRelic(ShopItem relic) {
@@ -916,137 +966,154 @@ class _TestMatchScreenState extends State<TestMatchScreen>
       context: context,
       backgroundColor: Colors.grey[900],
       builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.add, color: Colors.white70),
-              title: const Text(
-                'Add cards to hand',
-                style: TextStyle(color: Colors.white),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.add, color: Colors.white70),
+                title: const Text(
+                  'Add cards to hand',
+                  style: TextStyle(color: Colors.white),
+                ),
+                subtitle: const Text(
+                  'Choose specific cards to add',
+                  style: TextStyle(color: Colors.white54),
+                ),
+                onTap: () async {
+                  Navigator.pop(context);
+                  await _showAbilityTestingCardPicker();
+                },
               ),
-              subtitle: const Text(
-                'Choose specific cards to add',
-                style: TextStyle(color: Colors.white54),
+              ListTile(
+                leading: const Icon(Icons.backspace, color: Colors.white70),
+                title: const Text(
+                  'Remove all cards in hand',
+                  style: TextStyle(color: Colors.white),
+                ),
+                subtitle: const Text(
+                  'Clears your hand (testing mode)',
+                  style: TextStyle(color: Colors.white54),
+                ),
+                onTap: () async {
+                  Navigator.pop(context);
+                  await _abilityTestingClearHand();
+                },
               ),
-              onTap: () async {
-                Navigator.pop(context);
-                await _showAbilityTestingCardPicker();
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.backspace, color: Colors.white70),
-              title: const Text(
-                'Remove all cards in hand',
-                style: TextStyle(color: Colors.white),
+              ListTile(
+                leading: const Icon(Icons.person_off, color: Colors.white70),
+                title: const Text(
+                  "Remove all opponent cards in hand",
+                  style: TextStyle(color: Colors.white),
+                ),
+                subtitle: const Text(
+                  "Clears opponent's hand (testing mode)",
+                  style: TextStyle(color: Colors.white54),
+                ),
+                onTap: () async {
+                  Navigator.pop(context);
+                  await _abilityTestingClearOpponentHand();
+                },
               ),
-              subtitle: const Text(
-                'Clears your hand (testing mode)',
-                style: TextStyle(color: Colors.white54),
+              ListTile(
+                leading: const Icon(Icons.delete_sweep, color: Colors.white70),
+                title: const Text(
+                  'Remove all opponent cards from board',
+                  style: TextStyle(color: Colors.white),
+                ),
+                subtitle: const Text(
+                  "Clears opponent's board units (testing mode)",
+                  style: TextStyle(color: Colors.white54),
+                ),
+                onTap: () async {
+                  Navigator.pop(context);
+                  await _abilityTestingClearOpponentBoard();
+                },
               ),
-              onTap: () async {
-                Navigator.pop(context);
-                await _abilityTestingClearHand();
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.person_off, color: Colors.white70),
-              title: const Text(
-                "Remove all opponent cards in hand",
-                style: TextStyle(color: Colors.white),
+              ListTile(
+                leading: const Icon(
+                  Icons.person_add_alt_1,
+                  color: Colors.white70,
+                ),
+                title: const Text(
+                  'Add cards to opponent hand',
+                  style: TextStyle(color: Colors.white),
+                ),
+                subtitle: const Text(
+                  'Choose specific cards to add to opponent',
+                  style: TextStyle(color: Colors.white54),
+                ),
+                onTap: () async {
+                  Navigator.pop(context);
+                  await _showAbilityTestingOpponentCardPicker();
+                },
               ),
-              subtitle: const Text(
-                "Clears opponent's hand (testing mode)",
-                style: TextStyle(color: Colors.white54),
+              ListTile(
+                leading: const Icon(Icons.person_search, color: Colors.white70),
+                title: const Text(
+                  "Fill opponent hand with Spies",
+                  style: TextStyle(color: Colors.white),
+                ),
+                subtitle: const Text(
+                  'Quick setup for Watcher/Spy testing',
+                  style: TextStyle(color: Colors.white54),
+                ),
+                onTap: () async {
+                  Navigator.pop(context);
+                  await _abilityTestingFillOpponentHandWithSpies();
+                },
               ),
-              onTap: () async {
-                Navigator.pop(context);
-                await _abilityTestingClearOpponentHand();
-              },
-            ),
-            ListTile(
-              leading: const Icon(
-                Icons.person_add_alt_1,
-                color: Colors.white70,
+              ListTile(
+                leading: const Icon(Icons.auto_awesome, color: Colors.white70),
+                title: const Text(
+                  'Add relics',
+                  style: TextStyle(color: Colors.white),
+                ),
+                subtitle: const Text(
+                  'Choose specific relics to apply',
+                  style: TextStyle(color: Colors.white54),
+                ),
+                onTap: () async {
+                  Navigator.pop(context);
+                  await _showAbilityTestingRelicPicker();
+                },
               ),
-              title: const Text(
-                'Add cards to opponent hand',
-                style: TextStyle(color: Colors.white),
+              ListTile(
+                leading: const Icon(
+                  Icons.workspace_premium,
+                  color: Colors.white70,
+                ),
+                title: const Text(
+                  'Add legacy buffs',
+                  style: TextStyle(color: Colors.white),
+                ),
+                subtitle: const Text(
+                  'Choose which buffs to apply in this battle',
+                  style: TextStyle(color: Colors.white54),
+                ),
+                onTap: () async {
+                  Navigator.pop(context);
+                  await _showAbilityTestingBuffPicker();
+                },
               ),
-              subtitle: const Text(
-                'Choose specific cards to add to opponent',
-                style: TextStyle(color: Colors.white54),
+              ListTile(
+                leading: const Icon(Icons.list_alt, color: Colors.white70),
+                title: const Text(
+                  'View applied testing modifiers',
+                  style: TextStyle(color: Colors.white),
+                ),
+                subtitle: const Text(
+                  'See which relics/buffs are active in this battle',
+                  style: TextStyle(color: Colors.white54),
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                  _showAbilityTestingAppliedModifiersDialog();
+                },
               ),
-              onTap: () async {
-                Navigator.pop(context);
-                await _showAbilityTestingOpponentCardPicker();
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.person_search, color: Colors.white70),
-              title: const Text(
-                "Fill opponent hand with Spies",
-                style: TextStyle(color: Colors.white),
-              ),
-              subtitle: const Text(
-                'Quick setup for Watcher/Spy testing',
-                style: TextStyle(color: Colors.white54),
-              ),
-              onTap: () async {
-                Navigator.pop(context);
-                await _abilityTestingFillOpponentHandWithSpies();
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.auto_awesome, color: Colors.white70),
-              title: const Text(
-                'Add relics',
-                style: TextStyle(color: Colors.white),
-              ),
-              subtitle: const Text(
-                'Choose specific relics to apply',
-                style: TextStyle(color: Colors.white54),
-              ),
-              onTap: () async {
-                Navigator.pop(context);
-                await _showAbilityTestingRelicPicker();
-              },
-            ),
-            ListTile(
-              leading: const Icon(
-                Icons.workspace_premium,
-                color: Colors.white70,
-              ),
-              title: const Text(
-                'Add legacy buffs',
-                style: TextStyle(color: Colors.white),
-              ),
-              subtitle: const Text(
-                'Choose which buffs to apply in this battle',
-                style: TextStyle(color: Colors.white54),
-              ),
-              onTap: () async {
-                Navigator.pop(context);
-                await _showAbilityTestingBuffPicker();
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.list_alt, color: Colors.white70),
-              title: const Text(
-                'View applied testing modifiers',
-                style: TextStyle(color: Colors.white),
-              ),
-              subtitle: const Text(
-                'See which relics/buffs are active in this battle',
-                style: TextStyle(color: Colors.white54),
-              ),
-              onTap: () {
-                Navigator.pop(context);
-                _showAbilityTestingAppliedModifiersDialog();
-              },
-            ),
-            const SizedBox(height: 8),
-          ],
+              const SizedBox(height: 8),
+            ],
+          ),
         ),
       ),
     );
@@ -7031,8 +7098,14 @@ class _TestMatchScreenState extends State<TestMatchScreen>
 
       // For online mode, use the coordinated settings from host
       // For AI mode, let the match manager randomly decide
-      final String? firstPlayerOverride = _isOnlineMode ? _firstPlayerId : null;
+      final String? firstPlayerOverride = _isOnlineMode
+          ? _firstPlayerId
+          : (_isAbilityTestingMode ? id : null);
       debugPrint('First player override: $firstPlayerOverride');
+
+      _matchManager.maxCardsThisTurnOverride = _isAbilityTestingMode
+          ? 10
+          : null;
 
       // For online mode, use predefined board setup from host
       // Player 2 needs to mirror the terrain grid (swap rows 0 and 2)
@@ -7938,6 +8011,18 @@ class _TestMatchScreenState extends State<TestMatchScreen>
                   ? Builder(
                       builder: (context) {
                         final actionButton = _buildTYC3ActionButton(match);
+                        final aiPassButton =
+                            (_matchManager.isPlayerTurn &&
+                                !_isOnlineMode &&
+                                _onlineGameManager == null)
+                            ? FloatingActionButton.small(
+                                onPressed: _endTurnAIPassTYC3,
+                                tooltip: 'End Turn (AI Pass)',
+                                backgroundColor: Colors.orange[700],
+                                heroTag: 'endTurnAiPass',
+                                child: const Icon(Icons.pause, size: 22),
+                              )
+                            : null;
                         return Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -7951,6 +8036,10 @@ class _TestMatchScreenState extends State<TestMatchScreen>
                             if (actionButton != null) ...[
                               const SizedBox(height: 10),
                               actionButton,
+                            ],
+                            if (aiPassButton != null) ...[
+                              const SizedBox(height: 10),
+                              aiPassButton,
                             ],
                           ],
                         );
@@ -11404,7 +11493,11 @@ class _TestMatchScreenState extends State<TestMatchScreen>
   Widget _buildHand(player) {
     final match = _matchManager.currentMatch;
     final canPlayMoreCardsThisTurn =
-        match != null && match.isPlayerTurn && match.canPlaceMoreCards;
+        match != null &&
+        match.isPlayerTurn &&
+        (_isAbilityTestingMode
+            ? _matchManager.canPlayMoreCards
+            : match.canPlaceMoreCards);
 
     // Calculate available cards (not yet staged)
     final stagedCardSet = _stagedCards.values.expand((list) => list).toSet();

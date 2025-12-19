@@ -81,7 +81,7 @@ This document captures the **implemented and intended logic** of the game, mappe
 **Fields:**
 - `id`, `name`, `description`.
 - `terrainAffinities` (list of 1–2 terrain types, e.g., `['Woods', 'Lake']`).
-- `abilityType` (enum: `drawCards`, `damageBoost`, `healUnits`).
+- `abilityType` (enum: `drawCards`, `damageBoost`, `healUnits`, `directBaseDamage`, `refillHand`).
 - `abilityDescription` (player-facing text).
 - `abilityUsed` (bool, tracks if ability has been used this match).
 
@@ -89,6 +89,8 @@ This document captures the **implemented and intended logic** of the game, mappe
 - `drawCards`: Draw 2 extra cards this turn.
 - `damageBoost`: Give all your units +1 damage this turn (applied during combat).
 - `healUnits`: Heal all surviving units by 3 HP.
+- `directBaseDamage`: Deal direct damage to the enemy base.
+- `refillHand`: Refill hand with starting deck cards (ability testing).
 
 **Usage rules:**
 - Hero ability can only be used **once per match**.

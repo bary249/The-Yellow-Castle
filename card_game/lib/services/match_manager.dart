@@ -30,6 +30,8 @@ class MatchManager {
 
   MatchState? get currentMatch => _currentMatch;
 
+  int? maxCardsThisTurnOverride;
+
   /// Replace the current match state (for online sync)
   /// This completely replaces the local state with the received state
   /// IMPORTANT: Preserves local player's deck and hand since opponent doesn't know them
@@ -256,40 +258,132 @@ class MatchManager {
     ].where((c) => c.isAlive && c.ownerId == enemyId);
   }
 
-  String? _getMoveLockReason(GameCard card, int row, int col) {
-    if (card.ownerId == null) return null;
+  String _ownerLabel(String? ownerId) {
+    if (_currentMatch == null) return 'Unknown';
+    if (ownerId == _currentMatch!.player.id) return 'Player';
+    if (ownerId == _currentMatch!.opponent.id) return 'Opponent';
+    return 'Unknown';
+  }
 
-    final sources = _enemyCardsBehindTileForOwner(
-      ownerId: card.ownerId!,
-      row: row,
-      col: col,
-    );
-
-    if (sources.any((c) => c.abilities.contains('paralyze'))) {
-      return 'Paralyzed - cannot move';
-    }
-    if (sources.any((c) => c.abilities.contains('glue'))) {
-      return 'Glued - cannot move';
+  ({int row, int col})? _findCardPositionById(String cardId) {
+    if (_currentMatch == null) return null;
+    for (int r = 0; r < 3; r++) {
+      for (int c = 0; c < 3; c++) {
+        final tile = _currentMatch!.board.getTile(r, c);
+        if (tile.cards.any((x) => x.id == cardId) ||
+            tile.hiddenSpies.any((x) => x.id == cardId)) {
+          return (row: r, col: c);
+        }
+      }
     }
     return null;
   }
 
-  String? _getAttackLockReason(GameCard card, int row, int col) {
+  String _formatCardRef(GameCard card) {
+    final pos = _findCardPositionById(card.id);
+    if (pos == null) return card.name;
+    return '${card.name}(${pos.row},${pos.col})';
+  }
+
+  String _formatSources(List<GameCard> sources) {
+    if (sources.isEmpty) return '';
+    return sources.map(_formatCardRef).join(', ');
+  }
+
+  String? getMoveLockReasonTYC3(GameCard card, int row, int col) {
+    return _getMoveLockReason(card, row, col);
+  }
+
+  String? getAttackLockReasonTYC3(GameCard card, int row, int col) {
+    return _getAttackLockReason(card, row, col);
+  }
+
+  String? getMoveLockDebugTYC3(GameCard card, int row, int col) {
+    final details = _getMoveLockDetails(card, row, col);
+    if (details == null) return null;
+    final sources = _formatSources(details.sources);
+    return '${details.reason}${sources.isNotEmpty ? " (blocked by: $sources)" : ""}';
+  }
+
+  String? getAttackLockDebugTYC3(GameCard card, int row, int col) {
+    final details = _getAttackLockDetails(card, row, col);
+    if (details == null) return null;
+    final sources = _formatSources(details.sources);
+    return '${details.reason}${sources.isNotEmpty ? " (blocked by: $sources)" : ""}';
+  }
+
+  ({String reason, List<GameCard> sources, String ability})?
+  _getMoveLockDetails(GameCard card, int row, int col) {
+    if (_currentMatch == null) return null;
     if (card.ownerId == null) return null;
 
     final sources = _enemyCardsBehindTileForOwner(
       ownerId: card.ownerId!,
       row: row,
       col: col,
-    );
+    ).toList();
 
-    if (sources.any((c) => c.abilities.contains('paralyze'))) {
-      return 'Paralyzed - cannot attack';
+    final paralyzers = sources
+        .where((c) => c.abilities.contains('paralyze'))
+        .toList();
+    if (paralyzers.isNotEmpty) {
+      return (
+        reason: 'Paralyzed - cannot move',
+        sources: paralyzers,
+        ability: 'paralyze',
+      );
     }
-    if (sources.any((c) => c.abilities.contains('silence'))) {
-      return 'Silenced - cannot attack';
+
+    final gluers = sources.where((c) => c.abilities.contains('glue')).toList();
+    if (gluers.isNotEmpty) {
+      return (reason: 'Glued - cannot move', sources: gluers, ability: 'glue');
     }
+
     return null;
+  }
+
+  ({String reason, List<GameCard> sources, String ability})?
+  _getAttackLockDetails(GameCard card, int row, int col) {
+    if (_currentMatch == null) return null;
+    if (card.ownerId == null) return null;
+
+    final sources = _enemyCardsBehindTileForOwner(
+      ownerId: card.ownerId!,
+      row: row,
+      col: col,
+    ).toList();
+
+    final paralyzers = sources
+        .where((c) => c.abilities.contains('paralyze'))
+        .toList();
+    if (paralyzers.isNotEmpty) {
+      return (
+        reason: 'Paralyzed - cannot attack',
+        sources: paralyzers,
+        ability: 'paralyze',
+      );
+    }
+
+    final silencers = sources
+        .where((c) => c.abilities.contains('silence'))
+        .toList();
+    if (silencers.isNotEmpty) {
+      return (
+        reason: 'Silenced - cannot attack',
+        sources: silencers,
+        ability: 'silence',
+      );
+    }
+
+    return null;
+  }
+
+  String? _getMoveLockReason(GameCard card, int row, int col) {
+    return _getMoveLockDetails(card, row, col)?.reason;
+  }
+
+  String? _getAttackLockReason(GameCard card, int row, int col) {
+    return _getAttackLockDetails(card, row, col)?.reason;
   }
 
   void _applyFearOnEntry({
@@ -315,20 +409,27 @@ class MatchManager {
         );
 
     bool applied = false;
+    final triggering = <GameCard>[];
     for (final fearCard in fearSources) {
       if (fearCard.fearSeenEnemyIds.contains(enteringCard.id)) continue;
       fearCard.fearSeenEnemyIds.add(enteringCard.id);
       applied = true;
+      triggering.add(fearCard);
     }
 
     if (applied) {
       enteringCard.currentAP = 0;
-      _log('😱 Fear drains AP: ${enteringCard.name} is reduced to 0 AP');
+      final owner = _ownerLabel(enteringCard.ownerId);
+      final sourceNames = triggering.map((c) => c.name).join(', ');
+      _log(
+        '😱 [$owner] Fear drains AP: ${enteringCard.name} is reduced to 0 AP (triggered by: $sourceNames)',
+      );
     }
   }
 
   void _applyPushBackAfterAttack({
     required GameCard attacker,
+    required GameCard target,
     required int targetRow,
     required int targetCol,
   }) {
@@ -337,92 +438,80 @@ class MatchManager {
     if (attacker.ownerId == null) return;
     if (!attacker.abilities.contains('push_back')) return;
 
+    if (!target.isAlive) return;
+    if (target.ownerId == null) return;
+    if (target.ownerId == attacker.ownerId) return;
+
     final targetTile = _currentMatch!.board.getTile(targetRow, targetCol);
-    final candidates =
-        <GameCard>[...targetTile.cards, ...targetTile.hiddenSpies]
-            .where(
-              (c) =>
-                  c.isAlive &&
-                  c.ownerId != null &&
-                  c.ownerId != attacker.ownerId,
-            )
-            .toList();
+    // Only push the primary attacked target (not other units sharing the tile).
+    final targetStillOnTile =
+        targetTile.cards.any((c) => c.id == target.id) ||
+        targetTile.hiddenSpies.any((c) => c.id == target.id);
+    if (!targetStillOnTile) return;
 
-    if (candidates.isEmpty) return;
+    final pushRow = targetRow - _forwardDirForOwnerId(target.ownerId!);
+    final pushCol = targetCol;
+    if (pushRow < 0 || pushRow > 2) return;
 
-    candidates.sort((a, b) => a.id.compareTo(b.id));
+    final destTile = _currentMatch!.board.getTile(pushRow, pushCol);
 
-    for (final pushed in candidates) {
-      if (!pushed.isAlive) continue;
-      if (pushed.ownerId == null) continue;
+    final canPush = _isSpyCard(target)
+        ? (_tileHasEnemyCardsForOwner(destTile, target.ownerId!) ||
+              _canAddFriendlyOccupant(destTile, target.ownerId!))
+        : (destTile.canAddCard &&
+              !_tileHasEnemyCardsForOwner(destTile, target.ownerId!));
 
-      final pushRow = targetRow - _forwardDirForOwnerId(pushed.ownerId!);
-      final pushCol = targetCol;
-      if (pushRow < 0 || pushRow > 2) continue;
+    if (!canPush) return;
 
-      final destTile = _currentMatch!.board.getTile(pushRow, pushCol);
+    _applyTerrainAffinityOnExit(card: target, fromTerrain: targetTile.terrain);
 
-      final canPush = _isSpyCard(pushed)
-          ? (_tileHasEnemyCardsForOwner(destTile, pushed.ownerId!) ||
-                _canAddFriendlyOccupant(destTile, pushed.ownerId!))
-          : (destTile.canAddCard &&
-                !_tileHasEnemyCardsForOwner(destTile, pushed.ownerId!));
+    _removeCardFromTile(targetTile, target);
+    _addCardToTile(destTile, target);
+    _log(
+      '↩️ Push Back: ${target.name} pushed ($targetRow,$targetCol) → ($pushRow,$pushCol)',
+    );
 
-      if (!canPush) continue;
+    _triggerTrapIfPresent(target, pushRow, pushCol);
+    if (!target.isAlive) return;
 
-      _applyTerrainAffinityOnExit(
-        card: pushed,
-        fromTerrain: targetTile.terrain,
-      );
+    _triggerSpyOnEnemyBaseEntry(
+      enteringCard: target,
+      fromRow: targetRow,
+      fromCol: targetCol,
+      toRow: pushRow,
+      toCol: pushCol,
+    );
+    if (!target.isAlive) return;
 
-      _removeCardFromTile(targetTile, pushed);
-      _addCardToTile(destTile, pushed);
-      _log(
-        '↩️ Push Back: ${pushed.name} pushed ($targetRow,$targetCol) → ($pushRow,$pushCol)',
-      );
+    final finalPos = _applyBurningOnEntry(
+      enteringCard: target,
+      fromRow: targetRow,
+      fromCol: targetCol,
+      toRow: pushRow,
+      toCol: pushCol,
+    );
+    if (!target.isAlive) return;
 
-      _triggerTrapIfPresent(pushed, pushRow, pushCol);
-      if (!pushed.isAlive) continue;
+    _applyFearOnEntry(
+      enteringCard: target,
+      row: finalPos.row,
+      col: finalPos.col,
+    );
 
-      _triggerSpyOnEnemyBaseEntry(
-        enteringCard: pushed,
-        fromRow: targetRow,
-        fromCol: targetCol,
-        toRow: pushRow,
-        toCol: pushCol,
-      );
-      if (!pushed.isAlive) continue;
+    _applyMarshDrainOnEntry(
+      enteringCard: target,
+      row: finalPos.row,
+      col: finalPos.col,
+    );
 
-      final finalPos = _applyBurningOnEntry(
-        enteringCard: pushed,
-        fromRow: targetRow,
-        fromCol: targetCol,
-        toRow: pushRow,
-        toCol: pushCol,
-      );
-      if (!pushed.isAlive) continue;
+    _applyTerrainAffinityOnEntry(
+      card: target,
+      row: finalPos.row,
+      col: finalPos.col,
+    );
 
-      _applyFearOnEntry(
-        enteringCard: pushed,
-        row: finalPos.row,
-        col: finalPos.col,
-      );
-
-      _applyMarshDrainOnEntry(
-        enteringCard: pushed,
-        row: finalPos.row,
-        col: finalPos.col,
-      );
-
-      _applyTerrainAffinityOnEntry(
-        card: pushed,
-        row: finalPos.row,
-        col: finalPos.col,
-      );
-
-      _checkRelicPickup(finalPos.row, finalPos.col, pushed.ownerId!);
-      _updatePermanentVisibility(finalPos.row, finalPos.col, pushed.ownerId!);
-    }
+    _checkRelicPickup(finalPos.row, finalPos.col, target.ownerId!);
+    _updatePermanentVisibility(finalPos.row, finalPos.col, target.ownerId!);
   }
 
   bool _isWatcherCard(GameCard card) => card.abilities.contains('watcher');
@@ -2466,6 +2555,7 @@ class MatchManager {
   /// All other turns = 2 cards
   int get maxCardsThisTurn {
     if (_currentMatch == null) return 0;
+    if (maxCardsThisTurnOverride != null) return maxCardsThisTurnOverride!;
     return _currentMatch!.isFirstTurn ? 1 : 2;
   }
 
@@ -3207,13 +3297,37 @@ class MatchManager {
     int toRow,
     int toCol,
   ) {
-    if (!canMoveCard(card, fromRow, fromCol, toRow, toCol)) return false;
+    if (_currentMatch == null) return false;
+    if (!useTurnBasedSystem) return false;
+
+    final err = getMoveError(card, fromRow, fromCol, toRow, toCol);
+    if (err != null) {
+      final owner = _ownerLabel(card.ownerId);
+      final lockDetails = _getMoveLockDetails(card, fromRow, fromCol);
+      if (lockDetails != null) {
+        final sources = _formatSources(lockDetails.sources);
+        _log(
+          '⛔ [$owner] ${card.name} cannot move ($fromRow,$fromCol) → ($toRow,$toCol): ${lockDetails.reason}${sources.isNotEmpty ? " (blocked by: $sources)" : ""}',
+        );
+      } else {
+        _log(
+          '⛔ [$owner] ${card.name} cannot move ($fromRow,$fromCol) → ($toRow,$toCol): $err',
+        );
+      }
+      return false;
+    }
 
     final fromTile = _currentMatch!.board.getTile(fromRow, fromCol);
     final toTile = _currentMatch!.board.getTile(toRow, toCol);
 
     // Spend AP
-    if (!card.spendMoveAP()) return false;
+    if (!card.spendMoveAP()) {
+      final owner = _ownerLabel(card.ownerId);
+      _log(
+        '⛔ [$owner] ${card.name} cannot move: not enough AP (AP ${card.currentAP}/${card.maxAP})',
+      );
+      return false;
+    }
 
     _applyTerrainAffinityOnExit(card: card, fromTerrain: fromTile.terrain);
 
@@ -3573,9 +3687,17 @@ class MatchManager {
       return null;
     }
 
-    final lockReason = _getAttackLockReason(attacker, attackerRow, attackerCol);
-    if (lockReason != null) {
-      _log('❌ Attack failed: $lockReason');
+    final lockDetails = _getAttackLockDetails(
+      attacker,
+      attackerRow,
+      attackerCol,
+    );
+    if (lockDetails != null) {
+      final owner = _ownerLabel(attacker.ownerId);
+      final sources = _formatSources(lockDetails.sources);
+      _log(
+        '⛔ [$owner] ${attacker.name} cannot attack: ${lockDetails.reason}${sources.isNotEmpty ? " (blocked by: $sources)" : ""}',
+      );
       return null;
     }
 
@@ -3748,6 +3870,7 @@ class MatchManager {
 
     _applyPushBackAfterAttack(
       attacker: attacker,
+      target: target,
       targetRow: targetRow,
       targetCol: targetCol,
     );
@@ -4101,9 +4224,17 @@ class MatchManager {
       return 0;
     }
 
-    final lockReason = _getAttackLockReason(attacker, attackerRow, attackerCol);
-    if (lockReason != null) {
-      _log('❌ Attack failed: $lockReason');
+    final lockDetails = _getAttackLockDetails(
+      attacker,
+      attackerRow,
+      attackerCol,
+    );
+    if (lockDetails != null) {
+      final owner = _ownerLabel(attacker.ownerId);
+      final sources = _formatSources(lockDetails.sources);
+      _log(
+        '⛔ [$owner] ${attacker.name} cannot attack base: ${lockDetails.reason}${sources.isNotEmpty ? " (blocked by: $sources)" : ""}',
+      );
       return 0;
     }
 

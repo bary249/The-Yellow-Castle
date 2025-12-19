@@ -48,6 +48,8 @@ class GameCard {
   /// Applies once per match per unit.
   bool barrierUsed = false;
 
+  final Map<String, int> abilityCharges = <String, int>{};
+
   /// Fear runtime: tracks which enemy unit IDs have already been affected by this
   /// specific fear source (once per enemy unit per fear-card).
   final Set<String> fearSeenEnemyIds = <String>{};
@@ -197,6 +199,7 @@ class GameCard {
     copy.currentAP = currentAP;
     copy.ownerId = ownerId;
     copy.barrierUsed = barrierUsed;
+    copy.abilityCharges.addAll(abilityCharges);
     copy.fearSeenEnemyIds.addAll(fearSeenEnemyIds);
     copy.terrainAffinityRanged = terrainAffinityRanged;
     copy.terrainAffinityDamageBonus = terrainAffinityDamageBonus;
@@ -230,10 +233,16 @@ class GameCard {
     lastDamageAbsorbedByBarrier = false;
 
     // Barrier negates the next incoming damage from any source.
-    if (amount > 0 && abilities.contains('barrier') && !barrierUsed) {
-      barrierUsed = true;
-      lastDamageAbsorbedByBarrier = true;
-      return false;
+    if (amount > 0 && abilities.contains('barrier')) {
+      final int currentCharges = abilityCharges.containsKey('barrier')
+          ? (abilityCharges['barrier'] ?? 0)
+          : (barrierUsed ? 0 : 1);
+      if (currentCharges > 0) {
+        abilityCharges['barrier'] = currentCharges - 1;
+        barrierUsed = (abilityCharges['barrier'] ?? 0) <= 0;
+        lastDamageAbsorbedByBarrier = true;
+        return false;
+      }
     }
 
     // Decoys die from any damage
@@ -322,6 +331,7 @@ class GameCard {
     'ownerId': ownerId,
     'isDecoy': isDecoy,
     'barrierUsed': barrierUsed,
+    'abilityCharges': abilityCharges,
     'fearSeenEnemyIds': fearSeenEnemyIds.toList(),
     'terrainAffinityRanged': terrainAffinityRanged,
     'terrainAffinityDamageBonus': terrainAffinityDamageBonus,
@@ -369,6 +379,15 @@ class GameCard {
     card.currentAP = json['currentAP'] as int? ?? 0;
     card.ownerId = json['ownerId'] as String?;
     card.barrierUsed = json['barrierUsed'] as bool? ?? false;
+    final charges = json['abilityCharges'] as Map<String, dynamic>?;
+    if (charges != null) {
+      charges.forEach((k, v) {
+        final parsed = v is int ? v : int.tryParse(v.toString());
+        if (parsed != null) {
+          card.abilityCharges[k] = parsed;
+        }
+      });
+    }
     final fearSeen = json['fearSeenEnemyIds'] as List<dynamic>?;
     if (fearSeen != null) {
       card.fearSeenEnemyIds.addAll(fearSeen.map((e) => e.toString()));

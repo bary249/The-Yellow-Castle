@@ -53,7 +53,7 @@ New ability - enhancer - It's like the medic ability with the heal, only it doub
 
 New Ability - Switcher - A very special ability, which targets 2 ally cards on the same tile, and swaps their abilities between one and the other, then self destructs.
 
-
+New Ability - resetter - A card that refreshes the ability of cards in the same tile, it needs to target an ally unit, and then have a RIP chip. the targeted ally unit , if it has an ability that is cnosumable like paralyze or shaco etc, will gain another chrage to that ability.
 
 
 

@@ -1350,6 +1350,7 @@ Used to test look and feel and UX of a fully rendered game page.
 - [x] **Two-Side Attacker** (core + ability-testing card + basic keyword UI)
 - [x] **Enhancer** (core + ability-testing card + basic keyword UI)
 - [x] **Switcher** (core + serialization + ability-testing card + basic keyword UI)
+- [x] **Ability Testing: Tester hero + Specials deck** (starter deck list + refill-hand hero ability)
 
 #### 17.5.2 Follow-ups (TYC3 Abilities)
 - [ ] Balance pass for the new ability cards (stats/cost/rarity)

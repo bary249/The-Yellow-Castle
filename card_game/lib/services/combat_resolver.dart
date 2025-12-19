@@ -926,7 +926,9 @@ class CombatResolver {
       final effectiveShieldBonus = baseShieldBonus + targetLaneShieldBonus;
       final totalShield = targetShield + effectiveShieldBonus;
       final damageBeforeShield = damage;
-      damage = (damage - totalShield).clamp(0, damage);
+      if (damage < 0) damage = 0;
+      final reducedDamage = damage - totalShield;
+      damage = reducedDamage < 0 ? 0 : reducedDamage;
       if (damageBeforeShield > 0 && totalShield > 0) {
         final appliedTargetShield = targetShield
             .clamp(0, damageBeforeShield)
@@ -1049,11 +1051,10 @@ class CombatResolver {
           : _opponentLaneShieldBonus;
       final effectiveShieldBonus = attackerShieldBonus + laneShieldBonus;
       final retaliationBeforeShield = retaliationDamage;
-      retaliationDamage =
-          (retaliationDamage - attackerShield - effectiveShieldBonus).clamp(
-            0,
-            retaliationDamage,
-          );
+      if (retaliationDamage < 0) retaliationDamage = 0;
+      final reducedRetaliation =
+          retaliationDamage - attackerShield - effectiveShieldBonus;
+      retaliationDamage = reducedRetaliation < 0 ? 0 : reducedRetaliation;
       if (retaliationBeforeShield > 0) {
         final appliedAttackerShield = attackerShield
             .clamp(0, retaliationBeforeShield)
@@ -1273,7 +1274,9 @@ class CombatResolver {
     final effectiveShieldBonus = baseShieldBonus + targetLaneShieldBonus;
     final totalShield = targetShield + effectiveShieldBonus;
     final damageBeforeShield = damage;
-    damage = (damage - totalShield).clamp(0, damage);
+    if (damage < 0) damage = 0;
+    final reducedDamage = damage - totalShield;
+    damage = reducedDamage < 0 ? 0 : reducedDamage;
     if (damageBeforeShield > 0 && totalShield > 0) {
       final appliedTargetShield = targetShield
           .clamp(0, damageBeforeShield)
@@ -1360,11 +1363,10 @@ class CombatResolver {
           : _opponentLaneShieldBonus;
       final effectiveShieldBonus = attackerShieldBonus + laneShieldBonus;
       final retaliationBeforeShield = retaliationDamage;
-      retaliationDamage =
-          (retaliationDamage - attackerShield - effectiveShieldBonus).clamp(
-            0,
-            retaliationDamage,
-          );
+      if (retaliationDamage < 0) retaliationDamage = 0;
+      final reducedRetaliation =
+          retaliationDamage - attackerShield - effectiveShieldBonus;
+      retaliationDamage = reducedRetaliation < 0 ? 0 : reducedRetaliation;
       if (retaliationBeforeShield > 0) {
         final appliedAttackerShield = attackerShield
             .clamp(0, retaliationBeforeShield)

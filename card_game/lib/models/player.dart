@@ -180,6 +180,9 @@ class Player {
     for (final cardJson in handData) {
       player.hand.add(GameCard.fromJson(cardJson as Map<String, dynamic>));
     }
+
+    // Snapshot the starting deck for refill-style hero abilities.
+    player.startingDeck = player.deck.cards.map((c) => c.copy()).toList();
     return player;
   }
 
@@ -205,6 +208,8 @@ class Player {
     for (final card in hand) {
       newPlayer.hand.add(card.clone());
     }
+
+    newPlayer.startingDeck = startingDeck?.map((c) => c.clone()).toList();
 
     return newPlayer;
   }

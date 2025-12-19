@@ -180,6 +180,22 @@ class SimpleAI {
 
       if (matchManager.moveCardTYC3(card, row, col, targetRow, col)) {
         await logAndWait('Moved ${card.name} to row $targetRow');
+      } else {
+        final lock = matchManager.getMoveLockDebugTYC3(card, row, col);
+        if (lock != null) {
+          await logAndWait('Could not move ${card.name}: $lock');
+        } else {
+          final reason = matchManager.getMoveError(
+            card,
+            row,
+            col,
+            targetRow,
+            col,
+          );
+          if (reason != null) {
+            await logAndWait('Could not move ${card.name}: $reason');
+          }
+        }
       }
     }
 
@@ -243,9 +259,17 @@ class SimpleAI {
                 }
                 await logAndWait('Attacked ${target.name} (${result.message})');
               }
+              if (result == null) {
+                await logAndWait('Attack attempt failed for ${card.name}');
+              }
               break;
             }
           }
+        }
+      } else {
+        final lock = matchManager.getAttackLockDebugTYC3(card, row, col);
+        if (lock != null) {
+          await logAndWait('${card.name} cannot attack: $lock');
         }
       }
 
@@ -260,6 +284,8 @@ class SimpleAI {
             }
             await logAndWait('Attacked base for $dmg damage');
           }
+        } else {
+          // Out of range (not an ability lock)
         }
       }
     }
