@@ -155,6 +155,67 @@ class _TestMatchScreenState extends State<TestMatchScreen>
     return false;
   }
 
+  static const Set<String> _chargeBasedAbilities = <String>{
+    'fear',
+    'paralyze',
+    'glue',
+    'silence',
+    'shaco',
+    'barrier',
+    'poisoner',
+  };
+
+  bool _isChargeBasedAbility(String ability) {
+    return _chargeBasedAbilities.contains(ability) ||
+        ability.startsWith('ignite_');
+  }
+
+  bool _hasChargeBasedAbility(GameCard card) {
+    for (final a in card.abilities) {
+      if (_isChargeBasedAbility(a)) return true;
+    }
+    return false;
+  }
+
+  int _totalAbilityChargesRemaining(GameCard card) {
+    int total = 0;
+    for (final ability in card.abilities) {
+      if (!_isChargeBasedAbility(ability)) continue;
+      if (ability == 'barrier') {
+        final current = card.abilityCharges.containsKey('barrier')
+            ? (card.abilityCharges['barrier'] ?? 0)
+            : (card.barrierUsed ? 0 : 1);
+        total += current;
+        continue;
+      }
+      total += card.abilityCharges.containsKey(ability)
+          ? (card.abilityCharges[ability] ?? 0)
+          : 1;
+    }
+    return total;
+  }
+
+  bool _isPoisoned(GameCard card) {
+    return card.poisonTicksRemaining > 0;
+  }
+
+  String _abilityChargeSuffixForCard(GameCard card, String ability) {
+    if (!_isChargeBasedAbility(ability)) return '';
+
+    final int charges;
+    if (ability == 'barrier') {
+      charges = card.abilityCharges.containsKey('barrier')
+          ? (card.abilityCharges['barrier'] ?? 0)
+          : (card.barrierUsed ? 0 : 1);
+    } else {
+      charges = card.abilityCharges.containsKey(ability)
+          ? (card.abilityCharges[ability] ?? 0)
+          : 1;
+    }
+
+    return ' ($charges)';
+  }
+
   bool get _isAbilityTestingMode => widget.abilityTestingMode && !_isOnlineMode;
 
   GameCard _createAbilityTestingCardInstance(
@@ -179,6 +240,7 @@ class _TestMatchScreenState extends State<TestMatchScreen>
     );
 
     instance.currentHealth = newHealth;
+    _matchManager.initializeAbilityCharges(instance);
     return instance;
   }
 
@@ -224,6 +286,12 @@ class _TestMatchScreenState extends State<TestMatchScreen>
     cards.add(twoSideAttackerUnit(0));
     cards.add(enhancerUnit(0));
     cards.add(switcherUnit(0));
+    cards.add(resetterUnit(0));
+    cards.add(converterUnit(0));
+    cards.add(poisonerUnit(0));
+    cards.add(diagonalAttackerUnit(0));
+    cards.add(apBoosterUnit(0));
+    cards.add(laneSweeperUnit(0));
 
     return cards;
   }
@@ -535,6 +603,50 @@ class _TestMatchScreenState extends State<TestMatchScreen>
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Ignited tile ($targetRow,$targetCol)')),
     );
+
+    _clearTYC3Selection();
+    setState(() {});
+  }
+
+  void _resetTargetTYC3(GameCard target, int targetRow, int targetCol) {
+    if (_selectedCardForAction == null ||
+        _selectedCardRow == null ||
+        _selectedCardCol == null) {
+      return;
+    }
+
+    final resetter = _selectedCardForAction!;
+    final resetterRow = _selectedCardRow!;
+    final resetterCol = _selectedCardCol!;
+
+    final result = _matchManager.resetCardTYC3(
+      resetter,
+      target,
+      resetterRow,
+      resetterCol,
+      targetRow,
+      targetCol,
+    );
+
+    if (result != null) {
+      _syncOnlineState();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${resetter.name} refreshed ${target.name}! (${resetter.name} self-destructed)',
+          ),
+          backgroundColor: Colors.purple,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Reset failed'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
 
     _clearTYC3Selection();
     setState(() {});
@@ -2157,6 +2269,10 @@ class _TestMatchScreenState extends State<TestMatchScreen>
     return card.abilities.contains('switcher');
   }
 
+  bool _isResetter(GameCard card) {
+    return card.abilities.contains('resetter');
+  }
+
   bool _isValidTargetCard(GameCard card) {
     return _validTargets.any((t) => t.id == card.id);
   }
@@ -2295,6 +2411,13 @@ class _TestMatchScreenState extends State<TestMatchScreen>
                 uniqueTargets.add(pair.target2);
               }
               _validTargets = uniqueTargets.toList();
+            } else if (_isResetter(card)) {
+              final resetTargets = _matchManager.getReachableResetTargets(
+                card,
+                row,
+                col,
+              );
+              _validTargets = resetTargets.map((t) => t.target).toList();
             } else {
               final reachableTargets = _matchManager.getReachableAttackTargets(
                 card,
@@ -2585,8 +2708,6 @@ class _TestMatchScreenState extends State<TestMatchScreen>
   /// TYC3: Perform switch on targets (Switcher ability)
   /// For simplicity, we'll use a two-tap system: first tap selects first target, second tap selects second
   GameCard? _switcherFirstTarget;
-  int? _switcherFirstTargetRow;
-  int? _switcherFirstTargetCol;
 
   void _switchTargetTYC3(GameCard target, int targetRow, int targetCol) {
     if (_selectedCardForAction == null ||
@@ -2597,8 +2718,6 @@ class _TestMatchScreenState extends State<TestMatchScreen>
     // If no first target selected yet, store this as first target
     if (_switcherFirstTarget == null) {
       _switcherFirstTarget = target;
-      _switcherFirstTargetRow = targetRow;
-      _switcherFirstTargetCol = targetCol;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -2615,8 +2734,6 @@ class _TestMatchScreenState extends State<TestMatchScreen>
     // If same target tapped again, deselect
     if (_switcherFirstTarget!.id == target.id) {
       _switcherFirstTarget = null;
-      _switcherFirstTargetRow = null;
-      _switcherFirstTargetCol = null;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('First target deselected.'),
@@ -2662,8 +2779,6 @@ class _TestMatchScreenState extends State<TestMatchScreen>
 
     // Clear switcher state
     _switcherFirstTarget = null;
-    _switcherFirstTargetRow = null;
-    _switcherFirstTargetCol = null;
     _clearTYC3Selection();
     setState(() {});
   }
@@ -4875,6 +4990,8 @@ class _TestMatchScreenState extends State<TestMatchScreen>
         _enhanceTargetTYC3(card, row, col);
       } else if (_isSwitcher(_selectedCardForAction!)) {
         _switchTargetTYC3(card, row, col);
+      } else if (_isResetter(_selectedCardForAction!)) {
+        _resetTargetTYC3(card, row, col);
       } else {
         _attackTargetTYC3(card, row, col);
       }
@@ -4939,6 +5056,13 @@ class _TestMatchScreenState extends State<TestMatchScreen>
               uniqueTargets.add(pair.target2);
             }
             _validTargets = uniqueTargets.toList();
+          } else if (_isResetter(card)) {
+            final resetTargets = _matchManager.getReachableResetTargets(
+              card,
+              row,
+              col,
+            );
+            _validTargets = resetTargets.map((t) => t.target).toList();
           } else {
             final reachableTargets = _matchManager.getReachableAttackTargets(
               card,
@@ -5658,6 +5782,21 @@ class _TestMatchScreenState extends State<TestMatchScreen>
     if (ability == 'switcher') {
       return 'Target 2 friendly units on the same tile to swap their abilities, then self-destruct.';
     }
+    if (ability == 'resetter') {
+      return 'Target a friendly unit on the same tile to refresh its consumable ability charges (+1 each), then self-destruct.';
+    }
+    if (ability == 'converter') {
+      return 'Target an adjacent tile to convert its terrain to match this unit\'s chosen conversion.';
+    }
+    if (ability == 'diagonal_attack') {
+      return 'Can attack enemies on diagonally adjacent tiles (distance 1).';
+    }
+    if (ability == 'ap_booster') {
+      return 'Grants +1 AP to a friendly unit on the same tile (then self-destructs).';
+    }
+    if (ability == 'lane_sweeper') {
+      return 'Attacks all enemies in this lane (splash across tiles).';
+    }
     if (ability == 'silence') {
       return 'Enemy units directly in front of this unit cannot attack while it remains behind them.';
     }
@@ -5672,6 +5811,9 @@ class _TestMatchScreenState extends State<TestMatchScreen>
     }
     if (ability == 'fear') {
       return 'The first time an enemy unit enters the tile directly in front of this unit, that unit\'s AP is set to 0.';
+    }
+    if (ability == 'poisoner') {
+      return 'On hit, consumes 1 charge to poison the target for 2 turns (1 damage at the start of its owner\'s turn).';
     }
     if (ability.startsWith('motivate_')) {
       final value = ability.split('_').last;
@@ -5767,10 +5909,11 @@ class _TestMatchScreenState extends State<TestMatchScreen>
   }
 
   /// Build a row showing ability name and description
-  Widget _buildAbilityRow(String ability) {
+  Widget _buildAbilityRow(GameCard card, String ability) {
     final icon = _abilityIconData(ability);
     final description = _abilityDescription(ability);
-    final displayName = _abilityDisplayName(ability);
+    final displayName =
+        '${_abilityDisplayName(ability)}${_abilityChargeSuffixForCard(card, ability)}';
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
@@ -5982,6 +6125,24 @@ class _TestMatchScreenState extends State<TestMatchScreen>
                     ),
                   ],
                 ),
+                if (_isPoisoned(card)) ...[
+                  const SizedBox(height: 6),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.science, size: 14, color: Colors.green[800]),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Poisoned: ${card.poisonTicksRemaining}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.green[900],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
                 const SizedBox(height: 4),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -6028,7 +6189,7 @@ class _TestMatchScreenState extends State<TestMatchScreen>
                     style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 6),
-                  ...card.abilities.map((a) => _buildAbilityRow(a)),
+                  ...card.abilities.map((a) => _buildAbilityRow(card, a)),
                 ],
               ],
             ),
@@ -10908,6 +11069,13 @@ class _TestMatchScreenState extends State<TestMatchScreen>
                 uniqueTargets.add(pair.target2);
               }
               _validTargets = uniqueTargets.toList();
+            } else if (_isResetter(card)) {
+              final resetTargets = _matchManager.getReachableResetTargets(
+                card,
+                row,
+                col,
+              );
+              _validTargets = resetTargets.map((t) => t.target).toList();
             } else {
               _validTargets = _matchManager.getValidTargetsTYC3(card, row, col);
             }
@@ -11310,6 +11478,34 @@ class _TestMatchScreenState extends State<TestMatchScreen>
                     fontWeight: FontWeight.bold,
                     fontSize: 8,
                   ),
+                ),
+              ),
+            ),
+
+          if (_hasChargeBasedAbility(card))
+            Positioned(
+              right: 2,
+              bottom: 2,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+                decoration: BoxDecoration(
+                  color: Colors.purple[100],
+                  borderRadius: BorderRadius.circular(2),
+                  border: Border.all(color: Colors.purple[700]!, width: 0.5),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.flash_on, size: 8, color: Colors.purple[700]),
+                    Text(
+                      '${_totalAbilityChargesRemaining(card)}',
+                      style: TextStyle(
+                        fontSize: 7,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.purple[900],
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -11989,6 +12185,29 @@ class _TestMatchScreenState extends State<TestMatchScreen>
               ),
             ),
 
+          if (_isPoisoned(card) && !showDetails)
+            Positioned(
+              top: 22,
+              right: 2,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
+                decoration: BoxDecoration(
+                  color: Colors.green[100],
+                  borderRadius: BorderRadius.circular(3),
+                  border: Border.all(color: Colors.green[700]!, width: 0.5),
+                ),
+                child: Text(
+                  '☠ ${card.poisonTicksRemaining}',
+                  style: TextStyle(
+                    fontSize: width * 0.09,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.green[900],
+                    height: 1.0,
+                  ),
+                ),
+              ),
+            ),
+
           // 2. Name and Type - Top Left
           Positioned(
             top: 4,
@@ -12014,6 +12233,38 @@ class _TestMatchScreenState extends State<TestMatchScreen>
               ],
             ),
           ),
+
+          if (!showDetails && _hasChargeBasedAbility(card))
+            Positioned(
+              right: 2,
+              bottom: 2,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+                decoration: BoxDecoration(
+                  color: Colors.purple[100],
+                  borderRadius: BorderRadius.circular(2),
+                  border: Border.all(color: Colors.purple[700]!, width: 0.5),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.flash_on,
+                      size: width * 0.10,
+                      color: Colors.purple[700],
+                    ),
+                    Text(
+                      '${_totalAbilityChargesRemaining(card)}',
+                      style: TextStyle(
+                        fontSize: width * 0.10,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.purple[900],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
 
           // 3. Stats Column - Left Side (Ability Icons -> AP -> Damage -> HP)
           if (!showDetails)
@@ -12192,6 +12443,50 @@ class _TestMatchScreenState extends State<TestMatchScreen>
                             Text(' ${card.currentHealth}/${card.health}'),
                           ],
                         ),
+                        if (_isPoisoned(card)) ...[
+                          const SizedBox(height: 2),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.science,
+                                size: 12,
+                                color: Colors.green[800],
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Poisoned: ${card.poisonTicksRemaining}',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.green[900],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                        if (_hasChargeBasedAbility(card)) ...[
+                          const SizedBox(height: 2),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.flash_on,
+                                size: 12,
+                                color: Colors.purple[700],
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Charges: ${_totalAbilityChargesRemaining(card)}',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.purple[900],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                         // Terrain affinity
                         if (card.element != null) ...[
                           const SizedBox(height: 4),
@@ -12225,8 +12520,9 @@ class _TestMatchScreenState extends State<TestMatchScreen>
                             'Abilities:',
                             style: TextStyle(fontWeight: FontWeight.bold),
                           ),
-                          ...card.abilities.map(
-                            (a) => Padding(
+                          ...card.abilities.map((a) {
+                            final suffix = _abilityChargeSuffixForCard(card, a);
+                            return Padding(
                               padding: const EdgeInsets.only(top: 2),
                               child: Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -12239,14 +12535,14 @@ class _TestMatchScreenState extends State<TestMatchScreen>
                                   const SizedBox(width: 4),
                                   Expanded(
                                     child: Text(
-                                      '${_abilityDisplayName(a)}: ${_abilityDescriptionForCard(card, a)}',
+                                      '${_abilityDisplayName(a)}$suffix: ${_abilityDescriptionForCard(card, a)}',
                                       style: const TextStyle(fontSize: 10),
                                     ),
                                   ),
                                 ],
                               ),
-                            ),
-                          ),
+                            );
+                          }),
                         ],
                       ],
                     ),

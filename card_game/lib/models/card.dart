@@ -54,6 +54,8 @@ class GameCard {
   /// specific fear source (once per enemy unit per fear-card).
   final Set<String> fearSeenEnemyIds = <String>{};
 
+  int poisonTicksRemaining = 0;
+
   /// Transient helper for UI/logging: set to true when the most recent
   /// takeDamage call was negated by Barrier.
   bool lastDamageAbsorbedByBarrier = false;
@@ -201,6 +203,7 @@ class GameCard {
     copy.barrierUsed = barrierUsed;
     copy.abilityCharges.addAll(abilityCharges);
     copy.fearSeenEnemyIds.addAll(fearSeenEnemyIds);
+    copy.poisonTicksRemaining = poisonTicksRemaining;
     copy.terrainAffinityRanged = terrainAffinityRanged;
     copy.terrainAffinityDamageBonus = terrainAffinityDamageBonus;
     copy.terrainAffinityMarshBonusApplied = terrainAffinityMarshBonusApplied;
@@ -262,6 +265,7 @@ class GameCard {
     currentAP = 0; // Cards start with 0 AP when placed
     barrierUsed = false;
     fearSeenEnemyIds.clear();
+    poisonTicksRemaining = 0;
     lastDamageAbsorbedByBarrier = false;
   }
 
@@ -333,6 +337,7 @@ class GameCard {
     'barrierUsed': barrierUsed,
     'abilityCharges': abilityCharges,
     'fearSeenEnemyIds': fearSeenEnemyIds.toList(),
+    'poisonTicksRemaining': poisonTicksRemaining,
     'terrainAffinityRanged': terrainAffinityRanged,
     'terrainAffinityDamageBonus': terrainAffinityDamageBonus,
     'terrainAffinityMarshBonusApplied': terrainAffinityMarshBonusApplied,
@@ -379,24 +384,22 @@ class GameCard {
     card.currentAP = json['currentAP'] as int? ?? 0;
     card.ownerId = json['ownerId'] as String?;
     card.barrierUsed = json['barrierUsed'] as bool? ?? false;
-    final charges = json['abilityCharges'] as Map<String, dynamic>?;
-    if (charges != null) {
-      charges.forEach((k, v) {
-        final parsed = v is int ? v : int.tryParse(v.toString());
-        if (parsed != null) {
-          card.abilityCharges[k] = parsed;
-        }
-      });
-    }
-    final fearSeen = json['fearSeenEnemyIds'] as List<dynamic>?;
-    if (fearSeen != null) {
-      card.fearSeenEnemyIds.addAll(fearSeen.map((e) => e.toString()));
-    }
-
+    card.abilityCharges.addAll(
+      (json['abilityCharges'] as Map?)?.map(
+            (k, v) => MapEntry(k.toString(), (v as num).toInt()),
+          ) ??
+          const <String, int>{},
+    );
+    card.fearSeenEnemyIds.addAll(
+      (json['fearSeenEnemyIds'] as List?)?.map((e) => e.toString()) ??
+          const <String>[],
+    );
+    card.poisonTicksRemaining =
+        (json['poisonTicksRemaining'] as num?)?.toInt() ?? 0;
     card.terrainAffinityRanged =
         json['terrainAffinityRanged'] as bool? ?? false;
     card.terrainAffinityDamageBonus =
-        json['terrainAffinityDamageBonus'] as int? ?? 0;
+        (json['terrainAffinityDamageBonus'] as num?)?.toInt() ?? 0;
     card.terrainAffinityMarshBonusApplied =
         json['terrainAffinityMarshBonusApplied'] as bool? ?? false;
     card.terrainAffinityLakeTurn =

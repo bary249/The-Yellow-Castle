@@ -131,6 +131,17 @@ class MatchManager {
   bool _isIgniterCard(GameCard card) =>
       card.abilities.any((a) => a.startsWith('ignite_'));
 
+  bool _isConverter(GameCard card) => card.abilities.contains('converter');
+
+  bool _isPoisoner(GameCard card) => card.abilities.contains('poisoner');
+
+  String? _getIgniteAbilityKey(GameCard card) {
+    for (final a in card.abilities) {
+      if (a.startsWith('ignite_')) return a;
+    }
+    return null;
+  }
+
   int _getIgniteTurns(GameCard card) {
     for (final a in card.abilities) {
       if (a.startsWith('ignite_')) {
@@ -216,11 +227,6 @@ class MatchManager {
     }
   }
 
-  bool _isBurningTerrain(String? terrain) {
-    final t = terrain?.toLowerCase();
-    return t == 'woods' || t == 'forest';
-  }
-
   bool _isMarshTerrain(String? terrain) {
     final t = terrain?.toLowerCase();
     return t == 'marsh';
@@ -290,6 +296,188 @@ class MatchManager {
     return sources.map(_formatCardRef).join(', ');
   }
 
+  int _abilityChargesRemaining(
+    GameCard card,
+    String ability, {
+    int defaultCharges = 1,
+  }) {
+    if (!card.abilities.contains(ability)) return 0;
+    if (card.abilityCharges.containsKey(ability)) {
+      return card.abilityCharges[ability] ?? 0;
+    }
+    if (ability == 'barrier') {
+      return card.barrierUsed ? 0 : defaultCharges;
+    }
+    return defaultCharges;
+  }
+
+  bool _consumeAbilityCharge(
+    GameCard card,
+    String ability, {
+    int defaultCharges = 1,
+  }) {
+    final current = _abilityChargesRemaining(
+      card,
+      ability,
+      defaultCharges: defaultCharges,
+    );
+    if (current <= 0) {
+      card.abilityCharges[ability] = 0;
+      return false;
+    }
+    card.abilityCharges[ability] = current - 1;
+    if (ability == 'barrier') {
+      card.barrierUsed = (card.abilityCharges[ability] ?? 0) <= 0;
+    }
+    return true;
+  }
+
+  void _grantAbilityCharge(
+    GameCard card,
+    String ability, {
+    int amount = 1,
+    int defaultCharges = 1,
+  }) {
+    final current = _abilityChargesRemaining(
+      card,
+      ability,
+      defaultCharges: defaultCharges,
+    );
+    card.abilityCharges[ability] = current + amount;
+    if (ability == 'barrier') {
+      card.barrierUsed = false;
+    }
+  }
+
+  /// Initialize ability charges for consumable abilities when card is placed or drawn
+  void initializeAbilityCharges(GameCard card) {
+    const consumableAbilities = <String>{
+      'fear',
+      'paralyze',
+      'glue',
+      'silence',
+      'shaco',
+      'barrier',
+      'poisoner',
+    };
+
+    for (final ability in consumableAbilities) {
+      if (card.abilities.contains(ability)) {
+        // Only initialize if not already set
+        if (!card.abilityCharges.containsKey(ability)) {
+          card.abilityCharges[ability] = 1;
+        }
+      }
+    }
+
+    for (final a in card.abilities) {
+      if (!a.startsWith('ignite_')) continue;
+      if (!card.abilityCharges.containsKey(a)) {
+        card.abilityCharges[a] = 1;
+      }
+    }
+
+    // Handle legacy barrier flag
+    if (card.abilities.contains('barrier') && !card.barrierUsed) {
+      card.abilityCharges['barrier'] = 1;
+    }
+  }
+
+  void _applyPoisonTurnStartForPlayer(String playerId) {
+    if (_currentMatch == null) return;
+
+    for (int row = 0; row < 3; row++) {
+      for (int col = 0; col < 3; col++) {
+        final tile = _currentMatch!.board.getTile(row, col);
+        final allCards = <GameCard>[...tile.cards, ...tile.hiddenSpies];
+
+        for (final card in allCards) {
+          if (!card.isAlive) continue;
+          if (card.ownerId != playerId) continue;
+          if (card.poisonTicksRemaining <= 0) continue;
+
+          final hpBefore = card.currentHealth;
+          final died = card.takeDamage(1);
+          final hpAfter = card.currentHealth;
+          card.poisonTicksRemaining = (card.poisonTicksRemaining - 1).clamp(
+            0,
+            999,
+          );
+
+          _log(
+            '☠️ Poison ticks on ${card.name}: 1 dmg (${hpBefore}→$hpAfter), remaining=${card.poisonTicksRemaining}',
+          );
+
+          if (died) {
+            tile.addGravestone(
+              Gravestone(
+                cardName: card.name,
+                deathLog: 'Destroyed by poison',
+                ownerId: card.ownerId,
+                turnCreated: _currentMatch!.turnNumber,
+              ),
+            );
+            onCardDestroyed?.call(card);
+            _removeCardFromTile(tile, card);
+            _log('   💀 ${card.name} destroyed by poison!');
+          }
+        }
+      }
+    }
+  }
+
+  void _applyIgniteTurnStartForPlayer(String playerId) {
+    if (_currentMatch == null) return;
+
+    for (int row = 0; row < 3; row++) {
+      for (int col = 0; col < 3; col++) {
+        final tile = _currentMatch!.board.getTile(row, col);
+        if (!_isTileIgnited(tile)) continue;
+
+        final allCards = <GameCard>[...tile.cards, ...tile.hiddenSpies];
+
+        for (final card in allCards) {
+          if (!card.isAlive) continue;
+          if (card.ownerId != playerId) continue;
+
+          final hpBefore = card.currentHealth;
+          final died = card.takeDamage(1);
+          final hpAfter = card.currentHealth;
+
+          _log(
+            '🔥 Ignite burn on ${card.name} at ($row,$col): 1 dmg (${hpBefore}→$hpAfter)',
+          );
+
+          if (died) {
+            tile.addGravestone(
+              Gravestone(
+                cardName: card.name,
+                deathLog: 'Burned by ignited tile',
+                ownerId: card.ownerId,
+                turnCreated: _currentMatch!.turnNumber,
+              ),
+            );
+            onCardDestroyed?.call(card);
+            _removeCardFromTile(tile, card);
+            _log('   💀 ${card.name} burned to death!');
+          }
+        }
+      }
+    }
+  }
+
+  GameCard? _consumeChargeFromFirstSource(
+    List<GameCard> sources,
+    String ability,
+  ) {
+    if (sources.isEmpty) return null;
+    sources.sort((a, b) => a.id.compareTo(b.id));
+    for (final source in sources) {
+      if (_consumeAbilityCharge(source, ability)) return source;
+    }
+    return null;
+  }
+
   String? getMoveLockReasonTYC3(GameCard card, int row, int col) {
     return _getMoveLockReason(card, row, col);
   }
@@ -324,7 +512,11 @@ class MatchManager {
     ).toList();
 
     final paralyzers = sources
-        .where((c) => c.abilities.contains('paralyze'))
+        .where(
+          (c) =>
+              c.abilities.contains('paralyze') &&
+              _abilityChargesRemaining(c, 'paralyze') > 0,
+        )
         .toList();
     if (paralyzers.isNotEmpty) {
       return (
@@ -334,7 +526,13 @@ class MatchManager {
       );
     }
 
-    final gluers = sources.where((c) => c.abilities.contains('glue')).toList();
+    final gluers = sources
+        .where(
+          (c) =>
+              c.abilities.contains('glue') &&
+              _abilityChargesRemaining(c, 'glue') > 0,
+        )
+        .toList();
     if (gluers.isNotEmpty) {
       return (reason: 'Glued - cannot move', sources: gluers, ability: 'glue');
     }
@@ -354,7 +552,11 @@ class MatchManager {
     ).toList();
 
     final paralyzers = sources
-        .where((c) => c.abilities.contains('paralyze'))
+        .where(
+          (c) =>
+              c.abilities.contains('paralyze') &&
+              _abilityChargesRemaining(c, 'paralyze') > 0,
+        )
         .toList();
     if (paralyzers.isNotEmpty) {
       return (
@@ -365,7 +567,11 @@ class MatchManager {
     }
 
     final silencers = sources
-        .where((c) => c.abilities.contains('silence'))
+        .where(
+          (c) =>
+              c.abilities.contains('silence') &&
+              _abilityChargesRemaining(c, 'silence') > 0,
+        )
         .toList();
     if (silencers.isNotEmpty) {
       return (
@@ -403,28 +609,33 @@ class MatchManager {
 
     final behindTile = _currentMatch!.board.getTile(behindRow, col);
     final fearSources =
-        <GameCard>[...behindTile.cards, ...behindTile.hiddenSpies].where(
-          (c) =>
-              c.isAlive && c.ownerId == enemyId && c.abilities.contains('fear'),
-        );
+        <GameCard>[...behindTile.cards, ...behindTile.hiddenSpies]
+            .where(
+              (c) =>
+                  c.isAlive &&
+                  c.ownerId == enemyId &&
+                  c.abilities.contains('fear') &&
+                  _abilityChargesRemaining(c, 'fear') > 0,
+            )
+            .toList();
 
-    bool applied = false;
-    final triggering = <GameCard>[];
-    for (final fearCard in fearSources) {
-      if (fearCard.fearSeenEnemyIds.contains(enteringCard.id)) continue;
-      fearCard.fearSeenEnemyIds.add(enteringCard.id);
-      applied = true;
-      triggering.add(fearCard);
-    }
+    if (fearSources.isEmpty) return;
 
-    if (applied) {
-      enteringCard.currentAP = 0;
-      final owner = _ownerLabel(enteringCard.ownerId);
-      final sourceNames = triggering.map((c) => c.name).join(', ');
-      _log(
-        '😱 [$owner] Fear drains AP: ${enteringCard.name} is reduced to 0 AP (triggered by: $sourceNames)',
-      );
-    }
+    fearSources.sort((a, b) => a.id.compareTo(b.id));
+    final fearCard = fearSources.firstWhere(
+      (c) => !c.fearSeenEnemyIds.contains(enteringCard.id),
+      orElse: () => fearSources.first,
+    );
+
+    if (fearCard.fearSeenEnemyIds.contains(enteringCard.id)) return;
+    if (!_consumeAbilityCharge(fearCard, 'fear')) return;
+
+    fearCard.fearSeenEnemyIds.add(enteringCard.id);
+    enteringCard.currentAP = 0;
+    final owner = _ownerLabel(enteringCard.ownerId);
+    _log(
+      '😱 [$owner] Fear drains AP: ${enteringCard.name} is reduced to 0 AP (triggered by: ${fearCard.name})',
+    );
   }
 
   void _applyPushBackAfterAttack({
@@ -590,6 +801,9 @@ class MatchManager {
     if (_currentMatch == null) return;
     if (!shaco.isAlive) return;
     if (shaco.ownerId == null) return;
+    if (shaco.isDecoy) return;
+
+    if (!_consumeAbilityCharge(shaco, 'shaco')) return;
 
     final sideCols = <int>[];
     if (col == 0) {
@@ -612,6 +826,7 @@ class MatchManager {
       decoy.ownerId = shaco.ownerId;
       decoy.currentAP = shaco.currentAP;
       decoy.currentHealth = shaco.currentHealth;
+      decoy.abilityCharges['shaco'] = 0;
 
       _addCardToTile(tile, decoy);
       _log('🃏 Shaco spawns decoy at ($row,$sideCol)');
@@ -848,7 +1063,7 @@ class MatchManager {
     if (!enteringCard.isAlive) return (row: toRow, col: toCol);
 
     final toTile = _currentMatch!.board.getTile(toRow, toCol);
-    if (!_isBurningTerrain(toTile.terrain) || !_isTileIgnited(toTile)) {
+    if (!_isTileIgnited(toTile)) {
       return (row: toRow, col: toCol);
     }
 
@@ -986,6 +1201,94 @@ class MatchManager {
     return (row: fromRow, col: fromCol);
   }
 
+  /// TYC3: Get tiles that can be converted (adjacent tiles within range 1)
+  List<({int row, int col})> getConvertTargets(
+    GameCard card,
+    int fromRow,
+    int fromCol,
+  ) {
+    if (_currentMatch == null) return [];
+    if (!useTurnBasedSystem) return [];
+    if (!_isConverter(card)) return [];
+    if (card.currentAP < card.attackAPCost) return [];
+
+    final targets = <({int row, int col})>[];
+
+    // Can convert tiles within distance 1 (orthogonal only)
+    final positions = [
+      (row: fromRow, col: fromCol), // Same tile
+      (row: fromRow - 1, col: fromCol), // Up
+      (row: fromRow + 1, col: fromCol), // Down
+      (row: fromRow, col: fromCol - 1), // Left
+      (row: fromRow, col: fromCol + 1), // Right
+    ];
+
+    for (final pos in positions) {
+      if (pos.row >= 0 && pos.row <= 2 && pos.col >= 0 && pos.col <= 2) {
+        targets.add((row: pos.row, col: pos.col));
+      }
+    }
+
+    return targets;
+  }
+
+  /// TYC3: Convert a tile's terrain to a different type
+  SyncedCombatResult? convertTileTYC3(
+    GameCard converter,
+    int converterRow,
+    int converterCol,
+    int targetRow,
+    int targetCol,
+    String newTerrain,
+  ) {
+    if (_currentMatch == null) return null;
+    if (!useTurnBasedSystem) return null;
+    if (!_isConverter(converter)) return null;
+    if (!converter.isAlive) return null;
+    if (converter.currentAP < converter.attackAPCost) return null;
+
+    final tile = _currentMatch!.board.getTile(targetRow, targetCol);
+    final oldTerrain = tile.terrain ?? 'Neutral';
+
+    // Change the terrain
+    tile.terrain = newTerrain;
+
+    // Consume AP
+    converter.currentAP -= converter.attackAPCost;
+
+    _log(
+      '🔄 ${converter.name} converts tile ($targetRow, $targetCol) from $oldTerrain to $newTerrain',
+    );
+
+    final result = SyncedCombatResult(
+      id: '${DateTime.now().millisecondsSinceEpoch}_${converter.id}_convert',
+      isBaseAttack: false,
+      isHeal: false,
+      attackerName: converter.name,
+      targetName: 'Tile ($targetRow, $targetCol)',
+      targetId: 'tile_${targetRow}_$targetCol',
+      damageDealt: 0,
+      healAmount: 0,
+      retaliationDamage: 0,
+      targetDied: false,
+      attackerDied: false,
+      targetHpBefore: 0,
+      targetHpAfter: 0,
+      attackerHpBefore: converter.currentHealth,
+      attackerHpAfter: converter.currentHealth,
+      laneCol: targetCol,
+      attackerOwnerId: converter.ownerId ?? '',
+      attackerId: converter.id,
+      attackerRow: converterRow,
+      attackerCol: converterCol,
+      targetRow: targetRow,
+      targetCol: targetCol,
+    );
+
+    _currentMatch!.lastCombatResult = result;
+    return result;
+  }
+
   List<({int row, int col})> getIgniteTargets(
     GameCard card,
     int fromRow,
@@ -994,6 +1297,12 @@ class MatchManager {
     if (_currentMatch == null) return [];
     if (!useTurnBasedSystem) return [];
     if (!_isIgniterCard(card)) return [];
+
+    final igniteKey = _getIgniteAbilityKey(card);
+    if (igniteKey == null) return [];
+    if (_abilityChargesRemaining(card, igniteKey, defaultCharges: 1) <= 0) {
+      return [];
+    }
 
     final turns = _getIgniteTurns(card);
     if (turns <= 0) return [];
@@ -1014,6 +1323,29 @@ class MatchManager {
       final c = fromCol + d.dc;
       if (r < 0 || r > 2 || c < 0 || c > 2) continue;
       targets.add((row: r, col: c));
+    }
+
+    return targets;
+  }
+
+  /// TYC3: Get all reset targets reachable (friendly units on same tile).
+  List<({GameCard target, int row, int col, int moveCost})>
+  getReachableResetTargets(GameCard card, int fromRow, int fromCol) {
+    if (_currentMatch == null) return [];
+    if (!useTurnBasedSystem) return [];
+    if (!_isResetter(card)) return [];
+
+    if (card.currentAP < card.attackAPCost) return [];
+
+    final targets = <({GameCard target, int row, int col, int moveCost})>[];
+    final tile = _currentMatch!.board.getTile(fromRow, fromCol);
+
+    for (final friendly in tile.cards) {
+      if (!friendly.isAlive) continue;
+      if (friendly.ownerId != card.ownerId) continue;
+      if (friendly.id == card.id) continue;
+
+      targets.add((target: friendly, row: fromRow, col: fromCol, moveCost: 0));
     }
 
     return targets;
@@ -1040,7 +1372,16 @@ class MatchManager {
     final colDist = (targetCol - igniterCol).abs();
     if (rowDist + colDist != 1) return false;
 
-    if (!igniter.spendAttackAP()) return false;
+    final igniteKey = _getIgniteAbilityKey(igniter);
+    if (igniteKey == null) return false;
+    if (!_consumeAbilityCharge(igniter, igniteKey, defaultCharges: 1)) {
+      return false;
+    }
+
+    if (!igniter.spendAttackAP()) {
+      _grantAbilityCharge(igniter, igniteKey, amount: 1, defaultCharges: 1);
+      return false;
+    }
 
     final tile = _currentMatch!.board.getTile(targetRow, targetCol);
     final currentTurn = _currentMatch!.turnNumber;
@@ -1193,6 +1534,14 @@ class MatchManager {
     // Draw initial hands
     player.drawInitialHand();
     opponent.drawInitialHand();
+
+    // Initialize ability charges for all cards in hand
+    for (final card in player.hand) {
+      initializeAbilityCharges(card);
+    }
+    for (final card in opponent.hand) {
+      initializeAbilityCharges(card);
+    }
 
     // Reset temporary buffs
     _playerDamageBoostActive = false;
@@ -2674,6 +3023,9 @@ class MatchManager {
     card.currentAP = (card.maxAP - apCost).clamp(0, card.maxAP);
     card.ownerId = active.id;
 
+    // Initialize ability charges for consumable abilities
+    initializeAbilityCharges(card);
+
     final owner = isPlayer ? 'Player' : 'Opponent';
     final placementNote = (row == middleRow)
         ? ' (direct to middle, -2 AP)'
@@ -2695,7 +3047,20 @@ class MatchManager {
     }
     if (!card.isAlive) return true;
 
-    _applyTerrainAffinityOnEntry(card: card, row: row, col: col);
+    final finalPos = _applyBurningOnEntry(
+      enteringCard: card,
+      fromRow: -1,
+      fromCol: -1,
+      toRow: row,
+      toCol: col,
+    );
+    if (!card.isAlive) return true;
+
+    _applyTerrainAffinityOnEntry(
+      card: card,
+      row: finalPos.row,
+      col: finalPos.col,
+    );
 
     if (shouldInstantHeal) {
       // Heal the most-injured friendly unit on this tile.
@@ -2705,18 +3070,25 @@ class MatchManager {
         return missingB - missingA;
       });
       final target = injuredFriendlyOnTile.first;
-      healCardTYC3(card, target, row, col, row, col);
+      healCardTYC3(
+        card,
+        target,
+        finalPos.row,
+        finalPos.col,
+        finalPos.row,
+        finalPos.col,
+      );
     }
 
     // Check for relic pickup at placement tile (in case placed on middle)
-    _checkRelicPickup(row, col, card.ownerId!);
+    _checkRelicPickup(finalPos.row, finalPos.col, card.ownerId!);
 
     // Update visibility (permanent lane reveal + scout)
-    _updatePermanentVisibility(row, col, card.ownerId!);
+    _updatePermanentVisibility(finalPos.row, finalPos.col, card.ownerId!);
 
     // Shaco: spawn decoys in side lanes
     if (_isShacoCard(card) && card.isAlive) {
-      _spawnShacoDecoys(shaco: card, row: row, col: col);
+      _spawnShacoDecoys(shaco: card, row: finalPos.row, col: finalPos.col);
     }
 
     return true;
@@ -2774,6 +3146,9 @@ class MatchManager {
     card.currentAP = card.maxAP - 1;
     card.ownerId = opponent.id;
 
+    // Initialize ability charges for consumable abilities
+    initializeAbilityCharges(card);
+
     _log(
       '✅ [Opponent Replay] Placed ${card.name} (${card.damage}/${card.health}) at ($row, $col)',
     );
@@ -2782,6 +3157,18 @@ class MatchManager {
     _checkRelicPickup(row, col, card.ownerId!);
 
     _triggerTrapIfPresent(card, row, col);
+
+    if (card.isAlive) {
+      _applyBurningOnEntry(
+        enteringCard: card,
+        fromRow: -1,
+        fromCol: -1,
+        toRow: row,
+        toCol: col,
+      );
+    }
+
+    if (!card.isAlive) return true;
 
     // Update scout visibility
     if (card.abilities.contains('scout')) {
@@ -2859,8 +3246,15 @@ class MatchManager {
     // Draw a card for the new active player
     final newActive = activePlayer;
     if (newActive != null) {
+      final handSizeBefore = newActive.hand.length;
       newActive.drawCards(count: 1);
       _log('📥 ${newActive.name} draws 1 card');
+
+      // Initialize charges for newly drawn cards
+      if (newActive.hand.length > handSizeBefore) {
+        final newCard = newActive.hand.last;
+        initializeAbilityCharges(newCard);
+      }
     }
 
     // Regenerate AP for all cards of the new active player
@@ -2914,6 +3308,9 @@ class MatchManager {
     if (_currentMatch == null) return;
 
     int cardsRegen = 0;
+
+    _applyPoisonTurnStartForPlayer(playerId);
+    _applyIgniteTurnStartForPlayer(playerId);
 
     // Iterate through all tiles on the board
     for (int row = 0; row < 3; row++) {
@@ -3227,6 +3624,7 @@ class MatchManager {
     final targets = <GameCard>[];
     final hasCrossAttack = attacker.abilities.contains('cross_attack');
     final canAttackCrossLane = allowCrossLaneAttack || hasCrossAttack;
+    final hasDiagonalAttack = attacker.abilities.contains('diagonal_attack');
 
     // Forward direction: player attacks toward row 0, opponent toward row 2
     final forwardDir = isPlayerCard ? -1 : 1;
@@ -3249,6 +3647,22 @@ class MatchManager {
       // Right
       if (col < 2) {
         _addTargetsFromTile(targets, attacker, row, col + 1);
+      }
+    }
+
+    // 3) Diagonal attacks: only distance 1 diagonal tiles
+    if (hasDiagonalAttack) {
+      final diagonalPositions = [
+        (row: row - 1, col: col - 1), // Top-left
+        (row: row - 1, col: col + 1), // Top-right
+        (row: row + 1, col: col - 1), // Bottom-left
+        (row: row + 1, col: col + 1), // Bottom-right
+      ];
+
+      for (final pos in diagonalPositions) {
+        if (pos.row >= 0 && pos.row <= 2 && pos.col >= 0 && pos.col <= 2) {
+          _addTargetsFromTile(targets, attacker, pos.row, pos.col);
+        }
       }
     }
 
@@ -3304,6 +3718,17 @@ class MatchManager {
     if (err != null) {
       final owner = _ownerLabel(card.ownerId);
       final lockDetails = _getMoveLockDetails(card, fromRow, fromCol);
+      final consumedSource = lockDetails != null
+          ? _consumeChargeFromFirstSource(
+              lockDetails.sources,
+              lockDetails.ability,
+            )
+          : null;
+      if (consumedSource != null) {
+        _log(
+          '🔋 ${consumedSource.name} consumes its ${lockDetails!.ability} charge (remaining: ${_abilityChargesRemaining(consumedSource, lockDetails.ability, defaultCharges: 0)})',
+        );
+      }
       if (lockDetails != null) {
         final sources = _formatSources(lockDetails.sources);
         _log(
@@ -3695,6 +4120,15 @@ class MatchManager {
     if (lockDetails != null) {
       final owner = _ownerLabel(attacker.ownerId);
       final sources = _formatSources(lockDetails.sources);
+      final consumedSource = _consumeChargeFromFirstSource(
+        lockDetails.sources,
+        lockDetails.ability,
+      );
+      if (consumedSource != null) {
+        _log(
+          '🔋 ${consumedSource.name} consumes its ${lockDetails.ability} charge (remaining: ${_abilityChargesRemaining(consumedSource, lockDetails.ability, defaultCharges: 0)})',
+        );
+      }
       _log(
         '⛔ [$owner] ${attacker.name} cannot attack: ${lockDetails.reason}${sources.isNotEmpty ? " (blocked by: $sources)" : ""}',
       );
@@ -3773,6 +4207,15 @@ class MatchManager {
       return null;
     }
 
+    final willApplyPoison =
+        _isPoisoner(attacker) &&
+        _abilityChargesRemaining(attacker, 'poisoner', defaultCharges: 1) > 0;
+    if (willApplyPoison) {
+      if (!_consumeAbilityCharge(attacker, 'poisoner', defaultCharges: 1)) {
+        _log('❌ Poisoner has no poison charges');
+      }
+    }
+
     // Determine if player is attacking
     final isPlayerAttacking = isPlayerTurn;
 
@@ -3818,6 +4261,11 @@ class MatchManager {
       laneShieldBonus: laneBuffs.shield,
       commanderDamageBonus: motivateBonus.damage,
     );
+
+    if (willApplyPoison && target.isAlive) {
+      target.poisonTicksRemaining = 2;
+      _log('☠️ ${attacker.name} poisons ${target.name} (2 turns)');
+    }
 
     _log(
       '   Damage: ${result.damageDealt} → ${target.name} now ${target.currentHealth}/${target.health} HP',
@@ -4476,6 +4924,8 @@ class MatchManager {
 
   bool _isSwitcher(GameCard card) => card.abilities.contains('switcher');
 
+  bool _isResetter(GameCard card) => card.abilities.contains('resetter');
+
   /// TYC3: Get all heal targets reachable with current AP (move + heal).
   /// For now, medics can only heal friendly units on the SAME TILE.
   List<({GameCard target, int row, int col, int moveCost})>
@@ -4628,6 +5078,118 @@ class MatchManager {
     return result;
   }
 
+  /// TYC3: Refresh consumable ability charges on a friendly unit, then self-destruct.
+  SyncedCombatResult? resetCardTYC3(
+    GameCard resetter,
+    GameCard target,
+    int resetterRow,
+    int resetterCol,
+    int targetRow,
+    int targetCol,
+  ) {
+    if (_currentMatch == null) return null;
+    if (!useTurnBasedSystem) return null;
+
+    if (!_isResetter(resetter)) {
+      _log('❌ Reset failed: ${resetter.name} is not a resetter');
+      return null;
+    }
+    if (!resetter.canAttack()) {
+      _log('❌ Reset failed: Not enough AP');
+      return null;
+    }
+    if (!target.isAlive) {
+      _log('❌ Reset failed: Target is dead');
+      return null;
+    }
+    if (target.ownerId != resetter.ownerId) {
+      _log('❌ Reset failed: Cannot reset enemy units');
+      return null;
+    }
+    if (resetter.id == target.id) {
+      _log('❌ Reset failed: Cannot reset self');
+      return null;
+    }
+
+    if (resetterRow != targetRow || resetterCol != targetCol) {
+      _log('❌ Reset failed: Resetter must be on the same tile as target');
+      return null;
+    }
+
+    if (!resetter.spendAttackAP()) {
+      _log('❌ Reset failed: Not enough AP');
+      return null;
+    }
+
+    const consumableAbilities = <String>{
+      'fear',
+      'paralyze',
+      'glue',
+      'silence',
+      'shaco',
+      'barrier',
+    };
+
+    final refreshed = <String>[];
+    for (final ability in consumableAbilities) {
+      if (!target.abilities.contains(ability)) continue;
+      final before = _abilityChargesRemaining(target, ability);
+      _grantAbilityCharge(target, ability, amount: 1);
+      final after = _abilityChargesRemaining(target, ability);
+      refreshed.add('$ability ($before→$after)');
+    }
+
+    final resetterOwner = resetter.ownerId == _currentMatch!.player.id
+        ? 'Player'
+        : 'Opponent';
+    _log(
+      '♻️ [$resetterOwner] ${resetter.name} refreshes ${target.name}${refreshed.isNotEmpty ? " (+1 charge: ${refreshed.join(", ")})" : " (no consumable abilities found)"}',
+    );
+
+    // Self-destruct (RIP chip)
+    final tile = _currentMatch!.board.getTile(resetterRow, resetterCol);
+    tile.addGravestone(
+      Gravestone(
+        cardName: resetter.name,
+        deathLog: 'RIP chip: self-destructed after resetting ${target.name}',
+        ownerId: resetter.ownerId,
+        turnCreated: _currentMatch!.turnNumber,
+      ),
+    );
+    onCardDestroyed?.call(resetter);
+    _removeCardFromTile(tile, resetter);
+    resetter.currentHealth = 0;
+    _log('   💀 ${resetter.name} self-destructs!');
+
+    final result = SyncedCombatResult(
+      id: '${DateTime.now().millisecondsSinceEpoch}_${resetter.id}_${target.id}_reset',
+      isBaseAttack: false,
+      isHeal: false,
+      attackerName: resetter.name,
+      targetName: target.name,
+      targetId: target.id,
+      damageDealt: 0,
+      healAmount: 0,
+      retaliationDamage: 0,
+      targetDied: false,
+      attackerDied: true,
+      targetHpBefore: target.currentHealth,
+      targetHpAfter: target.currentHealth,
+      attackerHpBefore: resetter.health,
+      attackerHpAfter: 0,
+      laneCol: targetCol,
+      attackerOwnerId: resetter.ownerId ?? '',
+      attackerId: resetter.id,
+      attackerRow: resetterRow,
+      attackerCol: resetterCol,
+      targetRow: targetRow,
+      targetCol: targetCol,
+    );
+
+    _currentMatch!.lastCombatResult = result;
+    return result;
+  }
+
   /// TYC3: Get all enhance targets reachable (friendly units on same tile).
   List<({GameCard target, int row, int col, int moveCost})>
   getReachableEnhanceTargets(GameCard card, int fromRow, int fromCol) {
@@ -4752,7 +5314,7 @@ class MatchManager {
     return result;
   }
 
-  /// TYC3: Get all switch target pairs (2 friendly units on same tile, excluding switcher).
+  /// TYC3: Get all switch target pairs within 1 tile distance (same tile, adjacent tiles).
   List<({GameCard target1, GameCard target2, int row, int col})>
   getReachableSwitchTargets(GameCard card, int fromRow, int fromCol) {
     if (_currentMatch == null) return [];
@@ -4761,21 +5323,48 @@ class MatchManager {
 
     if (card.currentAP < card.attackAPCost) return [];
 
-    final tile = _currentMatch!.board.getTile(fromRow, fromCol);
-    final friendlies = tile.cards
-        .where((c) => c.isAlive && c.ownerId == card.ownerId && c.id != card.id)
-        .toList();
+    // Collect all friendly units within 1 tile distance (same tile + adjacent tiles)
+    final allFriendlies = <({GameCard card, int row, int col})>[];
 
-    if (friendlies.length < 2) return [];
+    // Check tiles within 1 distance (orthogonal only: same, left, right, up, down)
+    final tilesToCheck = [
+      (row: fromRow, col: fromCol), // Same tile
+      (row: fromRow, col: fromCol - 1), // Left
+      (row: fromRow, col: fromCol + 1), // Right
+      (row: fromRow - 1, col: fromCol), // Up/Back
+      (row: fromRow + 1, col: fromCol), // Down/Forward
+    ];
+
+    for (final pos in tilesToCheck) {
+      if (pos.row < 0 || pos.row >= 3 || pos.col < 0 || pos.col >= 3) continue;
+      final tile = _currentMatch!.board.getTile(pos.row, pos.col);
+      for (final c in tile.cards) {
+        if (c.isAlive && c.ownerId == card.ownerId && c.id != card.id) {
+          allFriendlies.add((card: c, row: pos.row, col: pos.col));
+        }
+      }
+    }
+
+    // If only 1 friendly found, allow swapping with the Switcher itself
+    if (allFriendlies.length == 1) {
+      final target = allFriendlies.first;
+      return [
+        (target1: card, target2: target.card, row: target.row, col: target.col),
+      ];
+    }
+
+    // If 2+ friendlies, generate all pairs
+    if (allFriendlies.length < 2) return [];
 
     final pairs = <({GameCard target1, GameCard target2, int row, int col})>[];
-    for (int i = 0; i < friendlies.length; i++) {
-      for (int j = i + 1; j < friendlies.length; j++) {
+    for (int i = 0; i < allFriendlies.length; i++) {
+      for (int j = i + 1; j < allFriendlies.length; j++) {
+        // Use the row/col of the first target in the pair
         pairs.add((
-          target1: friendlies[i],
-          target2: friendlies[j],
-          row: fromRow,
-          col: fromCol,
+          target1: allFriendlies[i].card,
+          target2: allFriendlies[j].card,
+          row: allFriendlies[i].row,
+          col: allFriendlies[i].col,
         ));
       }
     }
@@ -4809,10 +5398,6 @@ class MatchManager {
     if (target1.ownerId != switcher.ownerId ||
         target2.ownerId != switcher.ownerId) {
       _log('❌ Switch failed: Can only switch abilities between friendly units');
-      return null;
-    }
-    if (switcher.id == target1.id || switcher.id == target2.id) {
-      _log('❌ Switch failed: Cannot include self in switch');
       return null;
     }
     if (target1.id == target2.id) {

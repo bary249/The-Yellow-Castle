@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../models/card.dart';
 import '../models/hero.dart';
 import '../data/hero_library.dart';
 import 'test_match_screen.dart';
@@ -35,7 +36,7 @@ class _HeroSelectionScreenState extends State<HeroSelectionScreen> {
     _selectedHero = _availableHeroes.isNotEmpty ? _availableHeroes.first : null;
   }
 
-  void _startMatch() {
+  Future<void> _startMatch() async {
     if (_selectedHero == null) return;
 
     if (widget.isOnline) {
@@ -61,25 +62,27 @@ class _HeroSelectionScreenState extends State<HeroSelectionScreen> {
         ),
       );
     } else {
-      // Local: Go to Deck Selection
-      Navigator.of(context).push(
+      // Local: Go to Deck Selection, then navigate to TestMatchScreen
+      final deckCards = await Navigator.of(context).push<List<GameCard>>(
         MaterialPageRoute(
-          builder: (_) => DeckSelectionScreen(
-            heroId: _selectedHero!.id,
-            onDeckSelected: (deckCards) {
-              Navigator.of(context).pushReplacement(
-                MaterialPageRoute(
-                  builder: (_) => TestMatchScreen(
-                    selectedHero: _selectedHero,
-                    customDeck: deckCards,
-                    abilityTestingMode: widget.abilityTestingMode,
-                  ),
-                ),
-              );
-            },
-          ),
+          builder: (_) => DeckSelectionScreen(heroId: _selectedHero!.id),
         ),
       );
+
+      if (deckCards != null && deckCards.isNotEmpty && mounted) {
+        debugPrint(
+          'HeroSelectionScreen: Got ${deckCards.length} cards from DeckSelectionScreen',
+        );
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => TestMatchScreen(
+              selectedHero: _selectedHero,
+              customDeck: deckCards,
+              abilityTestingMode: widget.abilityTestingMode,
+            ),
+          ),
+        );
+      }
     }
   }
 

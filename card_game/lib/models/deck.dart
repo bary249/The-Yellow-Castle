@@ -210,6 +210,26 @@ class Deck {
         return advancedMedic(index);
       case 'Expert Medic':
         return expertMedic(index);
+
+      // Special support units
+      case 'Enhancer':
+        return enhancerUnit(index);
+      case 'Switcher':
+        return switcherUnit(index);
+      case 'Resetter':
+        return resetterUnit(index);
+
+      // New ability testing cards
+      case 'Converter':
+        return converterUnit(index);
+      case 'Poisoner':
+        return poisonerUnit(index);
+      case 'Diagonal Attacker':
+        return diagonalAttackerUnit(index);
+      case 'AP Booster':
+        return apBoosterUnit(index);
+      case 'Lane Sweeper':
+        return laneSweeperUnit(index);
       // Common cards
       case 'Desert Quick Strike':
         return desertQuickStrike(index);

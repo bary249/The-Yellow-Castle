@@ -420,6 +420,22 @@ GameCard switcherUnit(int index) => GameCard(
   rarity: 3,
 );
 
+GameCard resetterUnit(int index) => GameCard(
+  id: 'resetter_$index',
+  name: 'Resetter',
+  damage: 0,
+  health: 1,
+  tick: 2,
+  moveSpeed: 1,
+  maxAP: 1,
+  apPerTurn: 1,
+  attackAPCost: 1,
+  element: null,
+  abilities: const ['resetter'],
+  cost: 3,
+  rarity: 3,
+);
+
 GameCard firestarter(int index) => GameCard(
   id: 'firestarter_$index',
   name: 'Firestarter',
@@ -434,6 +450,86 @@ GameCard firestarter(int index) => GameCard(
   abilities: const ['ignite_2'],
   cost: 2,
   rarity: 2,
+);
+
+GameCard converterUnit(int index) => GameCard(
+  id: 'converter_$index',
+  name: 'Converter',
+  damage: 2,
+  health: 3,
+  tick: 2,
+  moveSpeed: 1,
+  maxAP: 2,
+  apPerTurn: 2,
+  attackAPCost: 1,
+  element: null,
+  abilities: const ['converter'],
+  cost: 3,
+  rarity: 3,
+);
+
+GameCard poisonerUnit(int index) => GameCard(
+  id: 'poisoner_$index',
+  name: 'Poisoner',
+  damage: 2,
+  health: 4,
+  tick: 2,
+  moveSpeed: 1,
+  maxAP: 1,
+  apPerTurn: 1,
+  attackAPCost: 1,
+  element: null,
+  abilities: const ['poisoner'],
+  cost: 2,
+  rarity: 2,
+);
+
+GameCard diagonalAttackerUnit(int index) => GameCard(
+  id: 'diagonal_attacker_$index',
+  name: 'Diagonal Attacker',
+  damage: 3,
+  health: 4,
+  tick: 2,
+  moveSpeed: 1,
+  maxAP: 1,
+  apPerTurn: 1,
+  attackAPCost: 1,
+  element: null,
+  abilities: const ['diagonal_attack'],
+  cost: 2,
+  rarity: 2,
+);
+
+GameCard apBoosterUnit(int index) => GameCard(
+  id: 'ap_booster_$index',
+  name: 'AP Booster',
+  damage: 1,
+  health: 3,
+  tick: 2,
+  moveSpeed: 1,
+  maxAP: 2,
+  apPerTurn: 2,
+  attackAPCost: 1,
+  element: null,
+  abilities: const ['ap_booster'],
+  cost: 3,
+  rarity: 3,
+);
+
+GameCard laneSweeperUnit(int index) => GameCard(
+  id: 'lane_sweeper_$index',
+  name: 'Lane Sweeper',
+  damage: 3,
+  health: 5,
+  tick: 2,
+  moveSpeed: 1,
+  maxAP: 2,
+  apPerTurn: 2,
+  attackAPCost: 1,
+  element: null,
+  abilities: const ['lane_sweep'],
+  cost: 3,
+  rarity: 3,
 );
 
 // ============================================================================
@@ -1450,6 +1546,7 @@ List<GameCard> buildFullCardPool() {
     cards.add(lakeShieldTotem(i));
     cards.add(desertWarBanner(i));
     cards.add(woodsHealingTree(i));
+    cards.add(resetterUnit(i));
     cards.add(desertBerserker(i));
     cards.add(lakeGuardian(i));
     cards.add(woodsSentinel(i));
@@ -2663,9 +2760,11 @@ List<GameCard> buildSpecialsDeck() {
   cards.add(basicMedic(idx++));
   cards.add(enhancerUnit(idx++));
   cards.add(switcherUnit(idx++));
+  cards.add(resetterUnit(idx++));
 
   // Defensive abilities
   cards.add(shieldGuard(idx++)); // Has guard ability
+  cards.add(lakeShieldTotem(idx++));
   cards.add(barrierUnit(idx++));
   cards.add(megaTauntUnit(idx++));
 
@@ -2695,6 +2794,13 @@ List<GameCard> buildSpecialsDeck() {
 
   // Ignite
   cards.add(firestarter(idx++));
+
+  // New abilities (not yet implemented)
+  cards.add(converterUnit(idx++));
+  cards.add(poisonerUnit(idx++));
+  cards.add(diagonalAttackerUnit(idx++));
+  cards.add(apBoosterUnit(idx++));
+  cards.add(laneSweeperUnit(idx++));
 
   // Utility
   cards.add(scoutUnit(idx++)); // Has scout ability

@@ -195,6 +195,22 @@ Design intent: if you play too many cards early, you can run out of gas later.
 
 ---
 
+## 3.3 Charges & Consumable Abilities (TYC3)
+
+Some abilities are **consumable** and have a limited number of **charges** per unit.
+
+- A charged ability is shown with a number, e.g. `Ignite 2 (1)`.
+- When the charge reaches `0`, that ability can no longer be used for the rest of the match unless refreshed.
+
+**Examples (implemented):**
+- **Ignite X**: spend 1 charge to ignite an adjacent tile for `X` turns. Units on ignited tiles take **1 damage per turn**.
+- **Poisoner**: spends 1 charge on an attack to poison the target for 2 turns (**1 damage per turn**).
+- **Resetter**: refreshes consumable charges on a friendly unit on the same tile and then self-destructs.
+
+**DOT Stacking**: Poison and ignite damage **stack**. A poisoned unit standing on an ignited tile takes **2 damage** at the start of their owner's turn.
+
+---
+
 ## 4. Lanes & Stacks
 - The battlefield has **3 lanes**, each with:
   - Your **Card Stack** (frontline) and the opponent’s **Card Stack**.
@@ -412,3 +428,8 @@ These systems are part of the wider design and may be enabled later:
   - The UI will clearly show the **current Age/deck** so players know which stage of the battle they are in.
 
 These details are for long-term progression and content, and don’t change the **core turn-by-turn rules** described above.
+
+
+
+
+I want to write a game where the player is a historical leader and the game is a turn-based match against an AI opponent.

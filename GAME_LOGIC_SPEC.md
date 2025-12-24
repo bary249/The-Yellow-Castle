@@ -180,6 +180,78 @@ This document captures the **implemented and intended logic** of the game, mappe
 
 ---
 
+### 1.5.1 Charge-Based Abilities (TYC3)
+
+Some abilities are **consumable** and tracked as **charges** on the unit.
+
+**Data model**
+- `GameCard.abilityCharges: Map<String, int>` stores remaining charges per ability key.
+
+**Initialization**
+- Charges are initialized when cards are created/added to match state via `MatchManager.initializeAbilityCharges(card)`.
+
+**Implemented charged abilities**
+- `fear` (consumable)
+- `paralyze` (consumable)
+- `glue` (consumable)
+- `silence` (consumable)
+- `shaco` (consumable)
+- `barrier` (consumable; also has legacy `barrierUsed` state)
+- `ignite_X` (consumable; each `ignite_2`, `ignite_3`, etc is charged using its exact ability key)
+- `poisoner` (consumable)
+
+**Consumption**
+- Charges are decremented by match logic when the ability is used.
+
+---
+
+### 1.5.2 Ignite (TYC3)
+
+**Ability tag**
+- `ignite_X` where `X` is the number of turns the target tile remains ignited.
+
+**Rules (implemented)**
+- Igniter must be the active player's unit and must have enough AP (uses attack AP cost).
+- Target is an **adjacent orthogonal tile**.
+- The ability consumes **1 charge** from the igniter's `abilityCharges[ignite_X]`.
+- When applied, the target tile receives `ignitedUntilTurn` for `X` turns.
+
+**Ignite damage (DOT)**
+- When a unit **enters** an ignited tile, it takes **1 damage** and is knocked back if possible.
+- At the **start of each owner's turn**, units standing on ignited tiles take **1 damage**.
+- **Stacking**: Ignite damage stacks with poison. A poisoned unit on an ignited tile takes **2 damage** (1 poison + 1 ignite) at turn start.
+
+---
+
+### 1.5.3 Poison (TYC3)
+
+**Ability tag**
+- `poisoner`
+
+**Rules (implemented)**
+- When a Poisoner performs a normal attack and has a `poisoner` charge available:
+  - It consumes **1** `poisoner` charge.
+  - If the target survives the attack, the target receives poison for **2 ticks**: `target.poisonTicksRemaining = 2`.
+- At the **start of the poisoned unit owner's turn** (turn start AP regeneration), poison triggers:
+  - Deal **1 damage**.
+  - Decrement `poisonTicksRemaining` by 1.
+  - If the unit dies, it is removed and a gravestone is created.
+- **Stacking**: Poison damage stacks with ignite. A poisoned unit on an ignited tile takes **2 damage** at turn start.
+
+---
+
+### 1.5.4 Resetter (TYC3)
+
+**Ability tag**
+- `resetter`
+
+**Rules (implemented)**
+- Resetter targets a **friendly unit on the same tile**.
+- On use, it refreshes consumable charges on the target by granting **+1 charge** for each consumable ability the target currently has.
+- Resetter then **self-destructs** (RIP chip behavior).
+
+---
+
 ### 1.5 Lanes & Tiles (`Lane`, `Tile`, `GameBoard`)
 
 **GameBoard**

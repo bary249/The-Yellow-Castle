@@ -322,9 +322,14 @@ class _DeckSelectionScreenState extends State<DeckSelectionScreen> {
       } catch (e) {
         print('Error submitting deck: $e');
       }
-    } else {
-      // PvE OR Pre-Matchmaking Online: Callback
+    } else if (widget.onDeckSelected != null) {
+      // Pre-Matchmaking Online: Use callback
       widget.onDeckSelected?.call(deckCards);
+    } else {
+      // PvE: Pop with result
+      if (mounted) {
+        Navigator.of(context).pop(deckCards);
+      }
     }
   }
 

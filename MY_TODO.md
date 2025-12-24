@@ -55,7 +55,54 @@ New Ability - Switcher - A very special ability, which targets 2 ally cards on t
 
 New Ability - resetter - A card that refreshes the ability of cards in the same tile, it needs to target an ally unit, and then have a RIP chip. the targeted ally unit , if it has an ability that is cnosumable like paralyze or shaco etc, will gain another chrage to that ability.
 
+---------
 
+Poisoner (Laner)
+
+A lane-based unit.
+
+Applies a Poison status effect to enemy units it damages.
+
+Poison deals damage over time (DoT) at the start/end of each turn for a fixed duration or until cleansed.
+
+Sandwicher
+
+Triggers an effect when an enemy unit is positioned between two allied units (left/right or front/back, depending on board rules).
+
+When the condition is met, the sandwiched enemy takes bonus damage, debuffs, or is instantly destroyed, depending on balance.
+
+Converter
+
+Transforms a unit, tile, or resource into another state.
+
+Examples:
+
+Convert an enemy unit to an allied unit.
+
+Convert terrain type (e.g., Forest → Plains).
+
+Convert one resource type into another.
+
+Diagonal Attack
+
+Unit or card can target enemies on diagonal tiles, not only orthogonal (up/down/left/right).
+
+Expands attack pattern to include all diagonal-adjacent positions.
+
+AP Booster (Action Point Booster)
+
+Grants additional Action Points (AP) to a unit or player.
+
+Can be:
+
+Temporary (this turn only)
+
+Persistent (while unit remains alive)
+
+Used to enable extra attacks, movement, or ability activations in a single turn.
+
+
+-------------
 
 
 Factory Function	Card Name	Ability
