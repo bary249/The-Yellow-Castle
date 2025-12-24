@@ -5767,6 +5767,9 @@ class _TestMatchScreenState extends State<TestMatchScreen>
     if (ability == 'tall') {
       return 'Provides fog-of-war visibility within Manhattan distance 1.';
     }
+    if (ability == 'watcher') {
+      return 'Reveals hidden enemy information (spies/concealed units) on this tile, adjacent tiles, and the tile directly in front (from your perspective).';
+    }
     if (ability == 'shaco') {
       return 'On play, spawns a decoy copy in each other lane (same row). Decoys look identical but deal 0 damage and die when attacking.';
     }
