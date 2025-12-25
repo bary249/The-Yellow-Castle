@@ -26,7 +26,7 @@ This document captures the **implemented and intended logic** of the game, mappe
   - Offensive: `fury_X`, `cleave`, `thorns_X`, `first_strike`
   - Defensive: `shield_X`, `regen_X`, `regenerate`, `guard`
   - Support: `heal_ally_X`, `inspire_X`, `fortify_X`, `rally_X`, `command_X`
-  - Attack Style: `ranged` (no retaliation), `far_attack` (attacks from distance)
+  - Attack Style: `ranged` (no retaliation), `far_attack` (attacks from distance), `lane_sweep` (after attacking, also damages all other enemies in the same lane/column)
   - Tactical: `conceal_back`, `scout`, `paratrooper`, `stealth_pass`
 - `isAlive` (derived from `currentHealth > 0`).
 

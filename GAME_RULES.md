@@ -342,6 +342,7 @@ For each **tick** in each lane:
 | **shaco** | On play, spawns a decoy copy in each other lane (same row); decoys deal 0 damage and die when attacking |
 | **one_side_attacker** | From side lanes, also hits center + far side (same row); only primary target retaliates |
 | **two_side_attacker** | From center hits both sides; from side hits center; only primary target retaliates |
+| **lane_sweep** | After a normal attack (spend attack AP once), also deals the same damage to all other enemy units in the same lane/column across all tiles |
 | **enhancer** | Target a friendly unit on the same tile to double its damage, then self-destruct |
 | **switcher** | Target 2 friendly units on the same tile to swap their abilities, then self-destruct |
 

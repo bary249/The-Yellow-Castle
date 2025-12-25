@@ -1523,15 +1523,20 @@ class CombatResolver {
     // 2) Cross-lane attack: same row, adjacent column (if allowed)
     final hasCrossAttack = attacker.abilities.contains('cross_attack');
     final canAttackCrossLane = allowCrossLane || hasCrossAttack;
+    final hasDiagonalAttack = attacker.abilities.contains('diagonal_attack');
 
     final isForwardAttack =
         colDistance == 0 && rowDistance <= attacker.attackRange;
     final isCrossLaneAttack =
         canAttackCrossLane && rowDistance == 0 && colDistance == 1;
+    final isDiagonalAttack =
+        hasDiagonalAttack && rowDistance == 1 && colDistance == 1;
 
-    if (!isForwardAttack && !isCrossLaneAttack) {
+    if (!isForwardAttack && !isCrossLaneAttack && !isDiagonalAttack) {
       if (colDistance > 0 && rowDistance > 0) {
-        return 'Cannot attack diagonally';
+        return hasDiagonalAttack
+            ? 'Diagonal attack only works on adjacent diagonal tiles'
+            : 'Cannot attack diagonally';
       } else if (colDistance > 1) {
         return 'Cross-lane attack only works on adjacent lanes';
       } else if (colDistance > 0 && !canAttackCrossLane) {
@@ -1566,6 +1571,7 @@ class CombatResolver {
     // Check if this unit can attack cross-lane
     final hasCrossAttack = attacker.abilities.contains('cross_attack');
     final canAttackCrossLane = allowCrossLane || hasCrossAttack;
+    final hasDiagonalAttack = attacker.abilities.contains('diagonal_attack');
 
     // Forward direction: player attacks toward row 0, opponent toward row 2
     final forwardDir = isPlayerCard ? -1 : 1;
@@ -1600,6 +1606,26 @@ class CombatResolver {
           attacker,
           boardCards[attackerRow][attackerCol + 1],
         );
+      }
+    }
+
+    // 3) Diagonal attacks: only distance 1 diagonal tiles
+    if (hasDiagonalAttack) {
+      final diagonalPositions = [
+        (row: attackerRow - 1, col: attackerCol - 1),
+        (row: attackerRow - 1, col: attackerCol + 1),
+        (row: attackerRow + 1, col: attackerCol - 1),
+        (row: attackerRow + 1, col: attackerCol + 1),
+      ];
+
+      for (final pos in diagonalPositions) {
+        if (pos.row >= 0 && pos.row <= 2 && pos.col >= 0 && pos.col <= 2) {
+          _addTargetsFromBoardTile(
+            targets,
+            attacker,
+            boardCards[pos.row][pos.col],
+          );
+        }
       }
     }
 

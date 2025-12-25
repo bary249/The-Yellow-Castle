@@ -30,6 +30,11 @@ class MatchManager {
 
   MatchState? get currentMatch => _currentMatch;
 
+  // When legacy lane-based staging APIs are used (submitPlayerMoves/submitOpponentMoves),
+  // lane stacks become the source of truth for unit positions. Online sync serializes
+  // the GameBoard, so we must mirror lane stacks into board tiles for correct PvP sync.
+  bool _legacyLanesDirtyForBoardSync = false;
+
   int? maxCardsThisTurnOverride;
 
   /// Replace the current match state (for online sync)
@@ -1750,6 +1755,9 @@ class MatchManager {
       }
     }
 
+    _legacyLanesDirtyForBoardSync = true;
+    _syncBoardCardsFromLanesIfNeeded();
+
     _currentMatch!.playerSubmitted = true;
 
     // Check if both players submitted
@@ -1777,6 +1785,9 @@ class MatchManager {
         }
       }
     }
+
+    _legacyLanesDirtyForBoardSync = true;
+    _syncBoardCardsFromLanesIfNeeded();
 
     _currentMatch!.playerSubmitted = true;
 
@@ -1806,6 +1817,9 @@ class MatchManager {
       }
     }
 
+    _legacyLanesDirtyForBoardSync = true;
+    _syncBoardCardsFromLanesIfNeeded();
+
     _currentMatch!.opponentSubmitted = true;
 
     // Check if both players submitted
@@ -1832,6 +1846,9 @@ class MatchManager {
         lane.opponentCards.baseCards.addCard(card, asTopCard: false);
       }
     }
+
+    _legacyLanesDirtyForBoardSync = true;
+    _syncBoardCardsFromLanesIfNeeded();
 
     _currentMatch!.opponentSubmitted = true;
 
@@ -2003,6 +2020,10 @@ class MatchManager {
     // Process far_attack cards (siege cannons that attack other lanes)
     await _processFarAttackCards();
 
+    // If legacy lane APIs were used, ensure the serialized board reflects any
+    // movement/combat damage done to lane stacks.
+    _syncBoardCardsFromLanesIfNeeded();
+
     // Check if any cards damaged crystals (winning a lane means attacking crystal)
     _checkCrystalDamage();
 
@@ -2039,6 +2060,56 @@ class MatchManager {
 
     if (!_currentMatch!.isGameOver) {
       _startNextTurn();
+    }
+  }
+
+  void _syncBoardCardsFromLanesIfNeeded() {
+    if (_currentMatch == null) return;
+    if (!_legacyLanesDirtyForBoardSync) return;
+
+    final match = _currentMatch!;
+
+    // Clear only card lists; keep terrain/owner/traps/ignite/gravestones intact.
+    for (int row = 0; row < 3; row++) {
+      for (int col = 0; col < 3; col++) {
+        final tile = match.board.getTile(row, col);
+        tile.cards.clear();
+        tile.hiddenSpies.clear();
+      }
+    }
+
+    for (final lane in match.lanes) {
+      final col = lane.position.index;
+
+      // Row 2: player's base cards + opponent attackers that reached player base.
+      match.board
+          .getTile(2, col)
+          .cards
+          .addAll(lane.playerCards.baseCards.aliveCards);
+      match.board
+          .getTile(2, col)
+          .cards
+          .addAll(lane.opponentCards.enemyBaseCards.aliveCards);
+
+      // Row 1: middle cards from both sides.
+      match.board
+          .getTile(1, col)
+          .cards
+          .addAll(lane.playerCards.middleCards.aliveCards);
+      match.board
+          .getTile(1, col)
+          .cards
+          .addAll(lane.opponentCards.middleCards.aliveCards);
+
+      // Row 0: opponent base cards + player attackers that reached enemy base.
+      match.board
+          .getTile(0, col)
+          .cards
+          .addAll(lane.opponentCards.baseCards.aliveCards);
+      match.board
+          .getTile(0, col)
+          .cards
+          .addAll(lane.playerCards.enemyBaseCards.aliveCards);
     }
   }
 
@@ -4312,6 +4383,42 @@ class MatchManager {
           onCardDestroyed?.call(secondTarget);
           _removeCardFromTile(targetTile, secondTarget);
           _log('   💀 ${secondTarget.name} destroyed by cleave!');
+        }
+      }
+    }
+
+    // Lane Sweep: after attacking, hit all other enemies in the same lane (same column)
+    // across all tiles for the same damage. Consumes only the normal attack AP.
+    if (attacker.abilities.contains('lane_sweep') && attacker.isAlive) {
+      for (int row = 0; row < 3; row++) {
+        final tile = _currentMatch!.board.getTile(row, attackerCol);
+        final enemies = <GameCard>[...tile.cards, ...tile.hiddenSpies].where(
+          (c) =>
+              c.isAlive && c.ownerId != attacker.ownerId && c.id != target.id,
+        );
+
+        for (final enemy in enemies.toList()) {
+          final hpBefore = enemy.currentHealth;
+          final died = enemy.takeDamage(result.damageDealt);
+          final hpAfter = enemy.currentHealth;
+
+          _log(
+            '   🧹 Lane Sweep hits ${enemy.name} at ($row,$attackerCol) for ${result.damageDealt} ($hpBefore→$hpAfter)',
+          );
+
+          if (died) {
+            tile.addGravestone(
+              Gravestone(
+                cardName: enemy.name,
+                deathLog: 'Lane Sweep',
+                ownerId: enemy.ownerId,
+                turnCreated: _currentMatch!.turnNumber,
+              ),
+            );
+            onCardDestroyed?.call(enemy);
+            _removeCardFromTile(tile, enemy);
+            _log('   💀 ${enemy.name} destroyed by Lane Sweep!');
+          }
         }
       }
     }
